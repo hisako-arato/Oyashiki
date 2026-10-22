@@ -1,6 +1,6 @@
 // 屋敷の間取り・家具・人物・調べられる場所
 // 座標は1マス1m。x は東向き、z は南向き（間取り図の上が北＝z の小さい側）
-import { THREE, TEX, M, mat, tiled, box, cyl, ball, mesh, plane, makeChar, rand } from './engine.js';
+import { THREE, TEX, M, mat, tiled, box, cyl, ball, mesh, plane, rand } from './engine.js';
 
 const WALL_H = 3, WALL_T = 0.2;
 export const HOUSE = { x: 14, z: 16 };    // 屋敷の1F原点が敷地のどこにあるか
@@ -404,7 +404,8 @@ function block({ name, x1, x2, z1, z2, h, color = '#e8dcc0', roof = '#7a4a3a', w
 }
 
 // ---- 人物 ----
-const LOOKS = {
+export const LOOKS = {
+  father: { outfit: '#3a3028', hair: '#6a6a6a', name: 'お父様' },
   red: { outfit: '#c8362d', hair: '#7a2a1a', maid: true, name: '赤メイド' },
   blue: { outfit: '#2f6fd0', hair: '#e8c070', maid: true, name: '青メイド' },
   black: { outfit: '#222230', hair: '#141414', maid: true, longHair: true, name: '黒メイド' },
@@ -412,24 +413,23 @@ const LOOKS = {
   mother: { outfit: '#8a2a4a', hair: '#5a3020', dress: true, longHair: true, name: 'お母様' },
   daughter: { outfit: '#f0d070', hair: '#3a2418', dress: true, longHair: true, name: 'お嬢様' },
 };
-function npc(id, x, z, facing = 0, extra = {}) {
-  const look = LOOKS[id];
-  const ch = makeChar(A.group, look);
-  const n = { id, name: look.name, ...ch, x, z, talk: 0, ...extra };
-  ch.g.position.set(x, 0, z);
-  ch.g.rotation.y = facing;
-  A.npcs.push(n);
-  return n;
-}
 
 // ---- 調べられる場所・出入口 ----
-const thing = (name, x, z, run, extra = {}) => A.things.push({ name, at: () => [x, z], label: '調べる', run, ...extra });
+const spot = (name, x, z, key, id, extra = {}) => A.things.push({ name, at: () => [x, z], label: '調べる', spot: [key, id], ...extra });
+const flavor = (name, x, z, ...lines) => A.things.push({ name, at: () => [x, z], label: '調べる', say: lines });
+const special = (name, x, z, kind, extra = {}) => A.things.push({ name, at: () => [x, z], label: '調べる', special: kind, ...extra });
 const exitMat = mat('#e3c06f', { emissive: '#e3c06f', emissiveIntensity: 0.35, transparent: true, opacity: 0.55 });
 function exit(name, x, z, to) {
   A.things.push({ name, at: () => [x, z], label: name, exit: to });
   plane(A.group, 0.9, 0.9, exitMat, x, 0.02, z).receiveShadow = false;
 }
-const talker = (n, lines) => A.things.push({ name: n.name, npc: n, at: () => [n.x, n.z], label: 'TALK', run: api => api.say([n.name, lines[n.talk++ % lines.length]]) });
+
+// 本編の仕事をする場所 [エリア, x, z]
+export const WORK = {
+  cook: ['f1', 36, 1.4], great: ['f1', 24, 9], corridor: ['f2', 30, 9.5], garden: ['grounds', 7, 20], laundry: ['f1', 46, 14.4],
+  study: ['f2', 12.5, 5.5], master: ['f2', 9, 14.5], droom: ['f2', 36, 12.5], storage: ['f1', 4.5, 3.5], archive: ['f1', 14.5, 3],
+  shopping: ['grounds', 38, 55.5], flowers: ['f1', 24, 13.6], escortM: ['grounds', 38, 55.5], tutorD: ['f2', 35, 16.4],
+};
 
 // ============================================================
 // エリア定義
@@ -443,7 +443,7 @@ AREAS.cottage = {
     { name: '執事の部屋', x: 0, z: 0, w: 7, d: 15 },
     { name: '赤の部屋', x: 7, z: 0, w: 4, d: 5 },
     { name: '青の部屋', x: 11, z: 0, w: 4, d: 5 },
-    { name: '共用室', x: 7, z: 5, w: 8, d: 5 },
+    { name: '共用室', x: 7, z: 5, w: 8, d: 5, key: 'servants' },
     { name: '黒の部屋', x: 7, z: 10, w: 4, d: 5 },
     { name: '白の部屋', x: 11, z: 10, w: 4, d: 5 },
     { name: '浴室', x: 15, z: 0, w: 5, d: 5, floor: 'tile', wall: 'tile' },
@@ -474,14 +474,15 @@ AREAS.cottage = {
     F.counter(19.6, 7.5, 3, 2.4);
     F.cabinet(19.7, 12.5, 3, 1.2, 0.9, '#8a6a4a');
   },
-  setup(api) {
-    thing('机', 4.5, 1.6, () => api.say('執事の机。手帳と万年筆が置いてある。', '（本編では、ここで手帳を整理してセーブする）'));
-    thing('窓', 0.8, 4, () => api.say('窓の向こうに、屋敷の北側の壁が見える。'));
-    thing('朝礼のテーブル', 11, 9.0, () => api.say('毎朝ここで定例会議を開き、メイドたちに仕事を割り振る。'));
-    thing('赤の部屋', 8.5, 3, () => api.say('きちんと片付いている。枕元に料理の本が積まれている。'));
-    thing('青の部屋', 12.5, 3, () => api.say('壁一面にスケッチが貼られている。どれも上手い。'));
-    thing('黒の部屋', 8.5, 12, () => api.say('物がほとんどない。机の上に聖書が一冊。'));
-    thing('白の部屋', 12.5, 12, () => api.say('工具箱と電気工学の教科書が置いてある。'));
+  setup() {
+    special('机', 4.5, 1.6, 'notebook');
+    flavor('窓', 0.8, 4, '窓の向こうに、屋敷の北側の壁が見える。');
+    flavor('朝礼のテーブル', 11, 9.0, '毎朝ここで定例会議を開き、メイドたちに仕事を割り振る。');
+    flavor('赤の部屋', 8.5, 3, 'きちんと片付いている。枕元に料理の本が積まれている。');
+    flavor('青の部屋', 12.5, 3, '壁一面にスケッチが貼られている。どれも上手い。');
+    flavor('黒の部屋', 8.5, 12, '物がほとんどない。机の上に聖書が一冊。');
+    flavor('白の部屋', 12.5, 12, '工具箱と電気工学の教科書が置いてある。');
+    spot('鍵掛け', 18.9, 12.5, 'servants', 'keys');
     exit('外へ出る', 17.5, 14.2, { area: 'grounds', x: COTTAGE.x + 17.5, z: COTTAGE.z + 15.7 });
   },
 };
@@ -490,6 +491,7 @@ AREAS.cottage = {
 const HX = HOUSE.x, HZ = HOUSE.z;
 AREAS.grounds = {
   name: '庭', outdoor: true,
+  zones: [{ name: 'バラ園', key: 'garden', x: 1, z: 16, w: 12, d: 20 }],
   rooms: [],
   doors: [],
   build() {
@@ -539,19 +541,18 @@ AREAS.grounds = {
     // 木
     for (const [x, z, s] of [[4, 4, 1.3], [10, 3, 1], [60, 4, 1.1], [4, 44, 1.3], [10, 54, 1], [16, 40, 0.9], [62, 54, 1.2], [88, 52, 1.1], [88, 28, 1], [64, 30, 0.9], [88, 36, 1.2]]) F.tree(x, z, s);
   },
-  setup(api) {
+  setup() {
     exit('使用人棟に入る', COTTAGE.x + 17.5, COTTAGE.z + 15.6, { area: 'cottage', x: 17.5, z: 14.2 });
     exit('勝手口から入る', HX + 45, HZ - 0.6, { area: 'f1', x: 45, z: 0.9 });
     exit('倉庫に入る', HX + 3, HZ - 0.6, { area: 'f1', x: 3, z: 0.9 });
     exit('玄関から入る', HX + 24, HZ + 18.6, { area: 'f1', x: 24, z: 17.2 });
-    thing('2階の窓', 38, 13, () => { api.state.windowsOut = true; api.say('屋敷の北側を見上げる。2階の窓は……7つ。', ...api.windowCheck()); });
-    thing('噴水', 38, 43.6, () => api.say('白い大理石の噴水。水音が涼しげだ。'));
-    thing('ガゼボ', 7, 28.6, () => api.say('バラ園のガゼボ。週末、お母様とお嬢様がここでお茶を楽しむ。'));
-    thing('ガレージ', 77, 47, () => api.say('シャッターが半分開いている。中は空っぽだ。お父様は今日、車で会社に出かけている。'));
-    thing('家庭菜園', 30, 8, () => api.say('トマトとハーブが育っている。赤メイドが世話をしているらしい。'));
-    thing('正門', 38, 57, () => api.say('正門には鍵が掛かっている。夜は閉ざされる。'));
-    const w = npc('white', 7, 34, Math.PI);
-    talker(w, ['「庭の照明、配線が古くて。今度まとめて直しておきますね」', '「お屋敷の警報、照明とは別の系統なんですよ。キッチン裏の配電盤です」']);
+    flavor('2階の窓', 38, 13, '屋敷の北側を見上げる。2階の窓は……7つ。');
+    spot('裏口への小道', 22, 12.6, 'garden', 'path');
+    flavor('噴水', 38, 43.6, '白い大理石の噴水。水音が涼しげだ。');
+    flavor('ガゼボ', 7, 28.6, 'バラ園のガゼボ。週末、お母様とお嬢様がここでお茶を楽しむ。');
+    special('ガレージ', 77, 47, 'garage');
+    flavor('家庭菜園', 30, 8, 'トマトとハーブが育っている。赤メイドが世話をしているらしい。');
+    flavor('正門', 40.5, 56.8, '正門には鍵が掛かっている。夜は閉ざされる。');
   },
 };
 
@@ -559,16 +560,16 @@ AREAS.grounds = {
 AREAS.f1 = {
   name: '屋敷 1F', origin: HOUSE, hide: 'house',
   rooms: [
-    { name: '倉庫', x: 0, z: 0, w: 6, d: 8, floor: 'stone', wall: 'plain' },
-    { name: '資料室', x: 6, z: 0, w: 12, d: 8, private: true },
+    { name: '倉庫', x: 0, z: 0, w: 6, d: 8, floor: 'stone', wall: 'plain', key: 'storage' },
+    { name: '資料室', x: 6, z: 0, w: 12, d: 8, private: true, key: 'archive' },
     { name: '応接室', x: 0, z: 8, w: 18, d: 10 },
-    { name: '大広間', x: 18, z: 0, w: 12, d: 12, floor: 'marble' },
-    { name: '玄関ホール', x: 18, z: 12, w: 12, d: 6, floor: 'marble' },
-    { name: 'キッチン', x: 30, z: 0, w: 12, d: 8, floor: 'tile', wall: 'tile' },
-    { name: 'キッチン裏', x: 42, z: 0, w: 6, d: 8, floor: 'stone', wall: 'plain' },
+    { name: '大広間', x: 18, z: 0, w: 12, d: 12, floor: 'marble', key: 'great' },
+    { name: '玄関ホール', x: 18, z: 12, w: 12, d: 6, floor: 'marble', key: 'hall' },
+    { name: 'キッチン', x: 30, z: 0, w: 12, d: 8, floor: 'tile', wall: 'tile', key: 'kitchen' },
+    { name: 'キッチン裏', x: 42, z: 0, w: 6, d: 8, floor: 'stone', wall: 'plain', key: 'kback' },
     { name: '食堂', x: 30, z: 8, w: 12, d: 10 },
     { name: '裏階段', x: 42, z: 8, w: 6, d: 5, wall: 'plain' },
-    { name: '洗濯室', x: 42, z: 13, w: 6, d: 5, floor: 'tile', wall: 'tile' },
+    { name: '洗濯室', x: 42, z: 13, w: 6, d: 5, floor: 'tile', wall: 'tile', key: 'laundry' },
   ],
   doors: [['v', 6, 3, 2], ['v', 18, 3, 2], ['h', 10, 8, 2], ['v', 18, 9, 2], ['v', 18, 14, 2], ['h', 22, 12, 4],
     ['v', 30, 9, 2], ['v', 30, 14, 2], ['h', 34, 8, 2], ['v', 42, 3, 2], ['h', 44, 8, 2], ['h', 44, 13, 2]],
@@ -613,31 +614,22 @@ AREAS.f1 = {
     F.washer(47.6, 15, 3); F.washer(47.6, 16.2, 3); F.basket(44.5, 17.4);
     F.linen(42.3, 16, 1, 1.6);
   },
-  setup(api) {
+  setup() {
     exit('倉庫から外へ', 3, 0.9, { area: 'grounds', x: HX + 3, z: HZ - 0.7 });
     exit('螺旋階段で2Fへ', 3.7, 5, { area: 'f2', x: 3.7, z: 5 });
     exit('2Fへ上がる', 24, 4.6, { area: 'f2', x: 24, z: 9.5 });
     exit('玄関から外へ', 24, 17.3, { area: 'grounds', x: HX + 24, z: HZ + 18.7 });
     exit('勝手口から外へ', 45, 0.9, { area: 'grounds', x: HX + 45, z: HZ - 0.7 });
     exit('裏階段で2Fへ', 45.2, 10.5, { area: 'f2', x: 45.2, z: 10.5 });
-    thing('古い図面棚', 12, 1.1, () => {
-      api.state.blueprint = true;
-      api.say('屋敷の古い設計図を見つけた。', '2階の書斎と物置の間に、用途の書かれていない細長い空間がある……。', ...api.hiddenCheck());
-    }, { private: true });
-    thing('運送伝票', 4.7, 2.0, () => api.say('20年前の運送伝票。差出人不明、品名は「額装品」。受取人は旦那様だ。'));
-    thing('洗濯かご', 44.5, 16.7, () => { api.state.receipt = true; api.say('旦那様のスーツのポケットに、花屋の領収書が入っていた。', ['領収書', '「麗子様　お誕生日　11月3日」']); });
-    thing('配電盤', 43.2, 0.9, () => api.say('配電盤。ひとつだけ新しい系統がある。警報装置用だろうか……配線が入り組んでいて、素人には見分けられない。'));
-    thing('暖炉', 1.3, 14.5, () => api.say('よく磨かれた暖炉。冬が近い。'));
-    thing('柱時計', 19, 17.2, () => api.say('毎朝ネジを巻くのも執事の仕事だ。'));
-    thing('家族の肖像画', 22, 4.6, () => api.say('大階段の上に、家族3人の肖像画が飾られている。お父様だけが、どこか別の場所を見ている。'));
-    const r = npc('red', 35, 1.8, Math.PI);
-    talker(r, ['「……旦那様、毎年11月3日になると花を買ってくる。誰に渡すのかは、知らない」', '「……夜は、ここで明日の仕込みをしてる。裏階段の音、よく聞こえる」', '「……（ぼーっとしている）」']);
-    const m = npc('mother', 5, 13, Math.PI / 2);
-    talker(m, ['「あら執事さん。ねえ、少し隣に座っていかない？」', '「あの人、家族より絵が好きなのよ。夜中に書斎にこもってばかり」']);
-    const k = npc('black', 24, 10.5, Math.PI, {
-      path: [[24, 10.5, 2], [24, 6.5], [20.5, 4], [15, 4, 2.5], [20.5, 4], [24, 6.5]], speed: 1.5,
-    });
-    talker(k, ['「大広間の見回り中です。怪しい者は見逃しません」', '「資料室は旦那様の大切な書類ばかりです。用もなく入らないでください」']);
+    spot('古い図面棚', 12, 1.1, 'archive', 'blueprint');
+    spot('運送伝票', 4.7, 2.0, 'storage', 'slips');
+    spot('古い螺旋階段', 2, 6.9, 'storage', 'lift');
+    spot('洗濯かご', 44.5, 16.7, 'laundry', 'basket');
+    spot('配電盤', 43.2, 0.9, 'kback', 'breaker');
+    spot('柱時計', 19, 17.2, 'hall', 'clock');
+    spot('家族の肖像画', 22, 4.6, 'great', 'portrait');
+    spot('食料庫', 39.6, 1.2, 'kitchen', 'pantry');
+    flavor('暖炉', 1.3, 14.5, 'よく磨かれた暖炉。冬が近い。');
   },
 };
 
@@ -646,19 +638,19 @@ AREAS.f2 = {
   name: '屋敷 2F', origin: HOUSE, hide: 'house', below: FLOOR2_Y,
   rooms: [
     { name: '物置', x: 0, z: 0, w: 6, d: 8, wall: 'plain' },
-    { name: '隠し部屋', x: 6, z: 0, w: 4, d: 8, private: true, secret: true, wall: 'plain' },
-    { name: '書斎', x: 10, z: 0, w: 8, d: 8, private: true },
+    { name: '隠し部屋', x: 6, z: 0, w: 4, d: 8, private: true, secret: true, wall: 'plain', key: 'hidden' },
+    { name: '書斎', x: 10, z: 0, w: 8, d: 8, private: true, key: 'study' },
     { name: '吹き抜け', x: 18, z: 0, w: 12, d: 8, type: 'void' },
     { name: '浴室', x: 30, z: 0, w: 6, d: 8, floor: 'tile', wall: 'tile' },
     { name: '洗面所（化粧室）', x: 36, z: 0, w: 6, d: 8, floor: 'tile', wall: 'tile' },
     { name: 'リネン室', x: 42, z: 0, w: 6, d: 8, floor: 'tile', wall: 'plain' },
-    { name: '2F廊下', x: 0, z: 8, w: 42, d: 3 },
+    { name: '2F廊下', x: 0, z: 8, w: 42, d: 3, key: 'corridor' },
     { name: '裏階段', x: 42, z: 8, w: 6, d: 5, wall: 'plain' },
     { name: '衣装部屋', x: 0, z: 11, w: 6, d: 7, floor: 'carpet', private: true },
-    { name: '主寝室', x: 6, z: 11, w: 12, d: 7, floor: 'carpet', private: true },
+    { name: '主寝室', x: 6, z: 11, w: 12, d: 7, floor: 'carpet', private: true, key: 'master' },
     { name: 'サロン', x: 18, z: 11, w: 12, d: 4 },
     { name: 'バルコニー', x: 18, z: 15, w: 12, d: 3, floor: 'stone', open: true },
-    { name: 'お嬢様の部屋', x: 30, z: 11, w: 12, d: 7, private: true },
+    { name: 'お嬢様の部屋', x: 30, z: 11, w: 12, d: 7, private: true, key: 'droom' },
     { name: '納戸', x: 42, z: 13, w: 6, d: 5, wall: 'plain' },
   ],
   doors: [['h', 2, 8, 2], ['h', 13, 8, 2], ['h', 32, 8, 2], ['h', 38, 8, 2], ['v', 36, 3, 2], ['v', 42, 9, 2], ['h', 44, 8, 2], ['h', 44, 13, 2],
@@ -729,36 +721,31 @@ AREAS.f2 = {
     F.bed(39, 16.85, 2, '#f0a0b0', 1.6, 2.1); F.desk(33, 17.5, 2, 1.4); F.chair(33, 16.7, 0, '#f0a0b0');
     F.shelf(38, 11.3, 0, 2, 1.8); F.rug(36, 14.5, 3, 2.5, TEX.carpet); F.plant(41.5, 11.5);
   },
-  setup(api) {
+  setup() {
     exit('螺旋階段で1Fへ', 3.7, 5, { area: 'f1', x: 3.7, z: 5 });
     exit('1Fへ降りる', 24, 9.4, { area: 'f1', x: 24, z: 4.6 });
     exit('裏階段で1Fへ', 45.2, 10.5, { area: 'f1', x: 45.2, z: 10.5 });
-    thing('廊下の窓', 16, 9.6, () => { api.state.windowsIn = true; api.say('各部屋の北側の窓を、中から数えてみた。物置、書斎、吹き抜け、浴室、洗面所、リネン室……全部で6つ。', ...api.windowCheck()); });
-    thing('本棚', 10.95, 2.7, () => api.shelf(), { private: true });
-    thing('机の引き出し', 14.5, 4.1, () => api.desk(), { private: true });
-    thing('月下の庭', 8, 3.2, () => api.found(), { secretOnly: true, private: true });
-    thing('鏡台', 15.6, 12.2, () => api.say('鏡台の引き出しに、若い男への高級時計の領収書が何枚も……。お母様の秘密だ。'), { private: true });
-    thing('勉強机', 33, 16.3, () => api.say('教科書の間に「退学届（控）」——日付は半年前だ。'), { private: true });
-    thing('ドレス', 3, 12.4, () => api.say('お母様のドレスがずらりと並んでいる。どれも一度しか袖を通していないようだ。'), { private: true });
-    thing('浴槽', 33, 1.6, () => api.say('大理石の浴槽。毎晩、お母様が長風呂をする。'));
-    thing('洗面台', 37.2, 1.4, () => api.say('鏡付きの洗面台が二つ並ぶ化粧室。お嬢様の化粧品が少しだけ置いてある。'));
-    thing('バルコニー', 24, 17.0, () => api.say('前庭と噴水が一望できる。正門の向こうに街の灯りが見える。'));
-    const d = npc('daughter', 36, 14.5, Math.PI);
-    talker(d, ['「執事さん！ ねえ、課題手伝ってくれない？」', '「子どもの頃ね、パパの本棚の赤い本を触ったら、すごく怒られたの。なんでだろう？」']);
-    const b = npc('blue', 40, 9.5, -Math.PI / 2, {
-      path: [[40, 9.5, 2], [24, 9.5], [14, 9.5], [14, 5.2, 2.5], [14, 9.5], [3, 9.5, 2], [24, 9.5]], speed: 1.6,
-    });
-    talker(b, ['「あっ執事さん！ 見回り中です！ 書斎は旦那様のお部屋だから、勝手に入っちゃダメなんですよ〜」', '「廊下の花、私が生けたんです！ 上手でしょ？」']);
+    spot('廊下の窓', 16, 9.6, 'corridor', 'windows');
+    special('本棚', 10.95, 2.7, 'shelf');
+    spot('机の引き出し', 14.5, 4.1, 'study', 'desk');
+    spot('部屋の空気', 16.2, 5.6, 'study', 'air');
+    spot('布の掛かった額', 8, 3.2, 'hidden', 'painting', { secretOnly: true });
+    spot('鏡台', 15.6, 12.2, 'master', 'dresser');
+    spot('勉強机', 33, 16.3, 'droom', 'desk');
+    flavor('ドレス', 3, 12.4, 'お母様のドレスがずらりと並んでいる。どれも一度しか袖を通していないようだ。');
+    flavor('浴槽', 33, 1.6, '大理石の浴槽。毎晩、お母様が長風呂をする。');
+    flavor('洗面台', 37.2, 1.4, '鏡付きの洗面台が二つ並ぶ化粧室。お嬢様の化粧品が少しだけ置いてある。');
+    flavor('バルコニー', 24, 17.0, '前庭と噴水が一望できる。正門の向こうに街の灯りが見える。');
   },
 };
 
-export function buildArea(id, scene, api) {
+export function buildArea(id, scene) {
   const def = AREAS[id];
-  A = { id, def, name: def.name, group: new THREE.Group(), solids: [], walls: [], blocks: [], things: [], npcs: [], rooms: def.rooms, secret: null, shelf: null };
+  A = { id, def, name: def.name, group: new THREE.Group(), solids: [], walls: [], blocks: [], things: [], rooms: def.rooms, zones: def.zones || [], secret: null, shelf: null };
   scene.add(A.group);
   if (def.rooms.length) buildRooms(def);
-  def.build(api);
-  def.setup(api);
+  def.build();
+  def.setup();
   const area = A;
   A = null;
   return area;

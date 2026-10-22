@@ -1,0 +1,46 @@
+/* 執事パート（3Dの屋敷）の画面 */
+#day3d { position: fixed; inset: 0; z-index: 5; touch-action: none; }
+#day3d.hidden, #day3d .hidden, #loading3d.hidden { display: none !important; }
+#day3d #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#loading3d { position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--gold); }
+
+#day3d .hud { position: absolute; top: 10px; left: 10px; max-width: min(360px, calc(100% - 180px)); background: rgba(30, 22, 34, .92);
+  border: 1px solid var(--gold); border-radius: 6px; padding: 6px 10px; font-size: 13px; line-height: 1.5; }
+#day3d .clock { color: var(--gold); font-weight: bold; }
+#day3d .place { font-size: 12px; }
+#day3d .meters { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 4px 6px; align-items: center; font-size: 11px; margin: 3px 0; }
+#day3d .bar { height: 7px; background: #3a2c3c; border-radius: 4px; overflow: hidden; min-width: 50px; }
+#day3d .bar i { display: block; height: 100%; width: 0; }
+#day3d .bar.trust i { background: var(--ok); }
+#day3d .bar.susp i { background: var(--bad); }
+#day3d .todo { font-size: 11px; color: #e8dccb; }
+#day3d #minimap { position: absolute; top: 10px; right: 10px; width: 150px; height: 100px; background: rgba(20, 14, 22, .75); border: 1px solid var(--gold); border-radius: 6px; }
+#day3d .tools { position: absolute; top: 118px; right: 10px; display: flex; flex-direction: column; gap: 6px; }
+#day3d .tools button { padding: 4px 10px; font-size: 12px; }
+
+#day3d #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#day3d .label { position: absolute; transform: translate(-50%, -100%); font: bold 12px sans-serif; padding: 1px 6px; border-radius: 10px;
+  background: #fff; color: #b8362d; border: 2px solid #b8362d; white-space: nowrap; }
+#day3d .label.alert { background: var(--bad); color: #fff; border-color: #fff; font-size: 16px; }
+#day3d .label.exit { color: #2f6a4a; border-color: #2f6a4a; }
+#day3d .label.work { background: #3c7a4c; color: #fff; border-color: #fff; font-size: 11px; font-weight: normal; }
+#day3d .label.name { background: rgba(0,0,0,.55); color: #fff; border: 0; font-weight: normal; font-size: 11px; }
+
+#day3d #fade3d { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .25s;
+  display: flex; align-items: center; justify-content: center; color: var(--gold); }
+#day3d #fade3d.on { opacity: 1; }
+#day3d .msg3d { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 32px));
+  background: rgba(30, 22, 34, .95); border: 1px solid var(--gold); border-radius: 8px; padding: 12px 14px; font-size: 15px; line-height: 1.7; cursor: pointer; }
+#day3d .msg3d b { color: var(--gold); display: block; }
+#day3d .act { position: absolute; right: 20px; bottom: 110px; width: 84px; height: 84px; border-radius: 50%; font-size: 14px; font-weight: bold;
+  white-space: nowrap; padding: 0; background: #8a3a50; color: #fff; border: 2px solid var(--gold); }
+#day3d .stick { position: absolute; left: 24px; bottom: 100px; width: 110px; height: 110px; border-radius: 50%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25); }
+#day3d .stick i { position: absolute; left: 35px; top: 35px; width: 40px; height: 40px; border-radius: 50%; background: rgba(227,192,111,.6); }
+@media (hover: hover) and (pointer: fine) { #day3d .stick { display: none; } }
+#day3d .help { position: absolute; left: 10px; bottom: 0; margin: 4px; font-size: 11px; color: #a99; }
+@media (hover: none) { #day3d .help { display: none; } }
+@media (max-width: 480px) {
+  #day3d .hud { font-size: 12px; padding: 5px 8px; max-width: calc(100% - 150px); }
+  #day3d #minimap { width: 120px; height: 80px; }
+  #day3d .tools { top: 96px; }
+}

@@ -3,11 +3,11 @@ import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_
 import { newState, save, load, clearSave, clamp, applyFx, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
   fatherHome, motherOutDay } from './state.js';
-import { SPOTS, pickTalk } from './actions.js';
+import { SPOTS } from './actions.js';
+import * as DL from './daylogic.js';
 import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS } from './story.js';
 
 const CHAPTER_TITLES = ['第1章　9月　情報収集', '第2章　10月　隠し部屋', '第3章　11月　月下の庭', '最終章　12月　決行'];
-const FORGERY_DAYS = 8;
 
 let s = null;
 const app = () => document.getElementById('app');
@@ -31,10 +31,10 @@ function badge(who) {
 }
 function meter(label, value, cls) {
   return el('div', { class: `meter ${cls}` }, el('span', {}, label),
-    el('div', { class: 'bar' }, el('i', { style: `width:${value}%` })), el('b', {}, String(value)));
+    el('div', { class: 'bar' }, el('i', { style: `width:${value}%` })), el('b', {}, String(Math.round(value))));
 }
 function statusBar() {
-  const hour = s.phase === 'day' ? `　${s.today.hour}:00` : '';
+  const hour = s.phase === 'day' ? `　${s.today.hour}:${String(Math.floor(s.today.min || 0)).padStart(2, '0')}` : '';
   return el('header', { class: 'status' },
     el('div', { class: 'date' }, dateLabel(s) + hour),
     meter('心象', s.trust, 'trust'), meter('疑惑', s.susp, 'susp'),
@@ -147,7 +147,7 @@ function chapterIntro() {
 function startWeekday() {
   s.phase = 'meeting';
   if (!s.today || s.today.dayIndex !== dayIndex(s)) {
-    s.today = { dayIndex: dayIndex(s), chores: generateChores(s), hour: START_HOUR, loc: 'servants', talked: {}, log: [], plan: {}, escort: null };
+    s.today = { dayIndex: dayIndex(s), chores: generateChores(s), hour: START_HOUR, min: 0, loc: 'servants', talked: {}, log: [], plan: {}, escort: null };
   }
   save(s);
   renderMeeting();
@@ -200,9 +200,28 @@ function autoAssign(s) {
   }
 }
 
-function beginDay() {
+// 執事パートは3Dの屋敷で遊ぶ。3D描画が使えない端末や ?2d を付けたときはボタン式の画面
+let day3d = null;
+function can3D() {
+  if (new URLSearchParams(location.search).has('2d')) return false;
+  try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
+}
+async function beginDay() {
   buildPlan(s);
   s.phase = 'day';
+  if (can3D()) {
+    const loading = document.getElementById('loading3d');
+    try {
+      if (!day3d) { loading.classList.remove('hidden'); day3d = await import('../explore/day3d.js'); }
+      loading.classList.add('hidden');
+      app().replaceChildren();
+      day3d.startDay(s, { endDay, fatal: checkFatal, notebook: openNotebook, askCode, askForgery, toast });
+      return;
+    } catch (e) {
+      console.error(e);
+      loading.classList.add('hidden');
+    }
+  }
   renderDay();
 }
 
@@ -226,12 +245,9 @@ function renderDay(msg) {
     if (c.assignee !== 'butler' || c.done) return;
     const at = def.room === 'out' ? 'hall' : def.room;
     if (at !== room) return;
-    let ok = true, why = '';
-    const partner = def.with && whereIs(s, def.with, t.hour);
-    if (def.with && (partner === 'out' || (def.room !== 'out' && partner !== def.room))) { ok = false; why = `（${PEOPLE[def.with].name}が不在）`; }
-    if (def.after && t.hour < def.after) { ok = false; why = `（${def.after}時以降）`; }
-    actions.push(el('button', { class: 'work', disabled: !ok, onclick: () => doChore(i) },
-      `${def.name}をする（残り${def.hours - c.progress}h）${why}`));
+    const { ok, why } = DL.choreAvailability(s, c);
+    actions.push(el('button', { class: 'work', disabled: !ok, onclick: () => renderDay(DL.doChore(s, i)) },
+      `${def.name}をする（残り${def.hours - c.progress}h）${why ? `（${why}）` : ''}`));
   });
   // 調査
   for (const sp of SPOTS[room] || []) actions.push(el('button', { class: 'search', onclick: () => investigate(sp) }, `調べる：${sp.name}`));
@@ -258,59 +274,26 @@ function move(id) {
   if (t.loc === 'hidden' && id !== 'study') return renderDay('隠し部屋からは書斎にしか戻れない。');
   if (id === 'hidden') {
     if (t.loc !== 'study') return renderDay('隠し部屋へは書斎から入る。');
-    if (witnesses('study').length) return renderDay('人の目がある。今は入れない。');
+    if (DL.witnessesIn(s, 'study').length) return renderDay('人の目がある。今は入れない。');
   }
   t.loc = id;
   const r = ROOMS[id];
   const hasWork = t.chores.some(c => c.assignee === 'butler' && !c.done && CHORES[c.id].room === id);
-  if (r.owner && r.owner !== 'father' && whereIs(s, r.owner, t.hour) === id && !hasWork) {
-    const notes = applyFx(s, { susp: 5, aff: { [r.owner]: -2 } });
-    return renderDay(`${PEOPLE[r.owner].name}「……何か用？」　${notes.join('／')}`);
-  }
+  if (r.owner && r.owner !== 'father' && whereIs(s, r.owner, t.hour) === id && !hasWork) return renderDay(DL.intrude(s, r.owner));
   renderDay();
 }
 
-function witnesses(room) {
-  return peopleIn(s, room).filter(p => !isAlly(s, p));
-}
-
-function spend(h) {
-  s.today.hour = Math.min(END_HOUR, s.today.hour + h);
-}
-
-function doChore(i) {
-  const t = s.today, c = t.chores[i], def = CHORES[c.id];
-  const h = Math.min(def.hours - c.progress, hoursLeft(s));
-  if (def.with) t.escort = { who: def.with, from: t.hour, to: t.hour + h, room: def.room === 'out' ? 'out' : def.room };
-  c.progress += h;
-  spend(h);
-  let msg = `${def.name}を${c.progress >= def.hours ? '終えた' : '途中まで進めた'}。`;
-  if (c.progress >= def.hours) {
-    c.done = true;
-    if (c.id === 'escortM') msg += ' ' + applyFx(s, { aff: { mother: 8 } }).join('／');
-    if (c.id === 'tutorD') msg += ' ' + applyFx(s, { aff: { daughter: 6 } }).join('／');
-    if (c.id === 'laundry' && s.chapter >= 1 && setFlag(s, 'p_bday'))
-      msg += ' 旦那様のスーツのポケットに、花屋の領収書が入っていた。「麗子様 お誕生日 11月3日」……。（手帳に記録した）';
-  }
-  renderDay(msg);
-}
-
 function investigate(sp) {
-  const room = s.today.loc;
-  const seen = witnesses(room);
-  spend(1);
-  const res = sp.run(s);
-  let msg = res.text;
-  if (seen.length) {
-    const amount = Math.min(25, seen.length * (seen.includes('father') ? 20 : 10));
-    msg += `　……${seen.map(p => PEOPLE[p].name).join('、')}に見られた！ ` + applyFx(s, { susp: amount }).join('／');
-  }
-  if (res.code) return askCode(msg);
+  const seen = DL.witnessesIn(s, s.today.loc);
+  DL.spendHours(s, 1);
+  const res = DL.investigate(s, sp, seen);
+  if (res.code) return askCode(res.msg, renderDay);
   if (res.clue) toast('手帳に記録した');
-  checkFatal() || renderDay(msg);
+  checkFatal() || renderDay(res.msg);
 }
 
-function askCode(msg) {
+// ダイヤル錠。done(文) で結果を返す（3Dの屋敷からも使う）
+function askCode(msg, done) {
   const input = el('input', { type: 'text', inputmode: 'numeric', maxlength: '4', placeholder: '0000', class: 'code' });
   const hints = ['p_lover', 'p_bday'].filter(f => s.flags[f]).map(f => el('li', {}, CLUES[f].text));
   const back = modal(el('h3', {}, 'ダイヤル錠'), el('p', {}, '4桁の数字を合わせる。'),
@@ -319,44 +302,41 @@ function askCode(msg) {
     el('div', { class: 'row' },
       el('button', { onclick: () => {
         back.remove();
-        if (input.value === PASSCODE) { setFlag(s, 'key_hidden'); toast('手帳に記録した'); renderDay('カチリ、と錠が外れた。中には古びた真鍮の鍵が入っていた。'); }
-        else renderDay(msg + '　……開かない。');
+        if (DL.tryCode(s, input.value)) { toast('手帳に記録した'); done('カチリ、と錠が外れた。中には古びた真鍮の鍵が入っていた。'); }
+        else done(msg + '　……開かない。');
       } }, '合わせる'),
-      el('button', { class: 'ghost', onclick: () => { back.remove(); renderDay(msg); } }, 'やめる')));
+      el('button', { class: 'ghost', onclick: () => { back.remove(); done(msg); } }, 'やめる')));
   input.focus();
 }
 
 function openHidden() {
   if (s.chapter < 2) return renderDay('本を引こうとして、手が止まった。……まだ早い。もう少し屋敷の様子を探ってからだ。');
-  if (witnesses('study').length) return renderDay('人の目がある。今はできない。');
-  spend(1);
-  s.flags.hidden_open = true;
+  const why = DL.openHidden(s, DL.witnessesIn(s, 'study'));
+  if (why) return renderDay(why);
+  DL.spendHours(s, 1);
   s.today.loc = 'hidden';
   renderDay('赤い本を引くと、本棚の奥で何かが外れる音がした。鍵を差し込むと、棚がゆっくりと動き、暗い小部屋が現れた。');
 }
 
 function talk(p) {
-  const t = s.today;
-  t.talked[p] = true;
-  spend(1);
-  const tk = pickTalk(s, p);
-  const fx = p === 'father' ? { trust: 2 } : { aff: { [p]: 3 } };
-  const notes = applyFx(s, fx);
-  if (tk.flag) { setFlag(s, tk.flag); notes.push('手帳に記録した'); }
-  const msg = `${PEOPLE[p].name}${tk.line}　${notes.join('／')}`;
-  if (tk.forgery) {
-    const back = modal(el('p', {}, msg), el('p', {}, '青メイドに「月下の庭」の模写を頼みますか？ 絵の特徴は口頭で伝える。'),
-      el('div', { class: 'row' },
-        el('button', { onclick: () => { back.remove(); setFlag(s, 'forgery_start'); s.forgeryDay = dayIndex(s); renderDay('青メイドは目を輝かせて引き受けてくれた。完成まで8日ほどかかるらしい。'); } }, '頼む'),
-        el('button', { class: 'ghost', onclick: () => { back.remove(); renderDay(msg); } }, 'やめておく')));
-    return;
-  }
+  DL.spendHours(s, 1);
+  const { msg, forgery } = DL.talk(s, p);
+  if (forgery) return askForgery(msg, renderDay);
   renderDay(msg);
+}
+
+// 青メイドへの模写の依頼（3Dの屋敷からも使う）
+function askForgery(msg, done) {
+  const back = modal(el('p', {}, msg), el('p', {}, '青メイドに「月下の庭」の模写を頼みますか？ 絵の特徴は口頭で伝える。'),
+    el('div', { class: 'row' },
+      el('button', { onclick: () => { back.remove(); done(DL.startForgery(s)); } }, '頼む'),
+      el('button', { class: 'ghost', onclick: () => { back.remove(); done(msg); } }, 'やめておく')));
 }
 
 // ---- 1日の終わり ----
 function endDay() {
   const t = s.today;
+  s.susp = Math.round(s.susp);
   const lines = [];
   let trust = 0;
   const maidFx = {};
@@ -373,7 +353,7 @@ function endDay() {
   }
   for (const m of activeMaids(s)) if (!(m in maidFx) && m !== 'red') maidFx[m] = -1;
   const notes = applyFx(s, { trust: Math.min(trust, 2), aff: maidFx, susp: -2 });
-  if (s.flags.forgery_start && !s.flags.forgery_ready && dayIndex(s) - s.forgeryDay >= FORGERY_DAYS) {
+  if (s.flags.forgery_start && !s.flags.forgery_ready && dayIndex(s) - s.forgeryDay >= DL.FORGERY_DAYS) {
     setFlag(s, 'forgery_ready');
     notes.push('青メイドの模写が完成した！');
   }

@@ -10,9 +10,32 @@
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/day3d.css">
 </head>
 <body>
   <main id="app"></main>
+  <!-- 執事パート（3Dの屋敷） -->
+  <div id="day3d" class="hidden">
+    <canvas id="view"></canvas>
+    <div id="labels"></div>
+    <div class="hud">
+      <div class="clock" id="clock3d"></div>
+      <div class="place" id="place3d"></div>
+      <div class="meters">
+        <span>心象</span><div class="bar trust"><i id="trust3d"></i></div>
+        <span>疑惑</span><div class="bar susp"><i id="susp3d"></i></div>
+      </div>
+      <div class="todo" id="todo3d"></div>
+    </div>
+    <canvas id="minimap" width="300" height="200"></canvas>
+    <div class="tools"><button id="nb3d">手帳</button><button id="end3d">業務を終える</button></div>
+    <div id="fade3d"><p id="fadeText"></p></div>
+    <div id="msg3d" class="msg3d hidden"></div>
+    <button id="act" class="act hidden"></button>
+    <div id="stick" class="stick"><i></i></div>
+    <p class="help">移動：矢印キー / WASD（スマホは左下のスティック）　調べる・話す・仕事：スペース / E</p>
+  </div>
+  <div id="loading3d" class="hidden">屋敷を準備しています……</div>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>
