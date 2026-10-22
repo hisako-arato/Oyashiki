@@ -1,0 +1,17 @@
+{
+  "name": "OYASHIKI 執事と月下の絵",
+  "short_name": "OYASHIKI",
+  "description": "お屋敷の宝を盗み出す物語",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1c1420",
+  "theme_color": "#1c1420",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

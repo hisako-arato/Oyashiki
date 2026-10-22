@@ -1,0 +1,96 @@
+// ゲームの静的データ（人物・部屋・仕事・調査ポイント）
+
+export const START_HOUR = 9;
+export const END_HOUR = 18;
+export const ALLY_AFF = 70;
+export const PASSCODE = '1103';
+
+export const PEOPLE = {
+  butler:  { name: '執事',     color: '#2b2b3a' },
+  father:  { name: 'お父様',   color: '#6b5640' },
+  mother:  { name: 'お母様',   color: '#b8436f' },
+  daughter:{ name: 'お嬢様',   color: '#d68a1c' },
+  red:     { name: '赤メイド', color: '#c8362d', maid: true, from: 0 },
+  blue:    { name: '青メイド', color: '#2f6fd0', maid: true, from: 1 },
+  black:   { name: '黒メイド', color: '#222222', maid: true, from: 2 },
+  white:   { name: '白メイド', color: '#9aa3ad', maid: true, from: 2 },
+};
+
+export const MAIDS = ['red', 'blue', 'black', 'white'];
+export const FAMILY = ['father', 'mother', 'daughter'];
+
+// 仕事の種類ごとの作業速度（倍率）。高いほど早い
+export const SPEED = {
+  red:   { cook: 2,   clean: 1,   misc: 1,   art: 0.7 },
+  blue:  { cook: 0.6, clean: 0.7, misc: 0.8, art: 2 },
+  black: { cook: 0.8, clean: 2,   misc: 1,   art: 0.6 },
+  white: { cook: 1.3, clean: 1.3, misc: 1.3, art: 1 },
+};
+export const MAID_CAPACITY = 8;
+export const BLUE_FAIL_RATE = 0.25;
+
+export const ROOMS = {
+  hall:     { name: '玄関ホール',     floor: 1 },
+  great:    { name: '大広間',         floor: 1 },
+  kitchen:  { name: 'キッチン',       floor: 1 },
+  kback:    { name: 'キッチン裏',     floor: 1 },
+  archive:  { name: '資料室',         floor: 1 },
+  laundry:  { name: '洗濯室',         floor: 1 },
+  servants: { name: '使用人室',       floor: 1 },
+  garden:   { name: '裏庭',           floor: 1 },
+  storage:  { name: '倉庫',           floor: 1 },
+  corridor: { name: '2F廊下',         floor: 2 },
+  study:    { name: '書斎',           floor: 2, owner: 'father' },
+  hidden:   { name: '隠し部屋',       floor: 2, secret: true },
+  master:   { name: '主寝室',         floor: 2, owner: 'mother' },
+  droom:    { name: 'お嬢様の部屋',   floor: 2, owner: 'daughter' },
+};
+
+// 仕事の定義。butlerOnly は執事しか担当できない。optional は未完了でも減点なし
+export const CHORES = {
+  cook:     { name: '料理',               type: 'cook',  hours: 4, room: 'kitchen' },
+  great:    { name: '大広間の掃除',       type: 'clean', hours: 3, room: 'great' },
+  corridor: { name: '2F廊下の掃除',       type: 'clean', hours: 2, room: 'corridor' },
+  garden:   { name: '庭の手入れ',         type: 'misc',  hours: 3, room: 'garden' },
+  laundry:  { name: '洗濯',               type: 'misc',  hours: 2, room: 'laundry' },
+  study:    { name: '書斎の掃除',         type: 'clean', hours: 2, room: 'study' },
+  master:   { name: '主寝室のベッドメイク', type: 'clean', hours: 2, room: 'master' },
+  droom:    { name: 'お嬢様の部屋の掃除', type: 'clean', hours: 2, room: 'droom' },
+  storage:  { name: '倉庫の整理',         type: 'misc',  hours: 3, room: 'storage' },
+  archive:  { name: '資料室の整理',       type: 'misc',  hours: 2, room: 'archive' },
+  shopping: { name: '買い出し',           type: 'misc',  hours: 3, room: 'out' },
+  flowers:  { name: '花の飾り付け',       type: 'art',   hours: 2, room: 'hall' },
+  escortM:  { name: 'お母様のお供',       type: 'escort', hours: 4, room: 'out', butlerOnly: true, optional: true, with: 'mother' },
+  tutorD:   { name: 'お嬢様の勉強の手伝い', type: 'escort', hours: 2, room: 'droom', butlerOnly: true, optional: true, with: 'daughter', after: 13 },
+};
+
+export const CHORE_POOL = ['great', 'corridor', 'garden', 'laundry', 'master', 'droom', 'storage', 'archive', 'shopping', 'flowers'];
+export const CHORES_PER_CHAPTER = [3, 4, 5, 6];
+
+// 手帳に表示する手がかり
+export const CLUES = {
+  c_import:     { ch: 0, text: '倉庫の古い伝票：20年前、差出人不明の「額装品」が屋敷に運び込まれている。' },
+  c_red:        { ch: 0, text: '赤メイドの証言：夜中、旦那様が書斎で「あの絵は年明けに海外で」と電話していた。' },
+  c_daughter:   { ch: 0, text: 'お嬢様の話：子どもの頃から書斎だけは入ってはいけないと言われている。' },
+  c_study:      { ch: 0, text: '書斎の空気：かすかに油絵具とニスの匂いがする。' },
+  h_window:     { ch: 1, text: '2F廊下の窓：外から見える窓の数と、2階の部屋の数が合わない。' },
+  h_blueprint:  { ch: 1, text: '資料室の設計図：書斎の奥に、用途の書かれていない空間がある。' },
+  hidden_room:  { ch: 1, text: '【確信】書斎の奥に隠し部屋がある。' },
+  hint_redbook: { ch: 1, text: 'お嬢様の思い出：父の本棚の「赤い本」に触れて、ひどく叱られたことがある。' },
+  red_book:     { ch: 1, text: '【仕掛け】書斎の本棚、上から5段目の赤い本だけ埃がない。これが隠し扉の仕掛けだ。' },
+  desk_lock:    { ch: 1, text: '書斎の机の引き出しは4桁のダイヤル錠。中に何か大事な物がありそうだ。' },
+  p_lover:      { ch: 1, text: 'お母様の愚痴：旦那様には「麗子」という愛人がいるらしい。' },
+  p_bday:       { ch: 1, text: '洗濯物から：旦那様のスーツに花屋の領収書「麗子様 お誕生日 11月3日」。' },
+  key_hidden:   { ch: 1, text: '【入手】引き出しから隠し部屋の鍵を手に入れた。' },
+  found_painting:{ ch: 2, text: '【発見】隠し部屋に「月下の庭」がある。額縁には警報センサーの線が繋がっている。' },
+  breaker_seen: { ch: 1, text: 'キッチン裏の配電盤：警報は独立した系統らしいが、どれがそれか素人には分からない。' },
+  white_elec:   { ch: 2, text: '白メイドは電気工学に詳しい。警報の系統も見分けられそうだ。' },
+  elevator:     { ch: 0, text: '倉庫の貨物エレベーター：2階の書斎横の物置に通じている。' },
+  hall_patrol:  { ch: 2, text: '夜は黒メイドが大広間を見回っている。大広間を通れば見つかる。' },
+  m_secret:     { ch: 1, text: '【お母様の秘密】若い男に多額の贈り物をしている。' },
+  d_secret:     { ch: 1, text: '【お嬢様の秘密】大学を半年前にこっそり辞めている。' },
+  forgery_start:{ ch: 2, text: '青メイドに「月下の庭」の模写を頼んだ。完成まで8日ほどかかる。' },
+  forgery_ready:{ ch: 2, text: '【贋作】青メイドの模写が完成した。見分けがつかないほどの出来だ。' },
+  white_ally:   { ch: 3, text: '【協力者】白メイドが決行の夜にブレーカーを切ってくれる。' },
+  hide_ok:      { ch: 3, text: '【協力者】お嬢様が「贈り物の絵」を部屋で預かってくれる。' },
+};
