@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1c1420">
+  <title>OYASHIKI 探索試作</title>
+  <link rel="icon" href="../icons/icon-192.png">
+  <link rel="stylesheet" href="explore.css">
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="labels"></div>
+  <div class="hud">
+    <div class="place" id="place">2F 廊下</div>
+    <div class="susp"><span>疑惑</span><div class="bar"><i id="susp"></i></div></div>
+  </div>
+  <canvas id="minimap" width="150" height="150"></canvas>
+  <div id="msg" class="msg hidden"></div>
+  <button id="act" class="act hidden">調べる</button>
+  <div id="stick" class="stick"><i></i></div>
+  <p class="help">移動：矢印キー / WASD（スマホは左下のスティック）　調べる・話す：スペース / E</p>
+  <div id="dial" class="dial hidden">
+    <div class="box">
+      <h3>ダイヤル錠</h3>
+      <p>4桁の数字を合わせる。</p>
+      <input id="code" inputmode="numeric" maxlength="4" placeholder="0000">
+      <div class="row"><button id="dialOk">合わせる</button><button id="dialNo" class="ghost">やめる</button></div>
+    </div>
+  </div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

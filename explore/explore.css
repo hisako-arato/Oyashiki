@@ -1,0 +1,38 @@
+:root { --gold: #e3c06f; --panel: rgba(30, 22, 34, .92); --text: #f3ece4; --bad: #e0675f; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #120c14; color: var(--text);
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif; -webkit-user-select: none; user-select: none; touch-action: none; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+.hud { position: fixed; top: 10px; left: 10px; background: var(--panel); border: 1px solid var(--gold); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+.place { color: var(--gold); font-weight: bold; }
+.susp { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.bar { width: 110px; height: 8px; background: #3a2c3c; border-radius: 4px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--bad); transition: width .1s; }
+#minimap { position: fixed; top: 10px; right: 10px; width: 120px; height: 120px; background: rgba(20, 14, 22, .75); border: 1px solid var(--gold); border-radius: 6px; }
+
+#labels { position: fixed; inset: 0; pointer-events: none; }
+.label { position: absolute; transform: translate(-50%, -100%); font: bold 12px sans-serif; padding: 1px 6px; border-radius: 10px;
+  background: #fff; color: #b8362d; border: 2px solid #b8362d; white-space: nowrap; }
+.label.alert { background: var(--bad); color: #fff; border-color: #fff; font-size: 16px; }
+.label.name { background: rgba(0,0,0,.55); color: #fff; border: 0; font-weight: normal; font-size: 11px; }
+
+.msg { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 32px));
+  background: var(--panel); border: 1px solid var(--gold); border-radius: 8px; padding: 12px 14px; font-size: 15px; line-height: 1.7; cursor: pointer; }
+.msg b { color: var(--gold); display: block; }
+.hidden { display: none !important; }
+.act { position: fixed; right: 20px; bottom: 110px; width: 84px; height: 84px; border-radius: 50%; font-size: 14px; font-weight: bold; white-space: nowrap; padding: 0;
+  background: #8a3a50; color: #fff; border: 2px solid var(--gold); }
+.stick { position: fixed; left: 24px; bottom: 100px; width: 110px; height: 110px; border-radius: 50%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25); }
+.stick i { position: absolute; left: 35px; top: 35px; width: 40px; height: 40px; border-radius: 50%; background: rgba(227,192,111,.6); }
+@media (hover: hover) and (pointer: fine) { .stick { display: none; } }
+.help { position: fixed; left: 10px; bottom: 0; margin: 4px; font-size: 11px; color: #a99; }
+@media (hover: none) { .help { display: none; } }
+
+.dial { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.dial .box { background: var(--panel); border: 1px solid var(--gold); border-radius: 8px; padding: 16px; width: min(360px, 100%); text-align: center; }
+.dial h3 { color: var(--gold); margin: 0 0 4px; }
+.dial input { font-size: 28px; letter-spacing: .4em; width: 7em; text-align: center; background: #3a2c3c; color: var(--text); border: 1px solid #6a5468; border-radius: 4px; padding: 4px; }
+.row { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+button { font: inherit; color: var(--text); background: #8a3a50; border: 1px solid var(--gold); border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+button.ghost { background: transparent; border-color: #6a5468; }

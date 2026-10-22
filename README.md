@@ -32,6 +32,15 @@ npx http-server -c-1 .
 
 GitHub Pages などの静的ホスティングにそのまま置ける。
 
+## 探索の試作（ローポリ3D）
+
+`explore/` は、主人公を操作して屋敷を探索する方式の試作（2F 書斎と廊下）。本編とは独立している。
+
+- 開き方：`http://localhost:8080/explore/`
+- 移動：矢印キー / WASD（スマホは左下のスティック）
+- 調べる・話す：スペース / E（スマホは右下のボタン）
+- 3D描画に [Three.js](https://threejs.org/)（MIT License）を `vendor/` に同梱している
+
 ## ファイル構成
 
 | ファイル | 内容 |
