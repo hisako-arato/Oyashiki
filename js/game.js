@@ -2,12 +2,12 @@
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY } from './data.js';
 import { newState, save, load, clearSave, clamp, applyFx, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
-  fatherHome, motherOutDay } from './state.js';
+  fatherHome, motherOutDay, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
 import * as DL from './daylogic.js';
 import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS } from './story.js';
 
-const CHAPTER_TITLES = ['第1章　9月　情報収集', '第2章　10月　隠し部屋', '第3章　11月　月下の庭', '最終章　12月　決行'];
+const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
 let s = null;
 const app = () => document.getElementById('app');
@@ -144,17 +144,30 @@ function chapterIntro() {
   render(card);
 }
 
-function startWeekday() {
+async function startWeekday() {
   s.phase = 'meeting';
   if (!s.today || s.today.dayIndex !== dayIndex(s)) {
     s.today = { dayIndex: dayIndex(s), chores: generateChores(s), hour: START_HOUR, min: 0, loc: 'servants', talked: {}, log: [], plan: {}, escort: null };
   }
   save(s);
-  renderMeeting();
+  // 3Dの屋敷では、執事の部屋で目を覚まし、共用室の席に着いて朝礼を始める
+  app().replaceChildren();
+  if (await load3D()) {
+    return day3d.startMorning(s, {
+      openMeeting: done => {
+        app().classList.add('overlay');
+        renderMeeting(() => { buildPlan(s); s.phase = 'day'; app().classList.remove('overlay'); app().replaceChildren(); done(); });
+      },
+      endDay, fatal: checkFatal, notebook: openNotebook, askCode, askForgery, toast,
+    });
+  }
+  renderMeeting(beginDay);
 }
 
-// ---- メイド定例会議 ----
-function renderMeeting() {
+// ---- 朝礼（メイドへの仕事の割り振り） ----
+let meetingDone = null;
+function renderMeeting(done = meetingDone) {
+  meetingDone = done;
   const t = s.today;
   const maids = activeMaids(s);
   const info = [
@@ -178,13 +191,13 @@ function renderMeeting() {
     return el('div', { class: `load ${l > MAID_CAPACITY ? 'over' : ''}` }, badge(m), ` ${l}/${MAID_CAPACITY}h`);
   });
   render(el('div', { class: 'panel' }, statusBar(),
-    el('h2', {}, 'メイド定例会議'),
+    el('h2', {}, '朝礼'),
     el('ul', { class: 'info' }, info.map(i => el('li', {}, i))),
     el('table', { class: 'chores' }, el('tr', {}, el('th', {}, '仕事'), el('th', {}, '場所'), el('th', {}, '担当')), rows),
     el('div', { class: 'loads' }, loads, el('div', { class: 'load' }, badge('butler'), ` ${butlerHours}/${END_HOUR - START_HOUR}h`)),
     el('button', { class: 'ghost', onclick: () => { autoAssign(s); renderMeeting(); } }, 'おまかせで割り振る'),
     el('p', { class: 'hint' }, 'メイドは担当した部屋で働く。調べたい部屋にメイドを置かないのがコツ。8時間を超えた仕事は終わらない。'),
-    el('button', { class: 'primary', onclick: beginDay }, '会議を終えて仕事を始める')));
+    el('button', { class: 'primary', onclick: () => meetingDone() }, '朝礼を終えて仕事を始める')));
 }
 
 // 得意な仕事を、余裕のあるメイドから順に割り振る。収まらない分は執事
@@ -206,22 +219,23 @@ function can3D() {
   if (new URLSearchParams(location.search).has('2d')) return false;
   try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
 }
-async function beginDay() {
+async function load3D() {
+  if (!can3D()) return false;
+  const loading = document.getElementById('loading3d');
+  try {
+    if (!day3d) { loading.classList.remove('hidden'); day3d = await import('../explore/day3d.js'); }
+    return true;
+  } catch (e) {
+    console.error(e);
+    return false;
+  } finally {
+    loading.classList.add('hidden');
+  }
+}
+// ボタン式の画面のとき
+function beginDay() {
   buildPlan(s);
   s.phase = 'day';
-  if (can3D()) {
-    const loading = document.getElementById('loading3d');
-    try {
-      if (!day3d) { loading.classList.remove('hidden'); day3d = await import('../explore/day3d.js'); }
-      loading.classList.add('hidden');
-      app().replaceChildren();
-      day3d.startDay(s, { endDay, fatal: checkFatal, notebook: openNotebook, askCode, askForgery, toast });
-      return;
-    } catch (e) {
-      console.error(e);
-      loading.classList.add('hidden');
-    }
-  }
   renderDay();
 }
 
@@ -348,7 +362,7 @@ function endDay() {
     else if (!def.optional) { trust -= c.id === 'cook' ? 10 : 5; s.weekStats.missed++; lines.push(`× ${def.name}${c.overload ? '（時間内に終わらず）' : ''}`); }
     if (MAIDS.includes(c.assignee)) {
       const m = c.assignee;
-      maidFx[m] = (maidFx[m] || 0) + (c.overload ? -4 : (def.type === 'art' && m === 'blue') ? 2 : maidHours(m, c) < def.hours ? 1 : 0);
+      maidFx[m] = (maidFx[m] || 0) + (c.overload ? -4 : (def.type === 'art' && m === 'blue') ? 4 : maidHours(m, c) < def.hours ? 2 : 0);
     }
   }
   for (const m of activeMaids(s)) if (!(m in maidFx) && m !== 'red') maidFx[m] = -1;
@@ -382,14 +396,14 @@ function checkFatal() {
 function startWeekend() {
   s.phase = 'weekend';
   save(s);
-  if (s.chapter === 3 && s.week === 3) return execution();
+  if (s.chapter === 3 && s.week === WEEKS_PER_CHAPTER - 1) return execution();
   playScript(WEEKENDS[s.chapter][s.week], afterWeekend);
 }
 
 function afterWeekend() {
   s.day = 0;
   s.week++;
-  if (s.week >= 4) { s.week = 0; s.chapter++; return chapterIntro(); }
+  if (s.week >= WEEKS_PER_CHAPTER) { s.week = 0; s.chapter++; return chapterIntro(); }
   startWeekday();
 }
 
@@ -418,7 +432,7 @@ function runRoute(id) {
     ['butler', '（「月下の庭」……今、迎えに来た）'],
   ], () => {
     if (!alarmOff) return fail('額縁に手をかけた瞬間、甲高い警報が屋敷中に鳴り響いた。');
-    if (id === 'night') return playScript([['n', '絵を布で包み、螺旋階段で1階へ。裏庭の闇を抜け、屋敷を後にした。']], () => ending('night'));
+    if (id === 'night') return playScript([['n', '絵を布で包み、バルコニーから梯子で前庭へ降りる。闇に紛れて、屋敷を後にした。']], () => ending('night'));
     playScript([
       ['n', '青の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。'],
       ['n', 'お嬢様の部屋のクローゼットに本物を隠し、執事は何食わぬ顔で自室に戻った。'],
@@ -432,7 +446,9 @@ function runRoute(id) {
         ? playScript([['n', '赤メイドの部屋の扉が少し開いていた。目が合った気がしたが、彼女は寝返りを打っただけだった。']], toPainting)
         : fail('「……誰？」赤メイドの部屋に明かりが点いた。足音を聞かれてしまった。') },
     ];
-    if (s.flags.elevator) opts.push({ t: '裏庭から倉庫へ回り、螺旋階段で2階へ', go: () => playScript([['n', '裏庭の死角を抜け、倉庫の螺旋階段を上る。誰にも見られず、書斎近くの物置に出た。']], toPainting) });
+    if (s.flags.ladder) opts.push({ t: '倉庫の梯子を前庭に運び、バルコニーから2階へ', go: () => s.flags.balcony_open
+      ? playScript([['n', '前庭の闇に梯子を立て、バルコニーへ登る。昼のうちに鍵を外しておいたガラス戸は、音もなく開いた。']], toPainting)
+      : fail('バルコニーのガラス戸には鍵が掛かっていた。こじ開けようとした音に、屋敷の明かりが灯った。') });
     showChoice(opts, o => o.go());
   };
   const breaker = () => {
@@ -472,7 +488,8 @@ function openNotebook() {
     !s.flags.hidden_room && '屋敷の構造を調べ、絵の隠し場所を突き止める',
     s.flags.hidden_room && !s.flags.red_book && '書斎の本棚に隠し扉の仕掛けがあるはずだ',
     s.flags.desk_lock && !s.flags.key_hidden && '机の引き出しのダイヤル錠を開ける番号を探す',
-    s.flags.red_book && s.flags.key_hidden && !s.flags.found_painting && '人のいない時に、書斎から隠し部屋へ入る（11月以降）',
+    s.flags.red_book && s.flags.key_hidden && !s.flags.found_painting && '人のいない時に、書斎から隠し部屋へ入る（12月以降）',
+    s.chapter >= 3 && s.flags.ladder && !s.flags.balcony_open && '昼のうちに、バルコニーのガラス戸の鍵を外しておく',
     s.flags.found_painting && !s.flags.white_ally && '絵の警報をどうにかする方法が要る',
   ].filter(Boolean);
   const back = modal(

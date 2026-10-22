@@ -4,7 +4,7 @@ import { PEOPLE, CHORES, PASSCODE, END_HOUR } from './data.js';
 import { applyFx, setFlag, dayIndex, whereIs, isAlly, peopleIn } from './state.js';
 import { pickTalk } from './actions.js';
 
-export const FORGERY_DAYS = 8;
+export const FORGERY_DAYS = 5;
 
 // 時間を進める（分単位。s.today.min が分）
 export function spendMinutes(s, m) {
@@ -35,8 +35,8 @@ export function doChore(s, i) {
   let msg = `${def.name}を${c.progress >= def.hours ? '終えた' : '途中まで進めた'}。`;
   if (c.progress >= def.hours) {
     c.done = true;
-    if (c.id === 'escortM') msg += ' ' + applyFx(s, { aff: { mother: 8 } }).join('／');
-    if (c.id === 'tutorD') msg += ' ' + applyFx(s, { aff: { daughter: 6 } }).join('／');
+    if (c.id === 'escortM') msg += ' ' + applyFx(s, { aff: { mother: 12 } }).join('／');
+    if (c.id === 'tutorD') msg += ' ' + applyFx(s, { aff: { daughter: 10 } }).join('／');
     if (c.id === 'laundry' && s.chapter >= 1 && setFlag(s, 'p_bday'))
       msg += ' 旦那様のスーツのポケットに、花屋の領収書が入っていた。「麗子様 お誕生日 11月3日」……。（手帳に記録した）';
   }
@@ -66,7 +66,7 @@ export function talk(s, p) {
   const tk = pickTalk(s, p);
   if (t.talked[p]) return { msg: `${PEOPLE[p].name}${tk.line}`, forgery: false, repeat: true };
   t.talked[p] = true;
-  const notes = applyFx(s, p === 'father' ? { trust: 2 } : { aff: { [p]: 3 } });
+  const notes = applyFx(s, p === 'father' ? { trust: 3 } : { aff: { [p]: 5 } });
   if (tk.flag) { setFlag(s, tk.flag); notes.push('手帳に記録した'); }
   return { msg: `${PEOPLE[p].name}${tk.line}　${notes.join('／')}`, forgery: !!tk.forgery };
 }

@@ -9,6 +9,7 @@ import * as DL from '../js/daylogic.js';
 
 const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か
 const ACT_MIN = 20;          // 調べる・話すにかかる時間（分）
+const WALK_SPEED = 5.2;      // 歩く速さ（m/秒）
 const LOW = 0.17, VIEW_RANGE = 5.5, VIEW_FOV = Math.PI * 0.42, CONE_RAYS = 24;
 const OWNERS = { master: 'mother', droom: 'daughter' };
 
@@ -18,7 +19,7 @@ const $ = id => document.getElementById(id);
 const root = $('day3d');
 
 // ---- 状態（その日だけ） ----
-const st = { busy: false, lastKey: null, shelfAnim: 0 };
+const st = { busy: false, lastKey: null, shelfAnim: 0, mode: 'day' };  // mode：morning（朝礼前）／day
 const player = { ...makeChar(scene, { outfit: '#22223a', hair: '#2a2a2a' }), x: 0, z: 0, r: 0.3 };
 
 // ---- メッセージ ----
@@ -154,8 +155,10 @@ function place(p, key) {
   else { [p.x, p.z] = freePoint(a, p.rect); p.still = false; }
   p.target = null; p.wait = Math.random() * 2;
 }
+// 朝礼前の使用人棟：赤はお茶を淹れ、黒は先に席で待ち、青と白は身支度中。家族は母屋にいる
+const MORNING = { red: 'c_kettle', blue: 'c_blue', black: 'servants', white: 'c_white' };
 function updatePerson(p, dt) {
-  const key = whereIs(s, p.id, s.today.hour);
+  const key = st.mode === 'morning' ? (MORNING[p.id] && whereIs(s, p.id, 9) ? MORNING[p.id] : null) : whereIs(s, p.id, s.today.hour);
   if (key !== p.key) place(p, key);
   const here = p.area === cur.id;
   p.g.visible = here; p.cone.visible = here;
@@ -199,6 +202,7 @@ const watchers = () => Object.values(people).filter(p => p.area === cur.id && p.
 const workMat = new THREE.MeshStandardMaterial({ color: '#7ad08a', emissive: '#4ab06a', emissiveIntensity: 0.6, transparent: true, opacity: 0.6 });
 function refreshMarkers() {
   for (const a of Object.values(areas)) { for (const m of a.markers) a.group.remove(m); a.markers = []; }
+  if (st.mode === 'morning') return;
   s.today.chores.forEach((c, i) => {
     if (c.assignee !== 'butler' || c.done) return;
     const [area, x, z] = WORK[c.id];
@@ -207,8 +211,16 @@ function refreshMarkers() {
     a.group.add(m); a.markers.push(m);
   });
 }
+// 朝礼の席（朝礼前だけ）と、ベッドで休む（仕事中だけ）
+const SEAT = [9.05, 7.5];
+function morningThings() {
+  if (cur.id !== 'cottage') return [];
+  if (st.mode === 'morning') return [{ name: '朝礼の席', at: () => SEAT, label: '朝礼', meeting: true }];
+  return [{ name: 'ベッド', at: () => [2.4, 12.5], label: '休む', rest: true }];
+}
 function choreThings() {
   const list = [];
+  if (st.mode === 'morning') return list;
   s.today.chores.forEach((c, i) => {
     if (c.assignee !== 'butler' || c.done) return;
     const [area, x, z] = WORK[c.id];
@@ -238,6 +250,7 @@ function findTarget() {
   };
   for (const t of cur.things) consider(t);
   for (const t of choreThings()) consider(t);
+  for (const t of morningThings()) consider(t);
   for (const p of Object.values(people)) if (p.area === cur.id) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p });
   return best;
 }
@@ -247,6 +260,8 @@ function act() {
   if (performance.now() < actLock) { actLock = performance.now() + 500; return; }
   if (st.busy || !target) return;
   const t = target;
+  if (t.meeting) return startMeeting();
+  if (t.rest) { if (confirm('今日の業務を終えて休みますか？')) finish(); return; }
   if (t.exit) return travel(t.exit);
   if (t.person) return talkTo(t.person);
   if (t.chore !== undefined) return work(t.chore);
@@ -254,6 +269,26 @@ function act() {
   if (t.special) return special(t.special);
   if (t.spot) return search(t.spot);
 }
+// 席に着くと、メイドたちも集まって朝礼が始まる
+function startMeeting() {
+  st.busy = true;
+  player.x = SEAT[0]; player.z = SEAT[1]; player.g.rotation.y = Math.PI / 2;
+  const seats = [[10, 6.55, 0], [12, 6.55, 0], [10, 8.45, Math.PI], [12, 8.45, Math.PI]];
+  Object.values(people).filter(p => p.area === 'cottage').forEach((p, i) => {
+    const [x, z, yaw] = seats[i % seats.length];
+    p.x = x; p.z = z; p.g.rotation.y = yaw; p.still = true; p.g.position.set(x, 0, z);
+  });
+  hooks.openMeeting(() => {
+    st.mode = 'day';
+    s.today.hour = 9; s.today.min = 0;
+    for (const p of Object.values(people)) p.key = undefined;   // それぞれの持ち場へ
+    refreshMarkers();
+    const mine = s.today.chores.filter(c => c.assignee === 'butler').map(c => CHORES[c.id].name);
+    say(['朝礼', `9時、仕事の始まりだ。執事の担当は${mine.length ? `「${mine.join('」「')}」` : 'なし'}。`],
+      mine.length ? '緑の印が仕事の場所だ。空いた時間で、屋敷を探ろう。' : '今日は自由に動ける。屋敷を探ろう。');
+  });
+}
+
 function talkTo(p) {
   p.g.rotation.y = Math.atan2(player.x - p.x, player.z - p.z);
   p.wait = Math.max(p.wait, 3); p.baseYaw = p.g.rotation.y; p.target = null;
@@ -325,7 +360,7 @@ function moveStick(e) {
 }
 $('act').addEventListener('click', act);
 $('nb3d').addEventListener('click', () => { if (!st.busy) hooks.notebook(); });
-$('end3d').addEventListener('click', () => { if (!st.busy && confirm('今日の業務を終えますか？')) finish(); });
+$('end3d').addEventListener('click', () => { if (!st.busy && st.mode === 'day' && confirm('今日の業務を終えますか？')) finish(); });
 
 // ---- 手前の壁・建物を低くする ----
 const tmpV = new THREE.Vector3();
@@ -407,12 +442,13 @@ function drawMinimap(here) {
 }
 function drawHud(room) {
   const t = s.today, mm2 = String(Math.floor(t.min || 0)).padStart(2, '0');
-  $('clock3d').textContent = `${dateLabel(s)}　${t.hour}:${mm2}`;
+  $('clock3d').textContent = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${mm2}`}`;
   $('place3d').textContent = `${AREA_INFO[cur.id].name}　${room ? room.name : ''}`;
   $('trust3d').style.width = `${s.trust}%`;
   $('susp3d').style.width = `${s.susp}%`;
   const todo = s.today.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${CHORES[c.id].optional ? '（任意）' : ''}`);
-  const text = todo.length ? todo.join('　') : '執事の担当なし';
+  $('end3d').classList.toggle('hidden', st.mode === 'morning');
+  const text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう' : todo.length ? todo.join('　') : '執事の担当なし';
   if ($('todo3d').textContent !== text) $('todo3d').textContent = text;
 }
 
@@ -441,11 +477,11 @@ function tick(now) {
   last = now;
 
   // 時間が進む（メッセージや操作待ちの間は止まる）
-  if (!st.busy && !document.querySelector('.modal-back')) {
+  if (st.mode === 'day' && !st.busy && !document.querySelector('.modal-back')) {
     s.today.min = (s.today.min || 0) + dt * 60 / SEC_PER_HOUR;
     if (s.today.min >= 60) { s.today.min -= 60; s.today.hour++; }
   }
-  if (s.today.hour >= END_HOUR && !ending) {
+  if (st.mode === 'day' && s.today.hour >= END_HOUR && !ending) {
     ending = true;
     s.today.hour = END_HOUR; s.today.min = 0;
     afterMsg = finish;
@@ -460,15 +496,15 @@ function tick(now) {
     if (keys.has('arrowleft') || keys.has('a')) ix -= 1;
     ix += stick.x; iy -= stick.y;
   }
-  const il = Math.hypot(ix, iy), moving = il > 0.15;
+  const il = Math.hypot(ix, iy), moving = il > 0.15 && !st.lying;
   if (moving) {
-    const sp = 3.6 * Math.min(1, il) / il;
+    const sp = WALK_SPEED * Math.min(1, il) / il;
     const dx = (FWD.x * iy + RIGHT.x * ix) * sp * dt, dz = (FWD.y * iy + RIGHT.y * ix) * sp * dt;
     moveBy(player, dx, dz, player.r);
     player.g.rotation.y = Math.atan2(dx, dz);
   }
-  player.g.position.set(player.x, 0, player.z);
-  animate(player, moving, dt);
+  if (st.lying) { player.g.position.set(player.x, 0.62, player.z); player.g.rotation.set(-Math.PI / 2, 0, 0); }
+  else { player.g.position.set(player.x, 0, player.z); animate(player, moving, dt); }
 
   // 今いる部屋
   const room = roomAt(player.x, player.z);
@@ -508,7 +544,7 @@ function tick(now) {
   const talking = !msgEl.classList.contains('hidden');
   target = st.busy ? null : findTarget();
   actBtn.classList.toggle('hidden', !target && !talking);
-  actBtn.textContent = talking ? '次へ' : target ? (target.exit ? '移動' : target.person ? '話す' : target.chore !== undefined ? '仕事' : '調べる') : '';
+  actBtn.textContent = talking ? '次へ' : target ? (target.exit ? '移動' : target.person ? '話す' : target.chore !== undefined ? '仕事' : target.meeting ? '朝礼' : target.rest ? '休む' : '調べる') : '';
   const labels = [];
   for (const p of Object.values(people)) {
     if (p.area !== cur.id) continue;
@@ -518,7 +554,7 @@ function tick(now) {
   for (const t of choreThings()) { const [x, z] = t.at(); labels.push({ x, y: 0.6, z, text: `仕事：${t.name}`, cls: 'work' }); }
   if (target) {
     const [x, z] = target.at();
-    labels.push({ x, z, y: target.person ? 2.5 : 1.6, text: target.person ? 'TALK' : target.exit ? target.label : target.chore !== undefined ? '仕事' : '調べる', cls: target.exit ? 'exit' : '' });
+    labels.push({ x, z, y: target.person ? 2.5 : 1.6, text: target.person ? 'TALK' : target.exit || target.meeting || target.rest ? target.label : target.chore !== undefined ? '仕事' : '調べる', cls: target.exit ? 'exit' : '' });
   }
   drawLabels(labels);
   drawMinimap(room);
@@ -528,8 +564,8 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 
-// 本編から呼ばれる：その日の執事パートを始める
-export function startDay(state, h) {
+// 本編から呼ばれる：朝、執事の部屋のベッドで目を覚ますところから1日を始める
+export function startMorning(state, h) {
   s = state; hooks = h;
   root.classList.remove('hidden');
   resize();
@@ -537,20 +573,21 @@ export function startDay(state, h) {
     for (const id of ['grounds', 'cottage', 'f1', 'f2']) getArea(id);
     makePeople();
   }
+  st.mode = 'morning';
   for (const p of Object.values(people)) p.key = undefined;
   syncSecret();
   refreshMarkers();
   s.today.min = s.today.min || 0;
   ending = false; st.busy = false; st.shelfAnim = 0; msgQueue = []; afterMsg = null;
-  enter('cottage', 11, 9.4);
-  player.g.rotation.y = Math.PI;
-  const mine = s.today.chores.filter(c => c.assignee === 'butler').map(c => CHORES[c.id].name);
-  say(['朝礼', `朝礼を終えた。執事の担当は${mine.length ? `「${mine.join('」「')}」` : 'なし'}。`],
-    mine.length ? '緑の印が仕事の場所だ。空いた時間で、屋敷を探ろう。' : '今日は自由に動ける。屋敷を探ろう。');
+  enter('cottage', 1.2, 13.3);
+  st.lying = true;
+  afterMsg = () => { st.lying = false; player.g.rotation.set(0, Math.PI / 2, 0); player.x = 2.4; player.z = 12.5; };
+  say(['執事', `（${dateLabel(s)}、朝7時30分。……さて、今日も完璧な執事を演じるとしよう）`],
+    '身支度を整えたら、共用室の席に着いて朝礼を始めよう。');
   running = true;
   last = performance.now();
   requestAnimationFrame(tick);
 }
 
 // テスト用
-window.__day3d = { get state() { return s; }, player, people, areas, enter, act, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r) };
+window.__day3d = { get state() { return s; }, st, player, people, areas, enter, act, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r) };

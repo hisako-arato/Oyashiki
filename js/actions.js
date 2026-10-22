@@ -45,9 +45,9 @@ export const SPOTS = {
       setFlag(s, 'c_import');
       return { text: '20年前の運送伝票。差出人不明、品名は「額装品」。宛先はこの屋敷、受取人は旦那様だ。', clue: true };
     } },
-    { id: 'lift', name: '古い螺旋階段', run: s => {
-      setFlag(s, 'elevator');
-      return { text: '倉庫の奥に、昔の使用人が使っていた鉄の螺旋階段がある。上ると、2階の書斎近くの物置に出るようだ。', clue: true };
+    { id: 'ladder', name: '庭師の梯子', run: s => {
+      setFlag(s, 'ladder');
+      return { text: '倉庫の奥に、庭師の長い梯子が立て掛けてある。伸ばせば、2階のバルコニーまで届きそうだ。', clue: true };
     } },
   ],
   corridor: [
@@ -81,6 +81,14 @@ export const SPOTS = {
     { id: 'painting', name: '布の掛かった額', run: s => {
       setFlag(s, 'found_painting');
       return { text: '布をめくると、月明かりの庭が現れた。「月下の庭」——母と見た、あの絵だ。額縁には警報センサーの線が繋がっている。触れれば警報が鳴るだろう。', clue: true };
+    } },
+  ],
+  balcony: [
+    { id: 'door', name: 'ガラス戸の鍵', run: s => {
+      if (s.chapter < 3) return { text: 'バルコニーのガラス戸。夜は旦那様が鍵を掛けるらしい。' };
+      if (s.flags.balcony_open) return { text: 'ガラス戸の鍵は外したままだ。誰も気づいていない。' };
+      setFlag(s, 'balcony_open');
+      return { text: '人目のない隙に、ガラス戸の鍵をそっと外しておいた。決行の夜、ここから入れる。', clue: true };
     } },
   ],
   master: [
@@ -119,8 +127,8 @@ export const TALKS = {
   red: [
     { if: s => s.aff.red >= 25 && !s.flags.c_red, flag: 'c_red',
       line: '「……夜中、旦那様が書斎で電話してた。『あの絵は年明けに海外で』って。……それだけ」' },
-    { if: s => s.aff.red >= 40 && !s.flags.elevator, flag: 'elevator',
-      line: '「……倉庫の奥の螺旋階段。2階の物置に出る。昔の使用人の通り道。今は誰も使わない」' },
+    { if: s => s.aff.red >= 40 && !s.flags.ladder, flag: 'ladder',
+      line: '「……倉庫に庭師さんの梯子。2階のバルコニーまで届く。危ないから、使っちゃだめって言われてる」' },
     { if: s => s.aff.red >= 70, line: '「……執事さんが何をしてても、私は見てないことにする」' },
     { line: '「……（ぼーっとしている）……あ、お昼もうできてます」' },
   ],

@@ -151,19 +151,12 @@ const F = {
     }
     solid(x1, x2, z1, z2, 'furniture');
   },
-  // 古い使用人用の螺旋階段（1F倉庫と2F物置をつなぐ）
-  spiral: (x, z, r = 1.2, rise = 3) => {
-    const g = new THREE.Group(); g.position.set(x, 0, z); A.group.add(g);
-    cyl(g, 0.08, 0.08, rise + 0.3, M.black, 0, 0, 0);
-    const n = 14;
-    for (let i = 0; i < n; i++) {
-      const s = new THREE.Group(); s.rotation.y = i / n * Math.PI * 1.6; g.add(s);
-      box(s, r, 0.06, 0.42, i % 2 ? M.metal : mat('#6a6a72'), r / 2, rise * i / n, 0);
-      cyl(s, 0.015, 0.015, 0.9, M.black, r - 0.05, rise * i / n, 0, 4);
-    }
-    mesh(new THREE.TorusGeometry(r, 0.03, 4, 16, Math.PI * 1.6), M.black, 0, 0.95, 0, g).rotation.x = Math.PI / 2;
-    solid(x - r, x + r, z - r, z + r, 'furniture');
-  },
+  // 庭師の長い梯子（壁に立て掛けてある）
+  ladder: (x, z, rot) => piece(x, z, rot, 0.6, 0.3, g => {
+    const lean = new THREE.Group(); lean.rotation.x = -0.12; g.add(lean);
+    for (const s of [-0.25, 0.25]) box(lean, 0.06, 2.9, 0.06, M.lightWood, s, 0, 0);
+    for (let i = 0; i < 9; i++) box(lean, 0.5, 0.04, 0.04, M.lightWood, 0, 0.25 + i * 0.3, 0);
+  }),
   basket: (x, z) => piece(x, z, 0, 0.6, 0.45, g => { box(g, 0.6, 0.4, 0.45, M.lightWood, 0, 0, 0); box(g, 0.5, 0.12, 0.35, M.white, 0, 0.4, 0); }),
   // ドレスを吊るしたハンガーラック（壁沿いに置く）
   dressRack: (x, z, rot, w = 3) => piece(x, z, rot, w, 0.6, g => {
@@ -440,14 +433,14 @@ const AREAS = {};
 AREAS.cottage = {
   name: '使用人棟', wallStyle: 'plain', origin: COTTAGE, hide: 'cottage',
   rooms: [
-    { name: '執事の部屋', x: 0, z: 0, w: 7, d: 15 },
-    { name: '赤の部屋', x: 7, z: 0, w: 4, d: 5 },
-    { name: '青の部屋', x: 11, z: 0, w: 4, d: 5 },
+    { name: '執事の部屋', x: 0, z: 0, w: 7, d: 15, key: 'c_butler' },
+    { name: '赤の部屋', x: 7, z: 0, w: 4, d: 5, key: 'c_red' },
+    { name: '青の部屋', x: 11, z: 0, w: 4, d: 5, key: 'c_blue' },
     { name: '共用室', x: 7, z: 5, w: 8, d: 5, key: 'servants' },
-    { name: '黒の部屋', x: 7, z: 10, w: 4, d: 5 },
-    { name: '白の部屋', x: 11, z: 10, w: 4, d: 5 },
+    { name: '黒の部屋', x: 7, z: 10, w: 4, d: 5, key: 'c_black' },
+    { name: '白の部屋', x: 11, z: 10, w: 4, d: 5, key: 'c_white' },
     { name: '浴室', x: 15, z: 0, w: 5, d: 5, floor: 'tile', wall: 'tile' },
-    { name: '給湯室', x: 15, z: 5, w: 5, d: 5, floor: 'tile', wall: 'tile' },
+    { name: '給湯室', x: 15, z: 5, w: 5, d: 5, floor: 'tile', wall: 'tile', key: 'c_kettle' },
     { name: '玄関', x: 15, z: 10, w: 5, d: 5, floor: 'stone' },
   ],
   doors: [['v', 7, 6, 2], ['h', 8, 5, 1], ['h', 12, 5, 1], ['h', 8, 10, 1], ['h', 12, 10, 1], ['h', 17, 5, 1], ['v', 15, 6, 2], ['h', 17, 10, 1]],
@@ -477,7 +470,7 @@ AREAS.cottage = {
   setup() {
     special('机', 4.5, 1.6, 'notebook');
     flavor('窓', 0.8, 4, '窓の向こうに、屋敷の北側の壁が見える。');
-    flavor('朝礼のテーブル', 11, 9.0, '毎朝ここで定例会議を開き、メイドたちに仕事を割り振る。');
+    flavor('朝礼のテーブル', 11, 9.0, '毎朝ここで朝礼を開き、メイドたちに仕事を割り振る。');
     flavor('赤の部屋', 8.5, 3, 'きちんと片付いている。枕元に料理の本が積まれている。');
     flavor('青の部屋', 12.5, 3, '壁一面にスケッチが貼られている。どれも上手い。');
     flavor('黒の部屋', 8.5, 12, '物がほとんどない。机の上に聖書が一冊。');
@@ -577,8 +570,8 @@ AREAS.f1 = {
     ['h', 18, 5], ['h', 18, 13], ['h', 18, 24, 'door'], ['h', 18, 34], ['h', 18, 38], ['h', 18, 47],
     ['v', 0, 4], ['v', 0, 10], ['v', 48, 4], ['v', 48, 10], ['v', 48, 15]],
   build() {
-    // 倉庫：螺旋階段で2Fの物置へ
-    F.spiral(2, 5);
+    // 倉庫：庭師の梯子が壁に立て掛けてある
+    F.ladder(0.45, 5, 1); F.crate(2.2, 4.2); F.basket(2.6, 6.6);
     F.crate(5.2, 1.0); F.crate(4.3, 0.9, 0.6); F.crate(5.2, 7.2); F.crate(4.3, 7.3, 0.6);
     F.linen(0.3, 1.8, 1, 1.6);
     // 資料室
@@ -616,14 +609,13 @@ AREAS.f1 = {
   },
   setup() {
     exit('倉庫から外へ', 3, 0.9, { area: 'grounds', x: HX + 3, z: HZ - 0.7 });
-    exit('螺旋階段で2Fへ', 3.7, 5, { area: 'f2', x: 3.7, z: 5 });
     exit('2Fへ上がる', 24, 4.6, { area: 'f2', x: 24, z: 9.5 });
     exit('玄関から外へ', 24, 17.3, { area: 'grounds', x: HX + 24, z: HZ + 18.7 });
     exit('勝手口から外へ', 45, 0.9, { area: 'grounds', x: HX + 45, z: HZ - 0.7 });
     exit('裏階段で2Fへ', 45.2, 10.5, { area: 'f2', x: 45.2, z: 10.5 });
     spot('古い図面棚', 12, 1.1, 'archive', 'blueprint');
     spot('運送伝票', 4.7, 2.0, 'storage', 'slips');
-    spot('古い螺旋階段', 2, 6.9, 'storage', 'lift');
+    spot('庭師の梯子', 1.3, 5, 'storage', 'ladder');
     spot('洗濯かご', 44.5, 16.7, 'laundry', 'basket');
     spot('配電盤', 43.2, 0.9, 'kback', 'breaker');
     spot('柱時計', 19, 17.2, 'hall', 'clock');
@@ -649,7 +641,7 @@ AREAS.f2 = {
     { name: '衣装部屋', x: 0, z: 11, w: 6, d: 7, floor: 'carpet', private: true },
     { name: '主寝室', x: 6, z: 11, w: 12, d: 7, floor: 'carpet', private: true, key: 'master' },
     { name: 'サロン', x: 18, z: 11, w: 12, d: 4 },
-    { name: 'バルコニー', x: 18, z: 15, w: 12, d: 3, floor: 'stone', open: true },
+    { name: 'バルコニー', x: 18, z: 15, w: 12, d: 3, floor: 'stone', open: true, key: 'balcony' },
     { name: 'お嬢様の部屋', x: 30, z: 11, w: 12, d: 7, private: true, key: 'droom' },
     { name: '納戸', x: 42, z: 13, w: 6, d: 5, wall: 'plain' },
   ],
@@ -670,8 +662,8 @@ AREAS.f2 = {
     F.chandelier(24, 4, 1.2);
     solid(23, 25, 4, 8, 'rail');
     for (let i = 0; i < 9; i++) box(A.group, 2, 0.12, 0.42, i % 2 ? M.wood : M.lightWood, 24, -0.37 * (i + 1), 7.8 - i * 0.42);
-    // 物置：螺旋階段で1Fの倉庫へ
-    F.spiral(2, 5, 1.2, 0.3);
+    // 物置
+    F.crate(1.2, 5.6); F.crate(2.1, 6.6, 0.6); F.cabinet(0.35, 4.6, 1, 1.2, 1.0);
     F.crate(5.2, 1); F.crate(4.4, 0.9, 0.6); F.linen(0.3, 1.8, 1, 1.6);
     // 隠し部屋（本棚を開けるまで中は見えない）
     const easel = piece(8, 2, 0, 1.3, 0.6, g => {
@@ -722,7 +714,6 @@ AREAS.f2 = {
     F.shelf(38, 11.3, 0, 2, 1.8); F.rug(36, 14.5, 3, 2.5, TEX.carpet); F.plant(41.5, 11.5);
   },
   setup() {
-    exit('螺旋階段で1Fへ', 3.7, 5, { area: 'f1', x: 3.7, z: 5 });
     exit('1Fへ降りる', 24, 9.4, { area: 'f1', x: 24, z: 4.6 });
     exit('裏階段で1Fへ', 45.2, 10.5, { area: 'f1', x: 45.2, z: 10.5 });
     spot('廊下の窓', 16, 9.6, 'corridor', 'windows');
@@ -735,6 +726,7 @@ AREAS.f2 = {
     flavor('ドレス', 3, 12.4, 'お母様のドレスがずらりと並んでいる。どれも一度しか袖を通していないようだ。');
     flavor('浴槽', 33, 1.6, '大理石の浴槽。毎晩、お母様が長風呂をする。');
     flavor('洗面台', 37.2, 1.4, '鏡付きの洗面台が二つ並ぶ化粧室。お嬢様の化粧品が少しだけ置いてある。');
+    spot('ガラス戸の鍵', 22.6, 14.4, 'balcony', 'door');
     flavor('バルコニー', 24, 17.0, '前庭と噴水が一望できる。正門の向こうに街の灯りが見える。');
   },
 };

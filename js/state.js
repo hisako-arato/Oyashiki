@@ -34,7 +34,8 @@ export function clearSave() {
 
 export const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
-export function dayIndex(s) { return s.chapter * 20 + s.week * 5 + s.day; }
+export const WEEKS_PER_CHAPTER = 2;
+export function dayIndex(s) { return (s.chapter * WEEKS_PER_CHAPTER + s.week) * 5 + s.day; }
 
 export function rng(seed) {
   let a = seed >>> 0;
@@ -83,7 +84,7 @@ export function motherOutDay(s) { return (s.day + s.week) % 2 === 0; }
 export function generateChores(s) {
   const r = rng(dayIndex(s) * 7919 + 13);
   const pool = CHORE_POOL.filter(id => id !== 'study');
-  if (!fatherHome(s) && dayIndex(s) >= 7) pool.push('study', 'study'); // 書斎の掃除は旦那様不在日のみ
+  if (!fatherHome(s) && dayIndex(s) >= 3) pool.push('study', 'study'); // 書斎の掃除は旦那様不在日のみ
   const picks = [];
   while (picks.length < CHORES_PER_CHAPTER[s.chapter] && pool.length) {
     const id = pool.splice(Math.floor(r() * pool.length), 1)[0];
@@ -152,8 +153,10 @@ export function peopleIn(s, room, hour = s.today.hour) {
 export function hoursLeft(s) { return END_HOUR - s.today.hour; }
 
 export function dateLabel(s) {
-  const month = 9 + s.chapter;
+  // 11月前半・後半、12月前半・後半が各章
+  const month = 11 + Math.floor(s.chapter / 2);
+  const week = (s.chapter % 2) * WEEKS_PER_CHAPTER + s.week + 1;
   const days = ['月', '火', '水', '木', '金'];
   const day = s.phase === 'weekend' ? '土・日' : days[s.day] + '曜';
-  return `${month}月 第${s.week + 1}週 ${day}`;
+  return `${month}月 第${week}週 ${day}`;
 }
