@@ -1,4 +1,5 @@
 // 探索の試作：2F 書斎と廊下（ローポリ3D・斜め見下ろし）
+import '../js/lockdown.js';
 import * as THREE from '../vendor/three.module.min.js';
 
 // ---- 描画の準備 ----

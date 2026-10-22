@@ -1,8 +1,9 @@
 // オフラインでも遊べるよう、ゲームのファイルをキャッシュする
-const CACHE = 'oyashiki-v1';
+const CACHE = 'oyashiki-v2';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
-  'js/main.js', 'js/game.js', 'js/state.js', 'js/data.js', 'js/actions.js', 'js/story.js',
+  'js/main.js', 'js/lockdown.js', 'js/game.js', 'js/state.js', 'js/data.js', 'js/actions.js', 'js/story.js',
+  'explore/', 'explore/index.html', 'explore/explore.css', 'explore/main.js', 'vendor/three.module.min.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-512-maskable.png',
 ];
 

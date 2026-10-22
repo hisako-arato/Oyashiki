@@ -1,3 +1,4 @@
+import './lockdown.js';
 import { title } from './game.js';
 
 title();

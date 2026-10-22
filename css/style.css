@@ -11,14 +11,19 @@
   --bad: #e0675f;
 }
 
-* { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--text); }
+/* スマホゲームらしく：文字選択・長押しメニュー・ズーム・引っ張って更新を無効にする */
+* { box-sizing: border-box; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--bg); color: var(--text); -webkit-text-size-adjust: 100%; }
 body {
   font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
   line-height: 1.7;
-  -webkit-tap-highlight-color: transparent;
 }
-#app { max-width: 720px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+/* 画面のスクロールは #app の中だけで行う */
+#app {
+  max-width: 720px; margin: 0 auto; height: 100%; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
 
 button {
   font: inherit; color: var(--text); background: var(--wine);
@@ -32,7 +37,7 @@ select, input { font: inherit; background: var(--panel2); color: var(--text); bo
 
 /* タイトル・章扉 */
 .title, .card {
-  min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding: 24px 16px;
   background: radial-gradient(circle at 50% 30%, #3a2a3e 0%, var(--bg) 70%);
 }
@@ -61,7 +66,7 @@ select, input { font: inherit; background: var(--panel2); color: var(--text); bo
 .meter.susp .bar i { background: var(--bad); }
 
 /* 物語パート */
-.stage { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; cursor: pointer; }
+.stage { min-height: 100%; display: flex; flex-direction: column; cursor: pointer; }
 .scene {
   flex: 1; display: flex; align-items: flex-end; justify-content: center; padding: 24px 16px 0;
   background: linear-gradient(#2b1f30, #1c1420);
