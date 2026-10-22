@@ -1,7 +1,7 @@
 // 探索の試作：屋敷全体（使用人棟・庭・1F・2F）を主人公で歩き回る
 import '../js/lockdown.js';
 import { THREE, renderer, scene, camera, CAM_OFFSET, hemi, sun, makeChar, animate } from './engine.js';
-import { buildArea, AREA_INFO } from './world.js';
+import { buildArea, AREA_INFO, HOUSE } from './world.js';
 
 const LOW = 0.17, VIEW_RANGE = 5.5, VIEW_FOV = Math.PI * 0.42, PASSCODE = '1103', CONE_RAYS = 24;
 
@@ -13,18 +13,19 @@ const state = {
 };
 const hiddenKnown = () => state.blueprint || (state.windowsOut && state.windowsIn);
 
-const player = { ...makeChar(scene, { outfit: '#22223a', hair: '#2a2a2a' }), x: 2.5, z: 3, r: 0.3 };
+const player = { ...makeChar(scene, { outfit: '#22223a', hair: '#2a2a2a' }), x: 3.5, z: 5, r: 0.3 };
 const areas = {};
 let cur = null;
 
 // ---- メッセージ ----
 const msgEl = document.getElementById('msg');
-let msgQueue = [], afterMsg = null;
+let msgQueue = [], afterMsg = null, actLock = 0;
 function say(...lines) { msgQueue = lines.filter(Boolean); nextMsg(); }
 function nextMsg() {
   const l = msgQueue.shift();
   if (!l) {
     msgEl.classList.add('hidden'); state.busy = false;
+    actLock = performance.now() + 500;
     if (afterMsg) { const f = afterMsg; afterMsg = null; f(); }
     return;
   }
@@ -35,6 +36,8 @@ function nextMsg() {
   msgEl.classList.remove('hidden');
 }
 msgEl.addEventListener('click', nextMsg);
+// メッセージ表示中は、画面のどこを押しても次へ進む
+document.getElementById('view').addEventListener('pointerdown', () => { if (!msgEl.classList.contains('hidden')) nextMsg(); });
 
 // ---- ダイヤル錠 ----
 const dial = document.getElementById('dial'), codeEl = document.getElementById('code');
@@ -86,7 +89,7 @@ function openShelf() {
   state.shelfOpen = true;
   shelfAnim = 0.0001;
   const a = areas.f2;
-  Object.assign(a.shelf.box, { minX: 7.6, maxX: 9.8, minZ: 1.0, maxZ: 1.5 });
+  Object.assign(a.shelf.box, { minX: 10.6, maxX: 12.8, minZ: 1.8, maxZ: 2.3 });
   for (const o of a.secret.objs) o.visible = true;
 }
 
@@ -119,13 +122,22 @@ function enter(id, x, z) {
   a.group.visible = true;
   player.x = x; player.z = z;
   const info = AREA_INFO[id];
-  scene.background = new THREE.Color(info.bg);
+  // 屋内にいるときも、窓や低くした壁の向こうに庭が見えるよう、敷地を一緒に表示する
+  const g = getArea('grounds');
+  g.group.visible = true;
+  if (info.outdoor) g.group.position.set(0, 0, 0);
+  else g.group.position.set(-info.origin.x, -0.03 - info.below, -info.origin.z);
+  for (const b of g.blocks) b.g.visible = info.outdoor || b.name !== info.hide;
+  scene.background = SKY;
   hemi.intensity = info.outdoor ? 1.4 : 1.0;
   sun.intensity = info.outdoor ? 2.4 : 1.2;
   camTarget.set(x, 0, z);
-  camera.zoom = info.outdoor ? 0.6 : 1;
+  zoomBase = info.outdoor ? 0.6 : 1;
+  camera.zoom = zoomBase;
   camera.updateProjectionMatrix();
 }
+const SKY = new THREE.Color('#9cbfd6');
+let zoomBase = 1;
 function travel(to) {
   state.busy = true;
   fadeEl.classList.add('on');
@@ -139,7 +151,7 @@ function travel(to) {
 // ---- 部屋の名前 ----
 function roomAt(x, z) {
   if (!cur) return null;
-  if (cur.id === 'grounds') return z < 12 ? '裏庭' : z > 27 ? '前庭' : x < 10 ? 'バラ園' : x > 44 ? '通用口' : '庭';
+  if (cur.id === 'grounds') return z < HOUSE.z ? '裏庭' : z > HOUSE.z + 18 ? '前庭' : x < HOUSE.x ? 'バラ園' : x > HOUSE.x + 48 ? '使用人棟の前' : '庭';
   return cur.rooms.find(r => r.type !== 'void' && x >= r.x && x <= r.x + r.w && z >= r.z && z <= r.z + r.d) || null;
 }
 
@@ -181,6 +193,8 @@ function findTarget() {
 }
 function act() {
   if (!msgEl.classList.contains('hidden')) return nextMsg();
+  // 会話を閉じた直後の連打では、次の会話を始めない（押し続けている間は待ち時間を延ばす）
+  if (performance.now() < actLock) { actLock = performance.now() + 500; return; }
   if (state.busy || !target) return;
   if (target.exit) return travel(target.exit);
   if (target.npc) target.npc.g.rotation.y = Math.atan2(player.x - target.npc.x, player.z - target.npc.z);
@@ -231,7 +245,7 @@ function addSusp(v) {
 function caught() {
   const w = watchers()[0];
   state.susp = 30;
-  afterMsg = () => travel({ area: 'cottage', x: 2.5, z: 3 });
+  afterMsg = () => travel({ area: 'cottage', x: 3.5, z: 5 });
   say([w ? w.name : '？', '「執事さん！？ そこで何をしているんですか……！」'], '（見つかってしまった。本編ならここで疑惑が一気に高まり、屋敷を追われる）');
 }
 
@@ -314,8 +328,8 @@ function drawLabels(list) {
 const mmCanvas = document.getElementById('minimap'), mm = mmCanvas.getContext('2d');
 function drawMinimap(here) {
   const W = mmCanvas.width, H = mmCanvas.height;
-  const ex = cur.id === 'grounds' ? 64 : Math.max(...cur.rooms.map(r => r.x + r.w));
-  const ez = cur.id === 'grounds' ? 42 : Math.max(...cur.rooms.map(r => r.z + r.d));
+  const ex = cur.id === 'grounds' ? 92 : Math.max(...cur.rooms.map(r => r.x + r.w));
+  const ez = cur.id === 'grounds' ? 58 : Math.max(...cur.rooms.map(r => r.z + r.d));
   const S = Math.min((W - 10) / ex, (H - 10) / ez);
   const ox = (W - ex * S) / 2, oz = (H - ez * S) / 2;
   const px = x => ox + x * S, pz = z => oz + z * S;
@@ -349,6 +363,17 @@ function goal() {
   if (hiddenKnown() && state.hasKey) return '書斎の本棚を調べる';
   if (hiddenKnown()) return '書斎の机の引き出しを開ける番号を探す';
   return '屋敷を調べ、絵の隠し場所を突き止める';
+}
+
+// ---- 影のちらつき対策 ----
+const LIGHT_OFF = new THREE.Vector3(-8, 16, 10);
+const LF = LIGHT_OFF.clone().negate().normalize();
+const LR = new THREE.Vector3().crossVectors(LF, new THREE.Vector3(0, 1, 0)).normalize();
+const LU = new THREE.Vector3().crossVectors(LR, LF).normalize();
+const TEXEL = (sun.shadow.camera.right - sun.shadow.camera.left) / sun.shadow.mapSize.x;
+function snapShadow(t, out) {
+  const r = Math.round(t.dot(LR) / TEXEL) * TEXEL, u = Math.round(t.dot(LU) / TEXEL) * TEXEL;
+  out.set(0, 0, 0).addScaledVector(LR, r).addScaledVector(LU, u).addScaledVector(LF, t.dot(LF));
 }
 
 // ---- メインループ ----
@@ -401,13 +426,19 @@ function tick(now) {
   camTarget.lerp(tmpV.set(player.x, 0, player.z), Math.min(1, dt * 5));
   camera.position.copy(camTarget).add(CAM_OFFSET);
   camera.lookAt(camTarget);
-  sun.target.position.copy(camTarget);
-  sun.position.copy(camTarget).add(new THREE.Vector3(-8, 16, 10));
+  snapShadow(camTarget, sun.target.position);
+  sun.position.copy(sun.target.position).add(LIGHT_OFF);
   sun.target.updateMatrixWorld();
 
+  // バルコニーに出たら少し引いて、庭を見渡せるようにする
+  const zoomTo = room && room.name === 'バルコニー' ? 0.7 : zoomBase;
+  if (Math.abs(camera.zoom - zoomTo) > 0.001) { camera.zoom += (zoomTo - camera.zoom) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); }
+
+  // メッセージ表示中もボタンを「次へ」として残し、同じ場所を連打して読み進められるようにする
+  const talking = !msgEl.classList.contains('hidden');
   target = state.busy ? null : findTarget();
-  actBtn.classList.toggle('hidden', !target);
-  if (target) actBtn.textContent = target.exit ? '移動' : target.npc ? '話す' : '調べる';
+  actBtn.classList.toggle('hidden', !target && !talking);
+  actBtn.textContent = talking ? '次へ' : target ? (target.exit ? '移動' : target.npc ? '話す' : '調べる') : '';
   const labels = cur.npcs.map(n => {
     const alert = n.seeing && inPrivate;
     return { x: n.x, y: 2.1, z: n.z, text: alert ? '！' : n.name, cls: alert ? 'alert' : 'name' };
@@ -423,7 +454,7 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 
-enter('cottage', 2.5, 3);
+enter('cottage', 3.5, 5);
 requestAnimationFrame(tick);
 say(['試作', '鷹宮邸の全体を歩ける探索試作です。朝礼を終え、使用人棟から屋敷へ向かおう。'],
   '移動は矢印キー／WASD（スマホは左下のスティック）、調べる・話す・移動はスペースキー（スマホは右下のボタン）。',

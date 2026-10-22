@@ -438,7 +438,7 @@ function runRoute(id) {
     ['butler', '（「月下の庭」……今、迎えに来た）'],
   ], () => {
     if (!alarmOff) return fail('額縁に手をかけた瞬間、甲高い警報が屋敷中に鳴り響いた。');
-    if (id === 'night') return playScript([['n', '絵を布で包み、貨物エレベーターで1階へ。裏庭の闇を抜け、屋敷を後にした。']], () => ending('night'));
+    if (id === 'night') return playScript([['n', '絵を布で包み、螺旋階段で1階へ。裏庭の闇を抜け、屋敷を後にした。']], () => ending('night'));
     playScript([
       ['n', '青の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。'],
       ['n', 'お嬢様の部屋のクローゼットに本物を隠し、執事は何食わぬ顔で自室に戻った。'],
@@ -452,7 +452,7 @@ function runRoute(id) {
         ? playScript([['n', '赤メイドの部屋の扉が少し開いていた。目が合った気がしたが、彼女は寝返りを打っただけだった。']], toPainting)
         : fail('「……誰？」赤メイドの部屋に明かりが点いた。足音を聞かれてしまった。') },
     ];
-    if (s.flags.elevator) opts.push({ t: '裏庭から倉庫へ回り、貨物エレベーターで2階へ', go: () => playScript([['n', '裏庭の死角を抜け、倉庫の貨物エレベーターへ。誰にも見られず、書斎横の物置に着いた。']], toPainting) });
+    if (s.flags.elevator) opts.push({ t: '裏庭から倉庫へ回り、螺旋階段で2階へ', go: () => playScript([['n', '裏庭の死角を抜け、倉庫の螺旋階段を上る。誰にも見られず、書斎近くの物置に出た。']], toPainting) });
     showChoice(opts, o => o.go());
   };
   const breaker = () => {

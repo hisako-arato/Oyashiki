@@ -27,7 +27,8 @@ export const sun = new THREE.DirectionalLight('#ffe2b8', 1.8);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 60 });
-sun.shadow.bias = -0.0008;
+sun.shadow.bias = -0.0005;
+sun.shadow.normalBias = 0.03;
 scene.add(hemi, sun, sun.target);
 
 // ---- テクスチャ（すべてプログラムで描く） ----
@@ -69,6 +70,11 @@ export const TEX = {
     g.fillStyle = '#d8c7a2'; for (let x = 0; x < w; x += 32) g.fillRect(x, 0, 12, h);
     g.fillStyle = '#c9b38a';
     for (let y = 16; y < h; y += 32) for (let x = 6; x < w; x += 32) { g.beginPath(); g.moveTo(x, y - 6); g.lineTo(x + 5, y); g.lineTo(x, y + 6); g.lineTo(x - 5, y); g.fill(); }
+  }),
+  wallTile: canvasTex(64, 64, (g) => {
+    g.fillStyle = '#eef3f4'; g.fillRect(0, 0, 64, 64);
+    g.strokeStyle = '#b8c8cc'; g.lineWidth = 2;
+    for (let i = 0; i <= 64; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, 64); g.moveTo(0, i); g.lineTo(64, i); g.stroke(); }
   }),
   plain: canvasTex(64, 64, (g) => { g.fillStyle = '#efe7d8'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#e4dac6'; g.fillRect(0, 60, 64, 4); }),
   grass: canvasTex(128, 128, (g) => {

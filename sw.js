@@ -1,5 +1,5 @@
 // オフラインでも遊べるよう、ゲームのファイルをキャッシュする
-const CACHE = 'oyashiki-v4';
+const CACHE = 'oyashiki-v5';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css',
   'js/main.js', 'js/lockdown.js', 'js/game.js', 'js/state.js', 'js/data.js', 'js/actions.js', 'js/story.js',

@@ -45,9 +45,9 @@ export const SPOTS = {
       setFlag(s, 'c_import');
       return { text: '20年前の運送伝票。差出人不明、品名は「額装品」。宛先はこの屋敷、受取人は旦那様だ。', clue: true };
     } },
-    { id: 'lift', name: '貨物エレベーター', run: s => {
+    { id: 'lift', name: '古い螺旋階段', run: s => {
       setFlag(s, 'elevator');
-      return { text: '食材を運ぶ貨物エレベーター。行き先表示を見ると、2階の書斎横の物置に通じている。', clue: true };
+      return { text: '倉庫の奥に、昔の使用人が使っていた鉄の螺旋階段がある。上ると、2階の書斎近くの物置に出るようだ。', clue: true };
     } },
   ],
   corridor: [
@@ -120,7 +120,7 @@ export const TALKS = {
     { if: s => s.aff.red >= 25 && !s.flags.c_red, flag: 'c_red',
       line: '「……夜中、旦那様が書斎で電話してた。『あの絵は年明けに海外で』って。……それだけ」' },
     { if: s => s.aff.red >= 40 && !s.flags.elevator, flag: 'elevator',
-      line: '「……倉庫のエレベーター。2階の書斎の横に着く。重い物はあれで運ぶと楽」' },
+      line: '「……倉庫の奥の螺旋階段。2階の物置に出る。昔の使用人の通り道。今は誰も使わない」' },
     { if: s => s.aff.red >= 70, line: '「……執事さんが何をしてても、私は見てないことにする」' },
     { line: '「……（ぼーっとしている）……あ、お昼もうできてます」' },
   ],
