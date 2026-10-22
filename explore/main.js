@@ -429,4 +429,4 @@ say(['試作', '鷹宮邸の全体を歩ける探索試作です。朝礼を終�
   '移動は矢印キー／WASD（スマホは左下のスティック）、調べる・話す・移動はスペースキー（スマホは右下のボタン）。',
   '書斎などの私室で、巡回中のメイドの視界（黄色い扇形）に入ると疑われる。手がかりを集め、隠された絵を探そう。');
 
-window.__explore = { state, player, areas, travel, enter, get cur() { return cur; } };
+window.__explore = { state, player, areas, travel, enter, blocked: (x, z, r) => blocked(x, z, r), get cur() { return cur; } };
