@@ -6,6 +6,7 @@ import { newState, save, load, clearSave, clamp, applyFx, setFlag, dayIndex, act
 import { SPOTS } from './actions.js';
 import * as DL from './daylogic.js';
 import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS } from './story.js';
+import { hasNight, nightOptions, nightScene } from './night.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -86,6 +87,7 @@ function playScript(steps, done) {
     const st = queue.shift();
     if (Array.isArray(st)) return showLine(st[0], st[1], next);
     if (st.fx) { const notes = applyFx(s, st.fx); if (notes.length) toast(notes.join('／')); return next(); }
+    if (st.call) { st.call(s); return next(); }
     if (st.if) { queue.unshift(...((st.if(s) ? st.then : st.else) || [])); return next(); }
     if (st.report) return showReport(next);
     if (st.choice) return showChoice(st.choice, c => {
@@ -378,7 +380,17 @@ function endDay() {
     el('h2', {}, '本日の業務報告'),
     el('ul', { class: 'report' }, lines.map(l => el('li', {}, l))),
     el('p', { class: 'hint' }, notes.join('／')),
-    el('button', { class: 'primary', onclick: nextDay }, '次へ')));
+    el('button', { class: 'primary', onclick: () => hasNight(s) ? night() : nextDay() }, '次へ')));
+}
+
+// ---- 夜（22時）：休む／密談／部屋を訪ねる ----
+function night() {
+  render(el('div', { class: 'panel night' }, statusBar(),
+    el('h2', {}, '夜　22時'),
+    el('p', { class: 'hint' }, '今夜はどう過ごす？（1つだけ選べる）'),
+    el('div', { class: 'nightopts' }, nightOptions(s).map(o => el('button', { class: o.ok ? '' : 'ghost', disabled: !o.ok,
+      onclick: () => { s.phase = 'night'; playScript(nightScene(s, o.id), () => checkFatal() || nextDay()); } },
+      o.label, !o.ok ? el('small', {}, `（${o.why}）`) : null)))));
 }
 
 function nextDay() {
@@ -445,11 +457,15 @@ async function runRoute(id) {
     ], () => ending('swap'));
   });
   const path = () => {
+    const room = s.flags.eve_daughter ? 'お嬢様の部屋' : s.flags.eve_mother ? '主寝室' : null;
     const opts = [
-      { t: `大広間の大階段を上る${s.flags.hall_patrol ? '（黒メイドが見回っている）' : ''}`, go: () => fail('大広間に足を踏み入れた瞬間、懐中電灯の光が執事を照らした。「……執事さん？ こんな時間に何を」黒メイドだった。') },
-      { t: '使用人用の階段を使う（赤メイドの部屋の前を通る）', go: () => s.aff.red >= ALLY_AFF
-        ? playScript([['n', '赤メイドの部屋の扉が少し開いていた。目が合った気がしたが、彼女は寝返りを打っただけだった。']], toPainting)
-        : fail('「……誰？」赤メイドの部屋に明かりが点いた。足音を聞かれてしまった。') },
+      ...(room ? [{ t: `${room}から、そっと書斎へ向かう`, go: () => playScript([['n', `寝息を確かめ、${room}を抜け出した。2階の廊下に人影はない。`]], toPainting) }] : []),
+      { t: `大広間の大階段を上る${s.flags.hall_patrol ? '（黒メイドが見回っている）' : ''}`, go: () => isAlly(s, 'black')
+        ? playScript([['n', '大広間の懐中電灯の光は、執事の前で静かに逸らされた。黒は約束を守った。']], toPainting)
+        : fail('大広間に足を踏み入れた瞬間、懐中電灯の光が執事を照らした。「……執事さん？ こんな時間に何を」黒メイドだった。') },
+      { t: '裏階段を使う（キッチン裏の赤メイドの前を通る）', go: () => s.aff.red >= ALLY_AFF
+        ? playScript([['n', '仕込みをしていた赤メイドと目が合った気がしたが、彼女は黙って鍋に向き直った。']], toPainting)
+        : fail('「……誰？」キッチン裏の赤メイドが振り返った。足音を聞かれてしまった。') },
     ];
     if (s.flags.ladder) opts.push({ t: '倉庫の梯子を前庭に運び、バルコニーから2階へ', go: () => s.flags.balcony_open
       ? playScript([['n', '前庭の闇に梯子を立て、バルコニーへ登る。昼のうちに鍵を外しておいたガラス戸は、音もなく開いた。']], toPainting)

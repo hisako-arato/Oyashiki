@@ -74,7 +74,8 @@ export function setFlag(s, f, notes) {
 
 export const maidAvailable = (s, m) => s.chapter >= PEOPLE[m].from;
 export const activeMaids = s => MAIDS.filter(m => maidAvailable(s, m));
-export const isAlly = (s, who) => MAIDS.includes(who) && s.aff[who] >= ALLY_AFF;
+// 好感度70以上のメイドは協力者。黒は、夜の密談で約束を交わした場合も協力者になる
+export const isAlly = (s, who) => MAIDS.includes(who) && (s.aff[who] >= ALLY_AFF || (who === 'black' && !!s.flags.black_ally));
 
 // ---- 1日の予定 ----
 

@@ -964,9 +964,12 @@ export function startNight(state, route, h) {
     nightRole: { i: 0, path: [[24, 10.5, 2], [23, 6.5], [20.5, 4.5, 2.5], [27.5, 4.5, 2], [27.5, 10.5], [24, 15, 2.5], [24, 10.5]] } });
   Object.assign(red, { area: 'f1', x: 44.6, z: 4.6, range: 5.5, look: 0, nightRole: { yaw: 0 } });
   red.g.rotation.y = 0;
-  enter('cottage', 2.4, 12.5);
+  // イブの夜にお嬢様・お母様の部屋へ招かれていれば、2階から始められる
+  const eve = s.flags.eve_daughter ? ['f2', 36, 14, 'お嬢様の部屋'] : s.flags.eve_mother ? ['f2', 12, 14, '主寝室'] : null;
+  if (eve) enter(eve[0], eve[1], eve[2]); else enter('cottage', 2.4, 12.5);
   player.g.rotation.set(0, Math.PI / 2, 0);
   say('12月24日、クリスマス・イブの深夜1時。パーティーの客も帰り、屋敷は寝静まった。',
+    eve && ['執事', `（${eve[3]}の寝息を確かめ、そっとベッドを抜け出した。ここは2階だ。書斎は近い）`],
     s.flags.white_ally ? ['執事', '（白は約束どおり、警報の系統を落としてくれたはずだ）'] : ['執事', '（警報はまだ生きている。絵に触れれば鳴るだろう……）'],
     ['執事', '（夜明けまでに、終わらせる）']);
   run();

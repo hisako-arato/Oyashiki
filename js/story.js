@@ -154,7 +154,7 @@ export const WEEKENDS = [
   // ---- 最終章 12月後半：決行（2週目の週末は決行の夜） ----
   [
     [
-      { if: s => s.aff.daughter >= 70, then: [
+      { if: s => s.aff.daughter >= 70 && !s.flags.d_secret, then: [
         [D, '「執事さん……誰にも言わないでね。私、大学、もう辞めてるの。パパにもママにも言えなくて」'],
         { fx: { flag: 'd_secret' } },
         { choice: [
@@ -164,7 +164,7 @@ export const WEEKENDS = [
       ], else: [
         [D, '「もうすぐクリスマスだね。……なんか、この家って寒いよね」'],
       ] },
-      { if: s => s.aff.mother >= 70, then: [
+      { if: s => s.aff.mother >= 70 && !s.flags.m_secret, then: [
         [M, '「ふふ、内緒よ。私ね、若い子に時計を贈るのが趣味なの。主人のお金でね」'],
         { fx: { flag: 'm_secret' } },
         { choice: [
@@ -213,7 +213,8 @@ export const ROUTES = [
     ok: s => s.flags.found_painting && s.flags.forgery_ready && s.flags.hide_ok },
   { id: 'persuade', name: 'ルート3：お父様を説得する',
     desc: 'お母様とお嬢様の秘密を突きつけ、家族を崩す。',
-    ok: s => s.flags.m_secret && s.flags.d_secret && s.aff.mother >= 80 && s.aff.daughter >= 80 && s.flags.hidden_room && s.flags.red_book },
+    // 母娘の鉢合わせで家族に溝ができていれば、好感度が足りなくても突きつけられる
+    ok: s => s.flags.m_secret && s.flags.d_secret && s.flags.hidden_room && s.flags.red_book && ((s.aff.mother >= 80 && s.aff.daughter >= 80) || s.flags.family_rift) },
 ];
 
 export const ENDINGS = {
