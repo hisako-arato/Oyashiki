@@ -35,6 +35,7 @@ export function doChore(s, i) {
   let msg = `${def.name}を${c.progress >= def.hours ? '終えた' : '途中まで進めた'}。`;
   if (c.progress >= def.hours) {
     c.done = true;
+    if (def.xmas) setFlag(s, `deco_${c.id}`);
     if (c.id === 'escortM') msg += ' ' + applyFx(s, { aff: { mother: 12 } }).join('／');
     if (c.id === 'tutorD') msg += ' ' + applyFx(s, { aff: { daughter: 10 } }).join('／');
     if (c.id === 'laundry' && s.chapter >= 1 && setFlag(s, 'p_bday'))

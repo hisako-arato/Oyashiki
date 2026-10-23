@@ -217,6 +217,28 @@ const F = {
   }),
 };
 
+// ---- クリスマスの飾り（飾り付けを終えるまで見えない。A.deco[仕事の名前] に登録） ----
+const BULB = ['#ff5a5a', '#ffd75a', '#6ad0ff', '#7aff9a', '#ff9ae0'];
+const glow = c => mat(c, { emissive: c, emissiveIntensity: 0.9 });
+function deco(id, build, solids = []) {
+  const g = new THREE.Group(); g.visible = false; A.group.add(g);
+  build(g);
+  // 飾る前は当たり判定を遠くへ退避しておく
+  const boxes = solids.map(([x1, x2, z1, z2]) => Object.assign(solid(-999, -998, -999, -998, 'furniture'), { at: { minX: x1, maxX: x2, minZ: z1, maxZ: z2 } }));
+  A.deco[id] = { g, boxes };
+}
+function xmasTree(g, x, z) {
+  const t = new THREE.Group(); t.position.set(x, 0, z); g.add(t);
+  box(t, 0.7, 0.4, 0.7, mat('#8a2a2a'), 0, 0, 0);
+  for (const [r, h, y] of [[1.15, 1.3, 0.4], [0.9, 1.1, 1.1], [0.6, 0.9, 1.75]]) mesh(new THREE.ConeGeometry(r, h, 8), mat('#2f6a3a'), 0, y + h / 2, 0, t);
+  mesh(new THREE.OctahedronGeometry(0.17), glow('#ffd75a'), 0, 2.78, 0, t).castShadow = false;
+  for (let i = 0; i < 22; i++) {
+    const y = 0.6 + rand() * 1.9, r = 1.1 * (1 - (y - 0.4) / 2.4) + 0.05, a = rand() * Math.PI * 2;
+    ball(t, 0.06, glow(BULB[i % BULB.length]), Math.cos(a) * r, y, Math.sin(a) * r).castShadow = false;
+  }
+  const l = new THREE.PointLight('#ffd9a0', 4, 7, 1.5); l.position.set(0, 1.5, 0); l.userData.keepNight = true; t.add(l);
+}
+
 const BOOK_COLORS = ['#7a2a2a', '#2a4a6a', '#3a5a2a', '#6a5a2a', '#4a2a4a', '#2a2a2a', '#8a6a3a'];
 function bookshelf(g, w, h, redBook) {
   const d = 0.45, rows = 5;
@@ -422,6 +444,7 @@ export const WORK = {
   cook: ['f1', 36, 1.4], great: ['f1', 24, 9], corridor: ['f2', 30, 9.5], garden: ['grounds', 7, 20], laundry: ['f1', 46, 14.4],
   study: ['f2', 12.5, 5.5], master: ['f2', 9, 14.5], droom: ['f2', 36, 12.5], storage: ['f1', 4.5, 3.5], archive: ['f1', 14.5, 3],
   shopping: ['grounds', 38, 55.5], flowers: ['f1', 24, 13.6], escortM: ['grounds', 38, 55.5], tutorD: ['f2', 35, 16.4],
+  xmasTree: ['f1', 23.2, 8.6], xmasWreath: ['f1', 19.6, 13.6], xmasGarland: ['f2', 37.5, 9.6], xmasLights: ['grounds', 7, 22], xmasTouch: ['f1', 26, 9.8],
 };
 
 // ============================================================
@@ -527,6 +550,10 @@ AREAS.grounds = {
     F.gazebo(7, 26);
     for (let z = 17.5; z <= 35; z += 2.5) { F.bush(3, z, true); F.bush(11, z, true); }
     F.bench(7, 32, 2);
+    deco('xmasLights', g => {
+      for (let z = 17.5; z <= 35; z += 2.5) for (const x of [3, 11]) for (let i = 0; i < 4; i++) ball(g, 0.07, glow(BULB[(i + z) % 5 | 0]), x + Math.cos(i * 1.6) * 0.45, 0.9, z + Math.sin(i * 1.6) * 0.45).castShadow = false;
+      for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; ball(g, 0.08, glow(BULB[i % 5]), 7 + Math.cos(a) * 1.6, 2.6, 26 + Math.sin(a) * 1.6).castShadow = false; }
+    });
     // 裏庭
     F.vegBed(26, 6, 5, 2); F.vegBed(34, 6, 5, 2);
     F.laundryLine(46, 6, 6);
@@ -589,6 +616,13 @@ AREAS.f1 = {
     for (const [x, z] of [[19.5, 5.5], [28.5, 5.5], [19.5, 10.5], [28.5, 10.5]]) F.pillar(x, z);
     F.chandelier(24, 7.5, 2.0);
     F.pedestalVase(18.5, 7); F.pedestalVase(29.5, 7, '#8a2a4a');
+    // クリスマスの飾り：大広間のツリー、玄関ホールのリース
+    deco('xmasTree', g => xmasTree(g, 21.2, 8.6), [[20.05, 22.35, 7.45, 9.75]]);
+    deco('xmasWreath', g => {
+      const w = mesh(new THREE.TorusGeometry(0.38, 0.12, 6, 14), mat('#2f6a3a'), 18.2, 1.95, 13.3, g); w.rotation.y = Math.PI / 2;
+      box(g, 0.06, 0.18, 0.3, mat('#c8362d'), 18.22, 1.58, 13.3);
+      for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; ball(g, 0.05, glow(BULB[i % 5]), 18.26, 1.95 + Math.sin(a) * 0.38, 13.3 + Math.cos(a) * 0.38).castShadow = false; }
+    });
     // 玄関ホール
     F.clock(18.35, 17.2, 1); F.plant(29.5, 17.4); F.plant(18.6, 12.6); F.rug(24, 15.6, 4, 2.4, TEX.carpet);
     // キッチン
@@ -692,6 +726,12 @@ AREAS.f2 = {
     F.linen(42.35, 3, 1, 2.2); F.linen(47.65, 3, 3, 2.2); F.table(45, 5, 1.4, 0.8);
     // 廊下
     plane(A.group, 41.6, 1.4, mat('#8a1f2a'), 21, 0.013, 9.5);
+    deco('xmasGarland', g => {
+      for (const [x1, x2] of [[0.5, 17.5], [30.5, 41.5]]) {
+        box(g, x2 - x1, 0.12, 0.12, mat('#2f6a3a'), (x1 + x2) / 2, 2.3, 8.18);
+        for (let x = x1 + 0.5; x < x2; x += 1) ball(g, 0.07, glow(BULB[Math.round(x) % 5]), x, 2.22, 8.26).castShadow = false;
+      }
+    });
     F.pedestalVase(8, 8.4); F.pedestalVase(16.5, 8.4, '#8a2a4a'); F.pedestalVase(36, 8.4);
     // 裏階段（1Fへ降りる吹き抜け）
     plane(A.group, 2, 5, mat('#2a1a14'), 47, 0.015, 10.5);
@@ -733,7 +773,7 @@ AREAS.f2 = {
 
 export function buildArea(id, scene) {
   const def = AREAS[id];
-  A = { id, def, name: def.name, group: new THREE.Group(), solids: [], walls: [], blocks: [], things: [], rooms: def.rooms, zones: def.zones || [], secret: null, shelf: null };
+  A = { id, def, name: def.name, group: new THREE.Group(), solids: [], walls: [], blocks: [], things: [], rooms: def.rooms, zones: def.zones || [], secret: null, shelf: null, deco: {} };
   scene.add(A.group);
   if (def.rooms.length) buildRooms(def);
   def.build();

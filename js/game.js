@@ -359,7 +359,7 @@ function endDay() {
   for (const c of t.chores) {
     const def = CHORES[c.id];
     if (c.assignee === 'butler' && c.progress >= def.hours) c.done = true;
-    if (c.done && !c.failed) { trust += 1; s.weekStats.done++; lines.push(`○ ${def.name}`); }
+    if (c.done && !c.failed) { trust += 1; s.weekStats.done++; lines.push(`○ ${def.name}`); if (def.xmas) setFlag(s, `deco_${c.id}`); }
     else if (c.failed) { trust -= 2; s.weekStats.done++; lines.push(`△ ${def.name}（青メイドが失敗）`); }
     else if (!def.optional) { trust -= c.id === 'cook' ? 10 : 5; s.weekStats.missed++; lines.push(`× ${def.name}${c.overload ? '（時間内に終わらず）' : ''}`); }
     if (MAIDS.includes(c.assignee)) {
@@ -413,7 +413,7 @@ function afterWeekend() {
 function execution() {
   const avail = ROUTES.filter(r => r.ok(s));
   const intro = [
-    ['n', '12月26日、深夜。会食の客も帰り、屋敷は寝静まった。'],
+    ['n', '12月24日、クリスマス・イブの深夜。パーティーの客も帰り、屋敷は寝静まった。'],
     ['butler', '（今夜しかない。明日の朝には、絵は梱包されて運び出される）'],
   ];
   playScript(intro, () => {

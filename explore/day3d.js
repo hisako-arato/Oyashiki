@@ -62,7 +62,7 @@ function getArea(id) {
     a.markers = [];
     areas[id] = a;
     for (const r of [...a.rooms, ...a.zones]) if (r.key) ROOM_OF[r.key] = { area: id, rect: r };
-    a.group.traverse(o => { if (o.isPointLight) LIGHTS.push({ o, base: o.intensity }); });
+    a.group.traverse(o => { if (o.isPointLight && !o.userData.keepNight) LIGHTS.push({ o, base: o.intensity }); });
     buildNav(a, ...AREA_SIZE[id]);
   }
   return areas[id];
@@ -309,6 +309,19 @@ function syncSecret() {
   a.shelf.hinge.rotation.y = open ? Math.PI : Math.PI / 2;
   Object.assign(a.shelf.box, open ? { minX: 10.6, maxX: 12.8, minZ: 1.8, maxZ: 2.3 } : { minX: 10.1, maxX: 10.6, minZ: 1.8, maxZ: 4.0 });
 }
+// クリスマスの飾り：飾り付けを終えた物だけ見せ、当たり判定を置く。人物の道順も作り直す
+function syncDeco() {
+  for (const [id, a] of Object.entries(areas)) {
+    let changed = false;
+    for (const [key, d] of Object.entries(a.deco)) {
+      const on = !!s.flags[`deco_${key}`];
+      if (d.g.visible !== on) changed = true;
+      d.g.visible = on;
+      for (const b of d.boxes) Object.assign(b, on ? b.at : { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
+    }
+    if (changed && a.deco && Object.values(a.deco).some(d => d.boxes.length)) buildNav(a, ...AREA_SIZE[id]);
+  }
+}
 function openShelf() {
   st.shelfAnim = 0.0001;
   const a = areas.f2;
@@ -388,6 +401,7 @@ function work(i) {
   fade(`${CHORES[c.id].name}をしています……`, () => {
     const msg = DL.doChore(s, i);
     refreshMarkers();
+    syncDeco();
     say(msg);
     if (st.tut) tutorEvent('chore');
   }, 900);
@@ -499,7 +513,7 @@ function ensureButlerChore() {
 }
 
 // ============================================================
-// 決行の夜（12月26日、深夜1時〜夜明け5時）
+// 決行の夜（12月24日クリスマス・イブ、深夜1時〜夜明け5時）
 // ============================================================
 function makeLadder(parent) {
   const g = new THREE.Group();
@@ -748,7 +762,7 @@ function drawHud(room) {
   let clock, text;
   if (st.mode === 'night') {
     const m = Math.floor(st.night.min), h = 1 + Math.floor(m / 60);
-    clock = `12月26日　深夜 ${h}:${String(m % 60).padStart(2, '0')}`;
+    clock = `12月24日 イブ　深夜 ${h}:${String(m % 60).padStart(2, '0')}`;
     text = '目的：' + nightGoal();
   } else {
     clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}`;
@@ -902,6 +916,7 @@ function prepare(state, h) {
   }
   for (const p of Object.values(people)) { p.key = undefined; p.route = null; p.nightRole = null; p.range = VIEW_RANGE; }
   syncSecret();
+  syncDeco();
   ending = false; st.busy = false; st.shelfAnim = 0; st.tut = null; st.tutPending = false; st.night = null; msgQueue = []; afterMsg = null;
 }
 function run() {
@@ -946,12 +961,12 @@ export function startNight(state, route, h) {
   // 夜の見張り：黒メイドは懐中電灯で大広間と玄関ホールを見回り、赤メイドはキッチン裏で仕込み
   const black = people.black, red = people.red;
   Object.assign(black, { area: 'f1', x: 24, z: 10.5, range: 7.5, wait: 0, look: 0,
-    nightRole: { i: 0, path: [[24, 10.5, 2], [20.5, 7.5], [20.5, 4.5, 2.5], [27.5, 4.5, 2], [27.5, 10.5], [24, 15, 2.5], [24, 10.5]] } });
+    nightRole: { i: 0, path: [[24, 10.5, 2], [23, 6.5], [20.5, 4.5, 2.5], [27.5, 4.5, 2], [27.5, 10.5], [24, 15, 2.5], [24, 10.5]] } });
   Object.assign(red, { area: 'f1', x: 44.6, z: 4.6, range: 5.5, look: 0, nightRole: { yaw: 0 } });
   red.g.rotation.y = 0;
   enter('cottage', 2.4, 12.5);
   player.g.rotation.set(0, Math.PI / 2, 0);
-  say('12月26日、深夜1時。会食の客も帰り、屋敷は寝静まった。',
+  say('12月24日、クリスマス・イブの深夜1時。パーティーの客も帰り、屋敷は寝静まった。',
     s.flags.white_ally ? ['執事', '（白は約束どおり、警報の系統を落としてくれたはずだ）'] : ['執事', '（警報はまだ生きている。絵に触れれば鳴るだろう……）'],
     ['執事', '（夜明けまでに、終わらせる）']);
   run();

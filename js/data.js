@@ -65,6 +65,16 @@ export const CHORES = {
   tutorD:   { name: 'お嬢様の勉強の手伝い', type: 'escort', hours: 2, room: 'droom', butlerOnly: true, optional: true, with: 'daughter', after: 13 },
 };
 
+// クリスマスの飾り付け（イブまでの1週間だけ。飾り終えた物は屋敷に残る）
+Object.assign(CHORES, {
+  xmasTree:    { name: '大広間のツリーの飾り付け', type: 'art', hours: 3, room: 'great', xmas: true },
+  xmasWreath:  { name: '玄関ホールのリース飾り',   type: 'art', hours: 2, room: 'hall', xmas: true },
+  xmasGarland: { name: '2F廊下のガーランド飾り',   type: 'art', hours: 2, room: 'corridor', xmas: true },
+  xmasLights:  { name: '前庭のイルミネーション',   type: 'art', hours: 3, room: 'garden', xmas: true },
+  xmasTouch:   { name: 'クリスマス飾りの手直し',   type: 'art', hours: 1, room: 'great' },
+});
+export const XMAS = ['xmasTree', 'xmasWreath', 'xmasGarland', 'xmasLights'];
+
 export const CHORE_POOL = ['great', 'corridor', 'garden', 'laundry', 'master', 'droom', 'storage', 'archive', 'shopping', 'flowers'];
 export const CHORES_PER_CHAPTER = [3, 4, 5, 6];
 
