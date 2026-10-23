@@ -2,11 +2,12 @@
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY } from './data.js';
 import { newState, save, load, clearSave, clamp, applyFx, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
-  fatherHome, motherOutDay, WEEKS_PER_CHAPTER } from './state.js';
+  fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
 import * as DL from './daylogic.js';
-import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS } from './story.js';
+import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ARRIVAL } from './story.js';
 import { hasNight, nightOptions, nightScene } from './night.js';
+import { morningEvents, joined } from './sister.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -86,7 +87,7 @@ function playScript(steps, done) {
     if (!queue.length) return done();
     const st = queue.shift();
     if (Array.isArray(st)) return showLine(st[0], st[1], next);
-    if (st.fx) { const notes = applyFx(s, st.fx); if (notes.length) toast(notes.join('／')); return next(); }
+    if (st.fx) { const notes = applyFx(s, typeof st.fx === 'function' ? st.fx(s) : st.fx); if (notes.length) toast(notes.join('／')); return next(); }
     if (st.call) { st.call(s); return next(); }
     if (st.if) { queue.unshift(...((st.if(s) ? st.then : st.else) || [])); return next(); }
     if (st.report) return showReport(next);
@@ -132,10 +133,12 @@ function showReport(next) {
 }
 
 function affList() {
-  const people = [...FAMILY, ...activeMaids(s)];
+  // 黒メイド（妹の雫）は好感度を持たない
+  const people = [...FAMILY, ...activeMaids(s)].filter(p => !(p === 'black' && joined(s)));
   return el('div', { class: 'affs' }, people.map(p => el('div', { class: 'aff' }, badge(p),
     el('div', { class: 'bar' }, el('i', { style: `width:${s.aff[p]}%;background:${PEOPLE[p].color}` })),
-    el('b', {}, String(s.aff[p])), isAlly(s, p) ? el('small', { class: 'ally' }, '協力者') : null)));
+    el('b', {}, String(s.aff[p])), isAlly(s, p) ? el('small', { class: 'ally' }, s.flags[`told_${p}`] ? '協力者・打ち明けた' : '協力者') : null)),
+    joined(s) ? el('div', { class: 'aff' }, badge('black'), el('span', { class: 'sister' }, '＝ 妹の雫（いつでも密談できる）')) : null);
 }
 
 // ---- 章の進行 ----
@@ -147,10 +150,14 @@ function chapterIntro() {
 }
 
 async function startWeekday() {
+  // 第3章の初日は、新しいメイド（妹の雫）がやって来る
+  if (s.chapter >= 2 && !s.flags.shizuku) return playScript(ARRIVAL, startWeekday);
   s.phase = 'meeting';
   if (!s.today || s.today.dayIndex !== dayIndex(s)) {
     s.today = { dayIndex: dayIndex(s), chores: generateChores(s), hour: START_HOUR, min: 0, loc: 'servants', talked: {}, log: [], plan: {}, escort: null };
+    s.today.notices = morningEvents(s);
   }
+  if (checkFatal()) return;
   save(s);
   // 3Dの屋敷では、執事の部屋で目を覚まし、共用室の席に着いて朝礼を始める
   app().replaceChildren();
@@ -184,7 +191,7 @@ function renderMeeting(done = meetingDone) {
     const opts = def.butlerOnly
       ? [['butler', '執事が引き受ける'], [null, '今日は断る']]
       : [[null, '― 未割当 ―'], ['butler', `執事（${def.hours}h）`], ...maids.map(m => [m, `${PEOPLE[m].name}（${maidHours(m, c)}h）`])];
-    const sel = el('select', { onchange: e => { c.assignee = e.target.value || null; renderMeeting(); } },
+    const sel = el('select', { disabled: !!c.forced, onchange: e => { c.assignee = e.target.value || null; renderMeeting(); } },
       opts.map(([v, label]) => el('option', { value: v || '', selected: c.assignee === v }, label)));
     return el('tr', {}, el('td', {}, def.name, def.optional ? el('small', {}, '（任意）') : null),
       el('td', {}, ROOMS[def.room] ? ROOMS[def.room].name : '外出'), el('td', {}, sel));
@@ -196,6 +203,7 @@ function renderMeeting(done = meetingDone) {
   render(el('div', { class: 'panel' }, statusBar(),
     el('h2', {}, '朝礼'),
     meetingHint ? el('p', { class: 'tutorial' }, meetingHint) : null,
+    (t.notices || []).map(n => el('p', { class: 'notice' }, n)),
     el('ul', { class: 'info' }, info.map(i => el('li', {}, i))),
     el('table', { class: 'chores' }, el('tr', {}, el('th', {}, '仕事'), el('th', {}, '場所'), el('th', {}, '担当')), rows),
     el('div', { class: 'loads' }, loads, el('div', { class: 'load' }, badge('butler'), ` ${butlerHours}/${END_HOUR - START_HOUR}h`)),
@@ -206,7 +214,7 @@ function renderMeeting(done = meetingDone) {
 
 // 得意な仕事を、余裕のあるメイドから順に割り振る。収まらない分は執事
 function autoAssign(s) {
-  const chores = s.today.chores.filter(c => !CHORES[c.id].butlerOnly);
+  const chores = s.today.chores.filter(c => !CHORES[c.id].butlerOnly && !c.forced);
   chores.forEach(c => { c.assignee = null; });
   chores.sort((a, b) => CHORES[b.id].hours - CHORES[a.id].hours);
   for (const c of chores) {
@@ -338,7 +346,7 @@ function openHidden() {
 
 function talk(p) {
   DL.spendHours(s, 1);
-  const { msg, forgery } = DL.talk(s, p);
+  const { msg, forgery } = DL.talk(s, p, peopleIn(s, s.today.loc).filter(x => x !== p).length);
   if (forgery) return askForgery(msg, renderDay);
   renderDay(msg);
 }
@@ -370,6 +378,7 @@ function endDay() {
     }
   }
   for (const m of activeMaids(s)) if (!(m in maidFx) && m !== 'red') maidFx[m] = -1;
+  if (joined(s)) delete maidFx.black;
   const notes = applyFx(s, { trust: Math.min(trust, 2), aff: maidFx, susp: -2 });
   if (s.flags.forgery_start && !s.flags.forgery_ready && dayIndex(s) - s.forgeryDay >= DL.FORGERY_DAYS) {
     setFlag(s, 'forgery_ready');
@@ -402,7 +411,7 @@ function nextDay() {
 
 function checkFatal() {
   if (s.trust <= 0) { ending('fired'); return true; }
-  if (s.susp >= 100) { ending('exposed'); return true; }
+  if (s.susp >= 100) { ending(s.today && s.today.rumor ? 'sibling' : 'exposed'); return true; }
   return false;
 }
 
@@ -456,19 +465,29 @@ async function runRoute(id) {
       ['n', '数日後、休暇を取った執事は「母への贈り物」を受け取り、屋敷を去った。'],
     ], () => ending('swap'));
   });
+  // 2階の廊下は、警備会社の巡回員が往復している。雫から癖を聞いていれば、背後を抜けられる
+  const corridor = () => {
+    if (s.flags.guard_info) return playScript([['n', '2階の廊下。巡回員の懐中電灯が、西の端で止まった。雫の言ったとおり、窓の外を眺めている。'],
+      ['butler', '（今だ）'], ['n', '背後を音もなく抜け、書斎の扉に滑り込んだ。']], toPainting);
+    const lucky = rng(dayIndex(s) * 131 + 17)() < 0.5;
+    playScript([['n', '2階の廊下に、見慣れない懐中電灯の光が揺れている。警備会社の巡回員だ。']], () => showChoice([
+      { t: '物陰で、巡回員が通り過ぎるのを待つ', ok: lucky }, { t: '巡回員が向こうを向いた隙に、書斎へ走る', ok: !lucky },
+    ], o => o.ok ? playScript([['n', '光が遠ざかった。息を殺したまま、書斎の扉に滑り込んだ。']], toPainting)
+      : fail('「誰だ！」懐中電灯の光が、まっすぐ執事を捉えた。巡回員の笛が、屋敷中に響き渡った。')));
+  };
   const path = () => {
     const room = s.flags.eve_daughter ? 'お嬢様の部屋' : s.flags.eve_mother ? '主寝室' : null;
     const opts = [
-      ...(room ? [{ t: `${room}から、そっと書斎へ向かう`, go: () => playScript([['n', `寝息を確かめ、${room}を抜け出した。2階の廊下に人影はない。`]], toPainting) }] : []),
-      { t: `大広間の大階段を上る${s.flags.hall_patrol ? '（黒メイドが見回っている）' : ''}`, go: () => isAlly(s, 'black')
-        ? playScript([['n', '大広間の懐中電灯の光は、執事の前で静かに逸らされた。黒は約束を守った。']], toPainting)
+      ...(room ? [{ t: `${room}から、そっと書斎へ向かう`, go: () => playScript([['n', `寝息を確かめ、${room}を抜け出した。`]], corridor) }] : []),
+      { t: `大広間の大階段を上る${s.flags.hall_patrol ? '（黒メイド――雫が見回っている）' : ''}`, go: () => isAlly(s, 'black')
+        ? playScript([['n', '大広間の懐中電灯の光は、執事の前でわざと逸らされた。すれ違いざま、雫が小さく頷いた。']], corridor)
         : fail('大広間に足を踏み入れた瞬間、懐中電灯の光が執事を照らした。「……執事さん？ こんな時間に何を」黒メイドだった。') },
       { t: '裏階段を使う（キッチン裏の赤メイドの前を通る）', go: () => s.aff.red >= ALLY_AFF
-        ? playScript([['n', '仕込みをしていた赤メイドと目が合った気がしたが、彼女は黙って鍋に向き直った。']], toPainting)
+        ? playScript([['n', '仕込みをしていた赤メイドと目が合った気がしたが、彼女は黙って鍋に向き直った。']], corridor)
         : fail('「……誰？」キッチン裏の赤メイドが振り返った。足音を聞かれてしまった。') },
     ];
     if (s.flags.ladder) opts.push({ t: '倉庫の梯子を前庭に運び、バルコニーから2階へ', go: () => s.flags.balcony_open
-      ? playScript([['n', '前庭の闇に梯子を立て、バルコニーへ登る。昼のうちに鍵を外しておいたガラス戸は、音もなく開いた。']], toPainting)
+      ? playScript([['n', '前庭の闇に梯子を立て、バルコニーへ登る。昼のうちに鍵を外しておいたガラス戸は、音もなく開いた。']], corridor)
       : fail('バルコニーのガラス戸には鍵が掛かっていた。こじ開けようとした音に、屋敷の明かりが灯った。') });
     showChoice(opts, o => o.go());
   };

@@ -1,6 +1,6 @@
 // ゲーム状態と、状態にまつわる計算
 import { PEOPLE, MAIDS, ALLY_AFF, CHORES, CHORE_POOL, CHORES_PER_CHAPTER, SPEED, XMAS,
-  MAID_CAPACITY, BLUE_FAIL_RATE, START_HOUR, END_HOUR } from './data.js';
+  MAID_CAPACITY, BLUE_FAIL_RATE, SISTER, START_HOUR, END_HOUR } from './data.js';
 
 const SAVE_KEY = 'oyashiki-save-v1';
 
@@ -74,8 +74,8 @@ export function setFlag(s, f, notes) {
 
 export const maidAvailable = (s, m) => s.chapter >= PEOPLE[m].from;
 export const activeMaids = s => MAIDS.filter(m => maidAvailable(s, m));
-// 好感度70以上のメイドは協力者。黒は、夜の密談で約束を交わした場合も協力者になる
-export const isAlly = (s, who) => MAIDS.includes(who) && (s.aff[who] >= ALLY_AFF || (who === 'black' && !!s.flags.black_ally));
+// 好感度70以上のメイドは協力者。黒メイド（妹の雫）は、屋敷に来た日から味方
+export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.flags.shizuku : s.aff[who] >= ALLY_AFF);
 
 // ---- 1日の予定 ----
 

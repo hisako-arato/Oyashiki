@@ -2,12 +2,13 @@
 // 表現は、性的な描写はせず、大人が読めば分かる程度にとどめる（暗転・翌朝の様子で示す）
 import { PEOPLE } from './data.js';
 import { activeMaids, fatherHome, rng, dayIndex, isAlly, WEEKS_PER_CHAPTER } from './state.js';
+import { joined, told, sulking, sis, afterSisterNight, afterMaidNight, tell } from './sister.js';
 
 const N = 'n', B = 'butler', M = 'mother', D = 'daughter';
-const R = 'red', BL = 'blue', K = 'black', W = 'white';
+const R = 'red', BL = 'blue', K = 'black', W = 'white', S = 'shizuku';
 
 const visits = (s, who) => s.counters[`night_${who}`] || 0;
-const NEED = { mother: 60, daughter: 60, red: 50, blue: 50, white: 50, black: 40 };
+const NEED = { mother: 60, daughter: 60, red: 50, blue: 50, white: 50 };
 
 // その夜に夜の時間があるか（決行の前夜＝最後の金曜は無し）
 export function hasNight(s) {
@@ -16,19 +17,24 @@ export function hasNight(s) {
 
 // 選べる行動の一覧。ok でない物は理由付きで灰色にする
 export function nightOptions(s) {
+  // 雫が来た日の夜は、必ず雫を呼び出す
+  if (joined(s) && !s.flags.shizuku_reunion) return [{ id: K, label: '黒メイド――雫を、自室に呼び出す', ok: true }];
   const opts = [{ id: 'rest', label: '休む', ok: true }];
-  for (const m of activeMaids(s)) opts.push({ id: m, label: `自室に${PEOPLE[m].name}を呼んで密談する`, ok: s.aff[m] >= NEED[m], why: `好感度${NEED[m]}以上` });
+  for (const m of activeMaids(s)) opts.push(m === K
+    ? { id: m, label: '自室に雫（黒メイド）を呼ぶ', ok: true }
+    : { id: m, label: `自室に${PEOPLE[m].name}を呼んで密談する`, ok: s.aff[m] >= NEED[m], why: `好感度${NEED[m]}以上` });
   opts.push({ id: 'mother', label: 'お母様の部屋（主寝室）を訪ねる', ok: s.aff.mother >= NEED.mother && !fatherHome(s),
     why: s.aff.mother < NEED.mother ? `好感度${NEED.mother}以上` : '今夜は旦那様が家にいる' });
   opts.push({ id: 'daughter', label: 'お嬢様の部屋を訪ねる', ok: s.aff.daughter >= NEED.daughter, why: `好感度${NEED.daughter}以上` });
   return opts;
 }
 
-// 夜の2階を歩けば、黒メイドの見回りに見られることがある（協力者なら見逃してくれる）
-const patrol = s => (isAlly(s, 'black') || s.flags.black_ally) ? [] : rng(dayIndex(s) * 97 + 5)() < 0.25
-  ? [[K, '「……執事さん？ こんな時間に2階で何をしているんですか」'], [B, '（「見回りの確認だ」とごまかしたが、黒の目は疑っていた）'], { fx: { susp: 10 } }] : [];
-// メイドを夜に呼ぶと、ほかのメイドに噂される
-const gossip = (s, who) => ({ fx: { aff: Object.fromEntries(activeMaids(s).filter(m => m !== who).map(m => [m, -1])) } });
+// 夜の2階を歩けば、夜食を取りに来た赤メイドに見られることがある。雫が来てからは、雫が見回りの順路を変えてくれる
+const patrol = s => joined(s) ? [[N, '（廊下の角で、黒メイドの懐中電灯がふっと逸れた。……雫が、見回りの順路を変えてくれたらしい）']]
+  : rng(dayIndex(s) * 97 + 5)() < 0.25 && !isAlly(s, R)
+  ? [[R, '「……執事さん？ こんな時間に、2階で何してるの」'], [B, '（「戸締まりの確認だ」とごまかしたが、赤の目は眠そうなまま疑っていた）'], { fx: { susp: 10 } }] : [];
+// メイドを夜に呼ぶと、ほかのメイドに噂される。雫と会うと、打ち明けていないメイドに強く妬まれる
+const gossip = who => ({ fx: s => who === K ? afterSisterNight(s) : afterMaidNight(s, who) });
 const count = who => ({ call: s => { s.counters[`night_${who}`] = (s.counters[`night_${who}`] || 0) + 1; } });
 
 // 母娘の両方と深い仲になると、いずれ鉢合わせる
@@ -46,7 +52,9 @@ export function nightScene(s, id) {
   if (id === 'rest') return [[N, '夜は早めに休んだ。明日も、完璧な執事でいなければならない。']];
   if (id === 'mother') return motherScene(s);
   if (id === 'daughter') return daughterScene(s);
-  return [[N, `夜10時。使用人棟の自室に、${PEOPLE[id].name}をそっと招き入れた。`], ...maidScene(s, id), gossip(s, id), count(id)];
+  // 来た日の呼び出しは避けられないので、噂や妬みの元にはしない
+  if (id === K) return [...sisterScene(s), ...(s.flags.shizuku_reunion ? [gossip(K)] : []), count(K)];
+  return [[N, `夜10時。使用人棟の自室に、${PEOPLE[id].name}をそっと招き入れた。`], ...maidScene(s, id), ...confess(s, id), gossip(id), count(id)];
 }
 
 function motherScene(s) {
@@ -144,18 +152,97 @@ function maidScene(s, m) {
     if (s.chapter === 3 && s.aff.white >= 70 && !s.flags.white_ally) return [[W, '「……イブの深夜1時、警報の系統だけ落とせばいいんですね。理由は聞きません」'], { fx: { flag: 'white_ally' } }];
     return [[W, '「夜は工具の手入れの時間なんですよ。……執事さんも、何か直したい物があるんですか？」'], { fx: { aff: { white: 3 } } }];
   }
-  // 黒：正義感が強いので、呼ぶこと自体が賭け
-  if (s.aff.black < 60) return [[K, '「……こんな時間に、使用人を部屋に呼ぶなんて。旦那様にご報告すべきでしょうか」'], { fx: { susp: 8, aff: { black: -3 } } }];
-  if (s.flags.found_painting && !s.flags.black_ally) return [
-    [K, '「……あの隠し部屋の絵。美術館から盗まれた『月下の庭』ですよね」'],
-    [B, '（……！）'],
-    [K, '「私、ここに来る前は、盗まれた美術品を追う仕事をしていました。旦那様を告発する証拠を探していたんです」'],
-    [K, '「あなたが何をしようとしているのか、薄々気づいています。……絵を、在るべき場所に返すと約束してくれるなら」'],
-    { choice: [
-      { t: '「約束する。あの絵は、母と見た絵なんだ」', fx: { flag: 'black_ally', aff: { black: 10 } },
-        then: [[K, '「……決行の夜、大広間の見回りは、私が引き受けます。あなたは見なかったことにします」']] },
-      { t: '何も答えない', fx: { aff: { black: -5 } }, then: [[K, '「……そうですか。では、私は私のやり方でやります」']] },
-    ] }];
-  return [[K, '「……夜分に失礼します。何か、私にお話があるのでは？」'], { fx: { aff: { black: 3 } } }];
+  return [];
 }
 
+// 協力者になったメイドには、雫とのことを打ち明けられる
+const CONFESS = {
+  red: [[R, '「……やっぱり。黒さんを見る執事さんの目、家族の目だった」'], [R, '「……大丈夫。わたし、お姉さんの代わりくらいはできる。二人とも、見守ってる」']],
+  blue: [[BL, '「妹さん……！ じゃあ、お母様と見た絵って、雫さんの思い出の絵でもあるんですね」'],
+    [BL, '「……ねえ執事さん、小さい頃の二人の話、もっと聞かせてください。いつか、三人の絵を描きたいな」']],
+  white: [[W, '「なるほど。それで二人とも、人前であんなにぎこちなかったんですね。合理的に納得しました」'],
+    [W, '「では、雫さんと会う夜は、私が口裏を合わせます。『執事さんは白と配線の打ち合わせ』。……理由は聞きませんよ」']],
+};
+function confess(s, m) {
+  if (!joined(s) || told(s, m) || !isAlly(s, m)) return [];
+  return [
+    [B, `（${PEOPLE[m].name}なら、信じられる。……雫のことを、話すべきだろうか）`],
+    { choice: [
+      { t: '黒メイドが妹の雫だと打ち明ける', then: [
+        [B, '「実は……黒は、私の妹なんだ。名前は雫。ここへは、二人で母の絵を取り戻しに来た」'],
+        ...CONFESS[m], { call: s => tell(s, m) }, { fx: { aff: { [m]: 3 } } },
+        [B, '（これで、彼女が雫とのことを噂することはない。……ただ、雫が知ったら何と言うか）'],
+      ] },
+      { t: 'まだ黙っておく' },
+    ] },
+  ];
+}
+
+// ---- 雫（黒メイド）との夜 ----
+const SULK_WHY = {
+  streak: [[S, '「……最近、ずっと他の子ばっかり呼んでたでしょ。廊下で足音、聞こえてたんだから」']],
+  ally: [[S, '「……ねえ。最近あの子と、ずいぶん仲いいよね。作戦の手伝いまでしてもらうんでしょ」']],
+  told: [[S, '「……私たちのこと、話したんですか。……ううん、怒ってない。怒ってないけど」'], [S, '「お兄ちゃんの秘密を知ってるのは、私だけがよかったな」']],
+};
+function sisterScene(s) {
+  const intro = [[N, '夜10時。自室の扉を閉めた瞬間、黒メイドの――雫の表情が、ふっとほどけた。']];
+  if (!s.flags.shizuku_reunion) return [
+    [N, '夜10時。自室に、新しいメイドを呼び出した。扉が閉まり、足音が遠ざかるのを待つ。'],
+    [K, '「……ご用件は何でしょうか、執事さん」'],
+    [B, '「……雫。どういうことだ」'],
+    [S, '「……っ、お兄ちゃん！」'],
+    [N, '毅然とした仮面が崩れ、雫は勢いよく執事の胸に飛び込んできた。'],
+    [S, '「ずっと会いたかった。半年以上も連絡ひとつくれないで……。ひとりで危ないことしないでよ」'],
+    [S, '「お兄ちゃんが執事に応募したとき、私もこっそり出してたの。なかなか採用されなくて、やっと呼ばれたんだから」'],
+    [S, '「お母さんの絵……二人で取り戻すって、決めたでしょ。お兄ちゃんだけに背負わせたくなかった」'],
+    { choice: [
+      { t: '「……無茶をする。だが、来てくれて助かった」と頭を撫でる', then: [[S, '「えへへ……。昔みたい」']] },
+      { t: '「危険すぎる。明日にでも辞めろ」と突き放す', then: [[S, '「やだ。絶対やだ。……もう決めたもん」'], [B, '（昔から、こうと決めたら聞かない子だ）']] },
+    ] },
+    [S, '「それにね、手ぶらで来たんじゃないよ。お母さんの日記、持ってきたの」'],
+    [S, '「『月下の庭』の額縁の裏には、美術館の蔵印が押してあるって。盗まれた絵だっていう、動かない証拠になる」'],
+    [S, '「あとね、採用の手続きのとき聞いちゃった。オークション会社の運び屋さん、25日の朝7時に来るんだって」'],
+    [B, '（25日の朝……。やはり、決行はイブの夜しかない）'],
+    { fx: { flag: ['shizuku_reunion', 'shizuku_diary', 'shizuku_courier'] } },
+    [S, '「人前では、私たちは他人。私、厳しくするからね。お兄ちゃんは黙って従って」'],
+    [S, '「その代わり……夜は、いつでも呼んでいいよ。私からは、いつだって来るから」'],
+    [N, '雫は名残惜しそうに袖を離し、何事もなかったような顔で部屋を出ていった。'],
+    [B, '（……他のメイドたちに怪しまれないよう、気をつけなければ。新人ばかり呼んでいれば、噂になる）'],
+  ];
+  if (sulking(s)) return [...intro,
+    [S, '「……」（ベッドの端に座ったまま、こちらを見ようとしない）'],
+    ...SULK_WHY[sis(s).sulk],
+    { choice: [
+      { t: '「雫が一番大事だ。作戦のためなんだ」と抱き寄せる', then: [[S, '「……ずるい。そう言えば許すと思って」'], [N, '口ではそう言いながら、雫は執事の胸に額を押しつけた。']] },
+      { t: '昔のように、雫の好きな紅茶を淹れる', then: [[S, '「……覚えてたんだ。ミルク多めのやつ」'], [N, '湯気の向こうで、雫の口元がようやく緩んだ。']] },
+    ] },
+    [B, '（今夜は、話を聞いてやるだけで精一杯だった。……情報はまた今度だ）'],
+  ];
+  const info = sisterInfo(s);
+  return [...intro, ...info,
+    [S, '「……ねえ、もうちょっとだけ、ここにいていい？」'],
+    [N, '雫は昔のように執事の肩にもたれ、やがて小さな寝息を立て始めた。夜明け前、そっと起こして部屋に帰した。'],
+  ];
+}
+// 雫が持ってきてくれる情報（上から順に、まだ知らないものを1つ）
+function sisterInfo(s) {
+  if (s.chapter >= 3 && !s.flags.guard_info) return [
+    [S, '「イブの夜ね、旦那様が警備会社の巡回員を一人呼ぶの。2階の廊下を往復するんだって」'],
+    [S, '「でもその人、西の端――物置の前で、必ず立ち止まって窓の外を眺める癖があるの。下見に来たとき、見ちゃった」'],
+    { fx: { flag: ['guard_known', 'guard_info'] } },
+    [B, '（巡回員が西の端で背を向けている間なら、廊下を抜けられる）'],
+  ];
+  if (s.flags.desk_lock && !s.flags.key_hidden && !s.flags.p_bday) return [
+    [S, '「お兄ちゃん、旦那様の洗濯物から、花屋さんの領収書が出てきたの。『麗子様 お誕生日 11月3日』だって」'],
+    { fx: { flag: 'p_bday' } },
+  ];
+  if (!s.flags.h_blueprint) return [
+    [S, '「資料室の整理のとき、屋敷の設計図を見たの。書斎の奥に、何も書いてない空間があったよ」'],
+    { fx: { flag: 'h_blueprint' } },
+  ];
+  if (s.flags.hidden_room && !s.flags.hint_redbook && !s.flags.red_book) return [
+    [S, '「書斎を掃除したとき、本棚の赤い本だけ、埃がなかったの。……絶対、何かあるよ」'],
+    { fx: { flag: 'hint_redbook' } },
+  ];
+  return [[S, '「今日もお疲れさま、お兄ちゃん。……昼間は冷たくしてごめんね。あれ、けっこう楽しんでるけど」']];
+}

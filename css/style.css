@@ -139,6 +139,8 @@ select, input { font: inherit; background: var(--panel2); color: var(--text); bo
   background: var(--gold); color: var(--bg); padding: 8px 16px; border-radius: 20px; font-size: .9rem; max-width: 90vw;
 }
 .tutorial { background: #3a3020; border-left: 4px solid var(--gold); padding: 8px 12px; font-size: .9rem; }
+.notice { background: #2a2238; border-left: 4px solid #a07ad0; padding: 8px 12px; font-size: .9rem; }
+.aff .sister { grid-column: 2 / -1; font-size: .85rem; opacity: .85; }
 .nightopts { display: flex; flex-direction: column; gap: 8px; }
 .nightopts button { text-align: left; }
 .nightopts small { color: var(--muted); margin-left: 6px; }

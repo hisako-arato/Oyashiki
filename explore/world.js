@@ -427,6 +427,7 @@ export const LOOKS = {
   white: { outfit: '#c8ccd2', hair: '#c0c0c8', maid: true, name: '白メイド' },
   mother: { outfit: '#8a2a4a', hair: '#5a3020', dress: true, longHair: true, name: 'お母様' },
   daughter: { outfit: '#f0d070', hair: '#3a2418', dress: true, longHair: true, name: 'お嬢様' },
+  guard: { outfit: '#41608f', hair: '#2a2a2a', name: '巡回員' },   // 決行の夜だけ現れる警備会社の巡回員
 };
 
 // ---- 調べられる場所・出入口 ----

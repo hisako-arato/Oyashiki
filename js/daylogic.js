@@ -1,8 +1,9 @@
 // 執事パートの処理（仕事・調査・会話）。画面の描き方に依らない部分
 // ボタン式の画面（game.js）と3Dの屋敷（explore/day3d.js）の両方から使う
-import { PEOPLE, CHORES, PASSCODE, END_HOUR } from './data.js';
+import { PEOPLE, CHORES, PASSCODE, END_HOUR, SISTER } from './data.js';
 import { applyFx, setFlag, dayIndex, whereIs, isAlly, peopleIn } from './state.js';
 import { pickTalk } from './actions.js';
+import { joined, sisterTalk } from './sister.js';
 
 export const FORGERY_DAYS = 5;
 
@@ -62,8 +63,14 @@ export function tryCode(s, code) {
 }
 
 // 会話。その日の最初の会話だけ好感度が上がる。{ msg, forgery } を返す
-export function talk(s, p) {
+// others：近くにいる他の人の数（雫は人目があると他人のふりをする）
+export function talk(s, p, others = 0) {
   const t = s.today;
+  if (p === SISTER && joined(s)) {
+    const repeat = !!t.talked[p];
+    t.talked[p] = true;
+    return { msg: `${PEOPLE[p].name}${sisterTalk(s, others)}`, forgery: false, repeat };
+  }
   const tk = pickTalk(s, p);
   if (t.talked[p]) return { msg: `${PEOPLE[p].name}${tk.line}`, forgery: false, repeat: true };
   t.talked[p] = true;

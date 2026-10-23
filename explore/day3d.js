@@ -390,7 +390,8 @@ function startMeeting() {
 function talkTo(p) {
   p.g.rotation.y = Math.atan2(player.x - p.x, player.z - p.z);
   p.wait = Math.max(p.wait, 3); p.baseYaw = p.g.rotation.y; p.target = null;
-  const res = DL.talk(s, p.id);
+  const others = Object.values(people).filter(o => o !== p && o.area === cur.id && Math.hypot(o.x - player.x, o.z - player.z) < 8).length;
+  const res = DL.talk(s, p.id, others);
   if (!res.repeat) DL.spendMinutes(s, ACT_MIN);
   if (res.forgery) { st.busy = true; return hooks.askForgery(res.msg, m => say(m)); }
   say(res.msg);
@@ -618,7 +619,7 @@ function nightGoal() {
   if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す' : '絵を抱えて、正門から屋敷を出る';
   if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
   if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
-  return '2階の書斎へ。大広間は黒メイドが、キッチン裏は赤メイドが見張っている';
+  return '2階の書斎へ。大広間は雫が見逃してくれる。キッチン裏には赤メイド、2階の廊下には巡回員がいる';
 }
 function endNight(id) {
   running = false;
@@ -643,7 +644,7 @@ function nightTick(dt) {
     N.caught = true;
     const p = seers[0];
     afterMsg = () => endNight('caught');
-    say([p.name, p.id === 'black' ? '「……執事さん？ こんな時間に、何をしているんですか」' : '「……誰？ ……執事さん？」'], '懐中電灯の光が、執事の顔を照らした。');
+    say([p.name, p.id === 'guard' ? '「誰だ！ そこで何をしている！」' : '「……誰？ ……執事さん？」'], '懐中電灯の光が、執事の顔を照らした。');
   }
 }
 
@@ -958,8 +959,11 @@ export function startNight(state, route, h) {
   setLights(true);
   setupNightProps();
   refreshMarkers();
-  // 夜の見張り：黒メイドは懐中電灯で大広間と玄関ホールを見回り、赤メイドはキッチン裏で仕込み
-  const black = people.black, red = people.red;
+  // 夜の見張り：黒メイド（雫）は大広間と玄関ホールを見回るが、兄を見逃す。赤メイドはキッチン裏で仕込み
+  // 2階の廊下は警備会社の巡回員が往復し、西の端（物置の前）で立ち止まって窓の外を眺める
+  const black = people.black, red = people.red, guard = people.guard;
+  Object.assign(guard, { area: 'f2', x: 30, z: 9.5, range: 7, wait: 0, look: 0,
+    nightRole: { i: 0, path: [[3.2, 9.5, 6], [40.5, 9.5, 1.5]] } });
   Object.assign(black, { area: 'f1', x: 24, z: 10.5, range: 7.5, wait: 0, look: 0,
     nightRole: { i: 0, path: [[24, 10.5, 2], [23, 6.5], [20.5, 4.5, 2.5], [27.5, 4.5, 2], [27.5, 10.5], [24, 15, 2.5], [24, 10.5]] } });
   Object.assign(red, { area: 'f1', x: 44.6, z: 4.6, range: 5.5, look: 0, nightRole: { yaw: 0 } });
@@ -971,6 +975,8 @@ export function startNight(state, route, h) {
   say('12月24日、クリスマス・イブの深夜1時。パーティーの客も帰り、屋敷は寝静まった。',
     eve && ['執事', `（${eve[3]}の寝息を確かめ、そっとベッドを抜け出した。ここは2階だ。書斎は近い）`],
     s.flags.white_ally ? ['執事', '（白は約束どおり、警報の系統を落としてくれたはずだ）'] : ['執事', '（警報はまだ生きている。絵に触れれば鳴るだろう……）'],
+    s.flags.guard_info ? ['執事', '（2階の廊下には巡回員。雫の話では、西の端で立ち止まって窓の外を眺める。その隙に背後を抜ける）']
+      : ['執事', '（2階の廊下には、警備会社の巡回員がいるはずだ。懐中電灯の光に気をつけろ）'],
     ['執事', '（夜明けまでに、終わらせる）']);
   run();
 }

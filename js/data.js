@@ -14,7 +14,11 @@ export const PEOPLE = {
   blue:    { name: '青メイド', color: '#2f6fd0', maid: true, from: 1 },
   black:   { name: '黒メイド', color: '#222222', maid: true, from: 2 },
   white:   { name: '白メイド', color: '#9aa3ad', maid: true, from: 1 },
+  // 黒メイドの正体は主人公の妹。二人きりの場面だけ「雫」として話す（好感度は持たない）
+  shizuku: { name: '雫',       color: '#222222' },
+  guard:   { name: '巡回員',   color: '#41608f' },
 };
+export const SISTER = 'black';
 
 export const MAIDS = ['red', 'blue', 'black', 'white'];
 export const FAMILY = ['father', 'mother', 'daughter'];
@@ -106,7 +110,14 @@ export const CLUES = {
   white_ally:   { ch: 3, text: '【協力者】白メイドが決行の夜にブレーカーを切ってくれる。' },
   n_codehint:   { ch: 1, text: 'お母様の寝物語：旦那様は、金庫も鍵も番号は全部「麗子の誕生日」にしている。' },
   n_red_night:  { ch: 0, text: '赤メイドの密談：夜中の1時ごろ、キッチン裏（裏階段の前）で翌日の仕込みをしている。' },
-  black_ally:   { ch: 2, text: '【協力者】黒メイドは盗まれた美術品を追っていた。絵を在るべき場所に返す約束で、夜の見回りを見逃してくれる。' },
+  shizuku:      { ch: 2, text: '【雫】黒メイドの正体は、妹の雫。人前では他人のふり。夜はいつでも自室で密談できるが、会えば他のメイドに妬まれる。' },
+  shizuku_diary:{ ch: 2, text: '【雫の情報】母の日記：「月下の庭」の額縁の裏には、美術館の蔵印が押されている。盗品である何よりの証拠だ。' },
+  shizuku_courier:{ ch: 2, text: '【雫の情報】オークション会社の運び屋は、12月25日の朝7時に屋敷へ来る。' },
+  guard_known:  { ch: 3, text: 'イブの夜は、警備会社の巡回員が2階の廊下を見回るらしい。' },
+  guard_info:   { ch: 3, text: '【雫の情報】巡回員は2階の廊下を往復し、西の端（物置の前）で必ず立ち止まって窓の外を眺める。その間なら背後を抜けられる。' },
+  told_red:     { ch: 2, text: '【打ち明けた】赤メイドに、雫とのことを話した。もう赤が噂することはない。' },
+  told_blue:    { ch: 2, text: '【打ち明けた】青メイドに、雫とのことを話した。もう青が噂することはない。' },
+  told_white:   { ch: 2, text: '【打ち明けた】白メイドに、雫とのことを話した。もう白が噂することはない。' },
   eve_mother:   { ch: 3, text: '【イブの夜】お母様の部屋（2階の主寝室）に招かれている。決行は2階から始められる。' },
   eve_daughter: { ch: 3, text: '【イブの夜】お嬢様の部屋に招かれている。決行は2階から始められる。' },
   family_rift:  { ch: 1, text: '【鉢合わせ】お母様とお嬢様に、互いの関係を知られてしまった。家族の溝は深い。' },
