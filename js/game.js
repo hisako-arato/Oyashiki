@@ -154,9 +154,10 @@ async function startWeekday() {
   app().replaceChildren();
   if (await load3D()) {
     return day3d.startMorning(s, {
-      openMeeting: done => {
+      openMeeting: (done, hint) => {
         app().classList.add('overlay');
-        renderMeeting(() => { buildPlan(s); s.phase = 'day'; app().classList.remove('overlay'); app().replaceChildren(); done(); });
+        meetingHint = hint;
+        renderMeeting(() => { meetingHint = null; buildPlan(s); s.phase = 'day'; app().classList.remove('overlay'); app().replaceChildren(); done(); });
       },
       endDay, fatal: checkFatal, notebook: openNotebook, askCode, askForgery, toast,
     });
@@ -165,7 +166,7 @@ async function startWeekday() {
 }
 
 // ---- 朝礼（メイドへの仕事の割り振り） ----
-let meetingDone = null;
+let meetingDone = null, meetingHint = null;
 function renderMeeting(done = meetingDone) {
   meetingDone = done;
   const t = s.today;
@@ -192,6 +193,7 @@ function renderMeeting(done = meetingDone) {
   });
   render(el('div', { class: 'panel' }, statusBar(),
     el('h2', {}, '朝礼'),
+    meetingHint ? el('p', { class: 'tutorial' }, meetingHint) : null,
     el('ul', { class: 'info' }, info.map(i => el('li', {}, i))),
     el('table', { class: 'chores' }, el('tr', {}, el('th', {}, '仕事'), el('th', {}, '場所'), el('th', {}, '担当')), rows),
     el('div', { class: 'loads' }, loads, el('div', { class: 'load' }, badge('butler'), ` ${butlerHours}/${END_HOUR - START_HOUR}h`)),
@@ -423,8 +425,11 @@ function execution() {
   });
 }
 
-function runRoute(id) {
+async function runRoute(id) {
   if (id === 'persuade') return ending('persuade');
+  // 3Dの屋敷では、夜の屋敷を歩いて絵を盗み出す
+  app().replaceChildren();
+  if (await load3D()) return day3d.startNight(s, id, { ending, notebook: openNotebook, toast });
   let alarmOff = false;
   const fail = text => playScript([['n', text]], () => ending('caught'));
   const toPainting = () => playScript([

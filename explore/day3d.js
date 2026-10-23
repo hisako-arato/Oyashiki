@@ -1,17 +1,22 @@
-// 執事パートを3Dの屋敷で遊ぶ
+// 執事パートと決行の夜を3Dの屋敷で遊ぶ
 // 本編（js/）の状態・予定・調査・会話をそのまま使い、移動と見た目だけを3Dにする
-import { THREE, renderer, scene, camera, CAM_OFFSET, hemi, sun, makeChar, animate, resize } from './engine.js';
+import { THREE, renderer, scene, camera, CAM_OFFSET, hemi, sun, makeChar, animate, resize, box, mat, M, TEX } from './engine.js';
 import { buildArea, AREA_INFO, HOUSE, LOOKS, WORK } from './world.js';
-import { PEOPLE, CHORES, END_HOUR } from '../js/data.js';
-import { whereIs, isAlly, fatherHome, dateLabel, clamp } from '../js/state.js';
+import { buildNav, planRoute } from './nav.js';
+import { PEOPLE, CHORES, END_HOUR, MAIDS } from '../js/data.js';
+import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 
-const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か
+const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か（昼）
+const NIGHT_SEC_PER_HOUR = 75; // 決行の夜
 const ACT_MIN = 20;          // 調べる・話すにかかる時間（分）
 const WALK_SPEED = 5.2;      // 歩く速さ（m/秒）
+const NPC_SPEED = 2.2;       // 人物が部屋を移るときの速さ
 const LOW = 0.17, VIEW_RANGE = 5.5, VIEW_FOV = Math.PI * 0.42, CONE_RAYS = 24;
 const OWNERS = { master: 'mother', droom: 'daughter' };
+const AREA_SIZE = { grounds: [92, 58], cottage: [20, 15], f1: [48, 18], f2: [48, 18] };
+const GATE = { area: 'grounds', x: 38, z: 56 };
 
 let s = null, hooks = null, cur = null, running = false;
 const areas = {};
@@ -19,8 +24,12 @@ const $ = id => document.getElementById(id);
 const root = $('day3d');
 
 // ---- 状態（その日だけ） ----
-const st = { busy: false, lastKey: null, shelfAnim: 0, mode: 'day' };  // mode：morning（朝礼前）／day
+// mode：morning（朝礼前）／day（仕事中）／night（決行の夜）
+const st = { busy: false, lastKey: null, shelfAnim: 0, mode: 'day', tut: null, night: null };
 const player = { ...makeChar(scene, { outfit: '#22223a', hair: '#2a2a2a' }), x: 0, z: 0, r: 0.3 };
+const lantern = new THREE.PointLight('#ffcf8a', 0, 9, 1.6);
+lantern.position.set(0.3, 1.3, 0.2);
+player.g.add(lantern);
 
 // ---- メッセージ ----
 const msgEl = $('msg3d');
@@ -45,6 +54,7 @@ $('view').addEventListener('pointerdown', () => { if (!msgEl.classList.contains(
 
 // ---- エリア ----
 const ROOM_OF = {};   // 本編の部屋名 → { area, rect }
+const LIGHTS = [];    // 屋敷の照明（夜は落とす）
 function getArea(id) {
   if (!areas[id]) {
     const a = buildArea(id, scene);
@@ -52,10 +62,12 @@ function getArea(id) {
     a.markers = [];
     areas[id] = a;
     for (const r of [...a.rooms, ...a.zones]) if (r.key) ROOM_OF[r.key] = { area: id, rect: r };
+    a.group.traverse(o => { if (o.isPointLight) LIGHTS.push({ o, base: o.intensity }); });
+    buildNav(a, ...AREA_SIZE[id]);
   }
   return areas[id];
 }
-const SKY = new THREE.Color('#9cbfd6');
+const SKY = new THREE.Color('#9cbfd6'), NIGHT_SKY = new THREE.Color('#0b1020');
 let zoomBase = 1;
 function enter(id, x, z) {
   const a = getArea(id);
@@ -70,14 +82,22 @@ function enter(id, x, z) {
   if (info.outdoor) g.group.position.set(0, 0, 0);
   else g.group.position.set(-info.origin.x, -0.03 - info.below, -info.origin.z);
   for (const b of g.blocks) b.g.visible = info.outdoor || b.name !== info.hide;
-  scene.background = SKY;
-  hemi.intensity = info.outdoor ? 1.4 : 1.0;
-  sun.intensity = info.outdoor ? 2.4 : 1.2;
+  const night = st.mode === 'night';
+  scene.background = night ? NIGHT_SKY : SKY;
+  hemi.intensity = night ? (info.outdoor ? 0.35 : 0.25) : info.outdoor ? 1.4 : 1.0;
+  sun.intensity = night ? 0.45 : info.outdoor ? 2.4 : 1.2;
   camTarget.set(x, 0, z);
   zoomBase = info.outdoor ? 0.6 : 1;
   camera.zoom = zoomBase;
   camera.updateProjectionMatrix();
   st.lastKey = undefined;
+}
+function setLights(night) {
+  hemi.color.set(night ? '#6a7aa8' : '#fff1dc');
+  sun.color.set(night ? '#9ab0ff' : '#ffe2b8');
+  lantern.intensity = night ? 7 : 0;
+  for (const l of LIGHTS) l.o.intensity = night ? l.base * 0.12 : l.base;
+  root.classList.toggle('night', night);
 }
 const fadeEl = $('fade3d'), fadeText = $('fadeText');
 function fade(text, mid, ms = 280) {
@@ -117,7 +137,8 @@ function rayDist(x, z, dx, dz, max) {
   return best;
 }
 
-// ---- 人物：本編の予定表どおりの部屋にいて、部屋の中を歩き回る ----
+// ---- 人物 ----
+// 本編の予定表どおりの部屋へ、扉・廊下・階段を歩いて移る。着いたら部屋の中を歩き回る
 const people = {};
 const coneMat = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
 function makePeople() {
@@ -130,7 +151,7 @@ function makePeople() {
     const cone = new THREE.Mesh(geo, mat);
     cone.position.y = 0.03; cone.frustumCulled = false;
     scene.add(cone);
-    people[id] = { id, name: LOOKS[id].name, ...ch, cone, coneGeo: geo, coneMat: mat, x: 0, z: 0, area: null, key: undefined, target: null, wait: 0, look: 0, seeing: false };
+    people[id] = { id, name: LOOKS[id].name, ...ch, cone, coneGeo: geo, coneMat: mat, x: 0, z: 0, area: null, key: undefined, target: null, wait: 0, look: 0, seeing: false, range: VIEW_RANGE };
   }
 }
 function freePoint(a, r) {
@@ -145,65 +166,115 @@ function clearPath(a, x1, z1, x2, z2) {
   for (let i = 1; i <= n; i++) if (blockedIn(a, x1 + (x2 - x1) * i / n, z1 + (z2 - z1) * i / n, 0.25)) return false;
   return true;
 }
-function place(p, key) {
-  p.key = key;
-  const where = key && ROOM_OF[key];
-  if (!where) { p.area = null; return; }
-  p.area = where.area; p.rect = where.rect;
-  const a = areas[p.area];
-  if (p.id === 'father' && key === 'study') { p.x = 14.5; p.z = 1.95; p.g.rotation.y = 0; p.still = true; }
-  else { [p.x, p.z] = freePoint(a, p.rect); p.still = false; }
-  p.target = null; p.wait = Math.random() * 2;
+// 使用人は勝手口と裏階段、家族は玄関と大階段を通りたがる
+const SERVANT_WAYS = /勝手口|裏階段/, FAMILY_WAYS = /玄関|2Fへ上がる|1Fへ降りる/;
+const preferFor = p => t => MAIDS.includes(p.id) ? (FAMILY_WAYS.test(t.name) ? 25 : 0) : (SERVANT_WAYS.test(t.name) || /倉庫/.test(t.name) ? 25 : 0);
+const FATHER_DESK = [14.5, 1.95];
+// 行き先を決める。instant なら歩かずにその場へ置く
+function goTo(p, key, instant) {
+  const wasOut = p.key === 'out' || !p.area;
+  p.key = key; p.route = null; p.still = false; p.leaving = false; p.target = null;
+  const where = key && key !== 'out' ? ROOM_OF[key] : null;
+  if (!where && key !== 'out') { p.area = null; return; }
+  let dest;
+  if (key === 'out') {
+    if (!p.area || instant) { p.area = null; return; }
+    dest = GATE; p.leaving = true;
+  } else {
+    p.rect = where.rect;
+    const [x, z] = p.id === 'father' && key === 'study' ? FATHER_DESK : freePoint(areas[where.area], where.rect);
+    dest = { area: where.area, x, z };
+    if (instant) { p.area = dest.area; p.x = x; p.z = z; arrive(p); return; }
+    if (wasOut) { p.area = GATE.area; p.x = GATE.x; p.z = GATE.z; }   // 外出から戻るときは正門から
+  }
+  const legs = planRoute(areas, { area: p.area, x: p.x, z: p.z }, dest, preferFor(p));
+  if (!legs) { if (key === 'out') p.area = null; else { p.area = dest.area; p.x = dest.x; p.z = dest.z; arrive(p); } return; }
+  p.route = legs; p.ri = 0; p.pt = 0;
 }
-// 朝礼前の使用人棟：赤はお茶を淹れ、黒は先に席で待ち、青と白は身支度中。家族は母屋にいる
-const MORNING = { red: 'c_kettle', blue: 'c_blue', black: 'servants', white: 'c_white' };
-function updatePerson(p, dt) {
-  const key = st.mode === 'morning' ? (MORNING[p.id] && whereIs(s, p.id, 9) ? MORNING[p.id] : null) : whereIs(s, p.id, s.today.hour);
-  if (key !== p.key) place(p, key);
-  const here = p.area === cur.id;
-  p.g.visible = here; p.cone.visible = here;
-  if (!here) { p.seeing = false; return; }
-  const a = cur;
-  if (!st.busy && !p.still) {
-    if (p.wait > 0) {
-      p.wait -= dt; p.look += dt;
-      p.g.rotation.y = (p.baseYaw || 0) + Math.sin(p.look * 1.3) * 0.8;
-      animate(p, false, dt);
-    } else {
-      if (!p.target) {
-        for (let i = 0; i < 8 && !p.target; i++) { const t = freePoint(a, p.rect); if (clearPath(a, p.x, p.z, t[0], t[1])) p.target = t; }
-        if (!p.target) { p.wait = 2; return; }
-      }
-      const dx = p.target[0] - p.x, dz = p.target[1] - p.z, d = Math.hypot(dx, dz);
-      if (d < 0.05) { p.target = null; p.wait = 2 + Math.random() * 2.5; p.look = 0; p.baseYaw = p.g.rotation.y; }
-      else { const step = Math.min(d, 1.1 * dt); p.x += dx / d * step; p.z += dz / d * step; p.g.rotation.y = Math.atan2(dx, dz); }
-      animate(p, d >= 0.05, dt);
-    }
-  } else animate(p, false, dt);
-  p.g.position.set(p.x, 0, p.z);
-  // 視線
+function arrive(p) {
+  p.route = null;
+  if (p.leaving) { p.area = null; p.leaving = false; return; }
+  p.wait = 1 + Math.random() * 2;
+  if (p.id === 'father' && p.key === 'study') { p.still = true; p.g.rotation.y = 0; }
+}
+// 道順に沿って歩く（別のエリアにいる間も進む）
+function walkLegs(p, dt) {
+  const leg = p.route[p.ri], [tx, tz] = leg.pts[p.pt];
+  const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz), step = NPC_SPEED * dt;
+  if (d > step) { p.x += dx / d * step; p.z += dz / d * step; p.g.rotation.y = Math.atan2(dx, dz); return true; }
+  p.x = tx; p.z = tz; p.pt++;
+  if (p.pt >= leg.pts.length) {
+    if (leg.then) { p.area = leg.then.area; p.x = leg.then.x; p.z = leg.then.z; p.ri++; p.pt = 0; }
+    else arrive(p);
+  }
+  return true;
+}
+// 部屋の中を歩き回る
+function wander(p, dt) {
+  const a = areas[p.area];
+  if (p.wait > 0) {
+    p.wait -= dt; p.look += dt;
+    p.g.rotation.y = (p.baseYaw || 0) + Math.sin(p.look * 1.3) * 0.8;
+    return false;
+  }
+  if (!p.target) {
+    for (let i = 0; i < 8 && !p.target; i++) { const t = freePoint(a, p.rect); if (clearPath(a, p.x, p.z, t[0], t[1])) p.target = t; }
+    if (!p.target) { p.wait = 2; return false; }
+  }
+  const dx = p.target[0] - p.x, dz = p.target[1] - p.z, d = Math.hypot(dx, dz);
+  if (d < 0.05) { p.target = null; p.wait = 2 + Math.random() * 2.5; p.look = 0; p.baseYaw = p.g.rotation.y; return false; }
+  const step = Math.min(d, 1.1 * dt);
+  p.x += dx / d * step; p.z += dz / d * step; p.g.rotation.y = Math.atan2(dx, dz);
+  return true;
+}
+// 視線と、視界の扇形
+function sight(p) {
   const vx = player.x - p.x, vz = player.z - p.z, d = Math.hypot(vx, vz);
   let diff = Math.atan2(vx, vz) - p.g.rotation.y;
   diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-  p.seeing = d < VIEW_RANGE && d > 1e-6 && Math.abs(diff) < VIEW_FOV / 2 && rayDist(p.x, p.z, vx / d, vz / d, d) >= d;
+  p.seeing = d < p.range && d > 1e-6 && Math.abs(diff) < VIEW_FOV / 2 && rayDist(p.x, p.z, vx / d, vz / d, d) >= d;
   const pos = p.coneGeo.attributes.position, yaw = p.g.rotation.y;
   pos.setXYZ(0, p.x, 0, p.z);
   for (let i = 0; i <= CONE_RAYS; i++) {
     const ang = yaw - VIEW_FOV / 2 + VIEW_FOV * i / CONE_RAYS, cx = Math.sin(ang), cz = Math.cos(ang);
-    const r = rayDist(p.x, p.z, cx, cz, VIEW_RANGE);
+    const r = rayDist(p.x, p.z, cx, cz, p.range);
     pos.setXYZ(i + 1, p.x + cx * r, 0, p.z + cz * r);
   }
   pos.needsUpdate = true;
 }
+// 朝礼前の使用人棟：赤はお茶を淹れ、黒は先に席で待ち、青と白は身支度中。家族は母屋にいる
+const MORNING = { red: 'c_kettle', blue: 'c_blue', black: 'servants', white: 'c_white' };
+function wantedKey(p) {
+  if (st.mode === 'morning') return MORNING[p.id] && whereIs(s, p.id, 9) ? MORNING[p.id] : null;
+  return whereIs(s, p.id, s.today.hour);
+}
+function updatePerson(p, dt) {
+  let moving = false;
+  if (st.mode === 'night') moving = nightPerson(p, dt);
+  else if (st.tut && p.id === 'red') moving = tutorGuide(p, dt);
+  else {
+    const key = wantedKey(p);
+    if (key !== p.key) goTo(p, key, st.mode === 'morning' || st.placeNow);
+    if (!st.busy && p.area) moving = p.route ? walkLegs(p, dt) : p.still ? false : wander(p, dt);
+  }
+  const here = p.area === cur.id;
+  p.g.visible = here; p.cone.visible = here;
+  if (!here) { p.seeing = false; return; }
+  animate(p, moving && !st.busy, dt);
+  p.g.position.set(p.x, 0, p.z);
+  sight(p);
+}
 // 今こちらを見ている人（協力者は数えない）
-const watchers = () => Object.values(people).filter(p => p.area === cur.id && p.seeing && !isAlly(s, p.id)).map(p => p.id);
+// チュートリアルで付き添う赤メイドは、資料室の練習のとき以外は数えない
+const guiding = p => st.tut && p.id === 'red' && st.tut.step !== 2;
+const watchers = () => Object.values(people).filter(p => p.area === cur.id && p.seeing && !isAlly(s, p.id) && !guiding(p)).map(p => p.id);
 
 // ---- 仕事の印 ----
 const workMat = new THREE.MeshStandardMaterial({ color: '#7ad08a', emissive: '#4ab06a', emissiveIntensity: 0.6, transparent: true, opacity: 0.6 });
 function refreshMarkers() {
   for (const a of Object.values(areas)) { for (const m of a.markers) a.group.remove(m); a.markers = []; }
-  if (st.mode === 'morning') return;
-  s.today.chores.forEach((c, i) => {
+  if (st.mode !== 'day') return;
+  s.today.chores.forEach(c => {
     if (c.assignee !== 'butler' || c.done) return;
     const [area, x, z] = WORK[c.id];
     const a = areas[area], m = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.6, 20), workMat);
@@ -213,14 +284,14 @@ function refreshMarkers() {
 }
 // 朝礼の席（朝礼前だけ）と、ベッドで休む（仕事中だけ）
 const SEAT = [9.05, 7.5];
-function morningThings() {
-  if (cur.id !== 'cottage') return [];
+function cottageThings() {
+  if (cur.id !== 'cottage' || st.mode === 'night') return [];
   if (st.mode === 'morning') return [{ name: '朝礼の席', at: () => SEAT, label: '朝礼', meeting: true }];
   return [{ name: 'ベッド', at: () => [2.4, 12.5], label: '休む', rest: true }];
 }
 function choreThings() {
   const list = [];
-  if (st.mode === 'morning') return list;
+  if (st.mode !== 'day') return list;
   s.today.chores.forEach((c, i) => {
     if (c.assignee !== 'butler' || c.done) return;
     const [area, x, z] = WORK[c.id];
@@ -228,7 +299,7 @@ function choreThings() {
   });
   return list;
 }
-const choreHere = key => s.today.chores.some(c => c.assignee === 'butler' && !c.done && CHORES[c.id].room === key);
+const choreHere = key => st.mode === 'day' && s.today.chores.some(c => c.assignee === 'butler' && !c.done && CHORES[c.id].room === key);
 
 // ---- 隠し部屋 ----
 function syncSecret() {
@@ -238,20 +309,28 @@ function syncSecret() {
   a.shelf.hinge.rotation.y = open ? Math.PI : Math.PI / 2;
   Object.assign(a.shelf.box, open ? { minX: 10.6, maxX: 12.8, minZ: 1.8, maxZ: 2.3 } : { minX: 10.1, maxX: 10.6, minZ: 1.8, maxZ: 4.0 });
 }
+function openShelf() {
+  st.shelfAnim = 0.0001;
+  const a = areas.f2;
+  for (const o of a.secret.objs) o.visible = true;
+  Object.assign(a.shelf.box, { minX: 10.6, maxX: 12.8, minZ: 1.8, maxZ: 2.3 });
+}
 
 // ---- 調べる・話す・仕事・移動 ----
 let target = null;
 function findTarget() {
   let best = null, bd = 1.3;
-  const consider = t => {
+  // bias を引いた距離で比べる（朝礼の席やベッドは、近くの人物より優先する）
+  const consider = (t, bias = 0) => {
     if (t.secretOnly && !s.flags.hidden_open) return;
-    const [x, z] = t.at(), d = Math.hypot(x - player.x, z - player.z);
+    const [x, z] = t.at(), d = Math.hypot(x - player.x, z - player.z) - bias;
     if (d < bd) { bd = d; best = t; }
   };
   for (const t of cur.things) consider(t);
   for (const t of choreThings()) consider(t);
-  for (const t of morningThings()) consider(t);
-  for (const p of Object.values(people)) if (p.area === cur.id) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p });
+  for (const t of cottageThings()) consider(t, 0.8);
+  for (const t of nightThings()) consider(t, 0.8);   // 夜だけの操作を、同じ場所の昼の調べものや出入口より優先する
+  if (st.mode !== 'night') for (const p of Object.values(people)) if (p.area === cur.id) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p });
   return best;
 }
 function act() {
@@ -260,6 +339,8 @@ function act() {
   if (performance.now() < actLock) { actLock = performance.now() + 500; return; }
   if (st.busy || !target) return;
   const t = target;
+  if (t.night) return t.night();
+  if (st.mode === 'night') return nightAct(t);
   if (t.meeting) return startMeeting();
   if (t.rest) { if (confirm('今日の業務を終えて休みますか？')) finish(); return; }
   if (t.exit) return travel(t.exit);
@@ -276,17 +357,21 @@ function startMeeting() {
   const seats = [[10, 6.55, 0], [12, 6.55, 0], [10, 8.45, Math.PI], [12, 8.45, Math.PI]];
   Object.values(people).filter(p => p.area === 'cottage').forEach((p, i) => {
     const [x, z, yaw] = seats[i % seats.length];
-    p.x = x; p.z = z; p.g.rotation.y = yaw; p.still = true; p.g.position.set(x, 0, z);
+    p.x = x; p.z = z; p.g.rotation.y = yaw; p.still = true; p.route = null; p.g.position.set(x, 0, z);
   });
+  const hint = st.tutPending ? '【旦那様の新しい決まり①】朝礼で、メイドと執事の担当を決める。執事が担当した仕事は、屋敷の緑の印の場所で行う。迷ったら「おまかせで割り振る」。' : null;
   hooks.openMeeting(() => {
     st.mode = 'day';
     s.today.hour = 9; s.today.min = 0;
-    for (const p of Object.values(people)) p.key = undefined;   // それぞれの持ち場へ
+    if (st.tutPending) ensureButlerChore();
+    // メイドは席から持ち場へ歩いていく。家族は最初からそれぞれの場所にいる
+    for (const p of Object.values(people)) if (!MAIDS.includes(p.id)) goTo(p, wantedKey(p), true); else p.still = false;
     refreshMarkers();
+    if (st.tutPending) { st.tutPending = false; return tutorStart(); }
     const mine = s.today.chores.filter(c => c.assignee === 'butler').map(c => CHORES[c.id].name);
     say(['朝礼', `9時、仕事の始まりだ。執事の担当は${mine.length ? `「${mine.join('」「')}」` : 'なし'}。`],
       mine.length ? '緑の印が仕事の場所だ。空いた時間で、屋敷を探ろう。' : '今日は自由に動ける。屋敷を探ろう。');
-  });
+  }, hint);
 }
 
 function talkTo(p) {
@@ -304,6 +389,7 @@ function work(i) {
     const msg = DL.doChore(s, i);
     refreshMarkers();
     say(msg);
+    if (st.tut) tutorEvent('chore');
   }, 900);
 }
 function search([key, id], extraMsg) {
@@ -315,6 +401,7 @@ function search([key, id], extraMsg) {
   if (res.clue) hooks.toast('手帳に記録した');
   if (res.code) { st.busy = true; return hooks.askCode(res.msg, m => { say(m); }); }
   say(extraMsg, res.msg);
+  if (st.tut) tutorEvent('search', key, id);
 }
 function special(kind) {
   if (kind === 'notebook') return hooks.notebook();
@@ -325,13 +412,224 @@ function special(kind) {
       const why = DL.openHidden(s, watchers());
       if (why) return say(why);
       DL.spendMinutes(s, ACT_MIN);
-      st.shelfAnim = 0.0001;
-      const a = areas.f2;
-      for (const o of a.secret.objs) o.visible = true;
-      Object.assign(a.shelf.box, { minX: 10.6, maxX: 12.8, minZ: 1.8, maxZ: 2.3 });
+      openShelf();
       return say('赤い本を引き、鍵を差し込む。本棚がゆっくりと手前に開き出した……！');
     }
     return search(['study', 'shelf']);
+  }
+}
+
+// ============================================================
+// 初日のチュートリアル：旦那様の「新しい決まり」の確認に、赤メイドが付き添う
+// （執事は何か月も働いているので、屋敷の案内ではなく、11月から変わった決まりの確認という形にする）
+// ============================================================
+const TUT = [
+  { goal: '担当の仕事を、緑の印の場所で済ませる', say: [['赤メイド', '「……新しい決まりの1つめ。執事さんの担当は、緑の印の場所でやる。わたしが付いていく」']] },
+  { goal: '倉庫で、古い運送伝票を確認する（調べる）', at: ['f1', 4.7, 2.0],
+    say: [['赤メイド', '「……決まりの2つめ。倉庫の古い記録を整理し直す。伝票を調べて、手帳に控えておいて」']] },
+  { goal: '試しに、資料室に入ってみる', at: ['f1', 12, 4], red: ['f1', 19.2, 4, -Math.PI / 2],
+    say: [['執事', '（何か月も働いた屋敷だ。だが、盗む者の目で見直すと、まるで違って見える）'],
+      ['赤メイド', '「……決まりの3つめ。書斎や資料室、奥様やお嬢様のお部屋に、用もなく入っているのを見られたら、旦那様に報告しなきゃいけない」'],
+      ['赤メイド', '「……試しに、資料室に入ってみて。わたしはここから見てる」']] },
+];
+function tutorStart() {
+  st.tut = { step: 0, lastPlan: 0 };
+  say(['赤メイド', '「……今日から旦那様の新しい決まり。12月のお客様に備えて、だって。全部いっしょに確認する」'], ...TUT[0].say);
+}
+function tutorNext() {
+  st.tut.step++;
+  const step = TUT[st.tut.step];
+  if (step) return say(...step.say);
+  setFlag(s, 'tutorial_done');
+  st.tut = null;
+  people.red.key = undefined;   // 自分の持ち場へ戻る
+  say(['赤メイド', '「……決まりは以上。あとは、いつもどおり。わたしは持ち場に戻る」'],
+    ['赤メイド', '「……夕方になったら、使用人棟のベッドで休んで。お疲れさま」'],
+    '（手帳で、手がかりや好感度をいつでも確認できる）');
+}
+function tutorEvent(kind, key, id) {
+  if (!st.tut) return;
+  const step = st.tut.step;
+  if (step === 0 && kind === 'chore') afterMsg = tutorNext;
+  if (step === 1 && kind === 'search' && key === 'storage') afterMsg = tutorNext;
+}
+// 赤メイドは執事についてくる。3つめの決まりの間は、資料室の入口で見張る
+function tutorGuide(p, dt) {
+  const step = TUT[st.tut.step];
+  if (step && step.red) {
+    const [area, x, z, yaw] = step.red;
+    if (p.area !== area || Math.hypot(p.x - x, p.z - z) > 0.2) {
+      if (!p.route || p.guideTo !== 'post') { p.route = planRoute(areas, { area: p.area || cur.id, x: p.x, z: p.z }, { area, x, z }) || null; p.ri = 0; p.pt = 0; p.guideTo = 'post'; if (!p.area) p.area = area; }
+      if (p.route) return walkLegs(p, dt);
+      p.area = area; p.x = x; p.z = z;
+    }
+    p.route = null; p.g.rotation.y = yaw;
+    return false;
+  }
+  // ついてくる：別のエリアに移ったら、少し後ろに現れる
+  if (p.area !== cur.id) { p.area = cur.id; p.x = player.x - 0.8; p.z = player.z - 0.8; p.route = null; if (blockedIn(cur, p.x, p.z, 0.3)) { p.x = player.x; p.z = player.z; } }
+  const d = Math.hypot(player.x - p.x, player.z - p.z);
+  if (d < 1.8) { p.route = null; p.g.rotation.y = Math.atan2(player.x - p.x, player.z - p.z); return false; }
+  const now = performance.now();
+  if (!p.route || now - st.tut.lastPlan > 800) {
+    st.tut.lastPlan = now; p.guideTo = 'player';
+    p.route = planRoute(areas, { area: p.area, x: p.x, z: p.z }, { area: cur.id, x: player.x, z: player.z }); p.ri = 0; p.pt = 0;
+  }
+  if (!p.route) return false;
+  return walkLegs(p, dt * 1.4);
+}
+// 3つめの決まり：資料室に入ったところを赤メイドに見られたら、練習として説明する
+function tutorCheck(key) {
+  if (!st.tut || st.tut.step !== 2 || st.busy) return;
+  if (key === 'archive' && people.red.seeing) {
+    const before = st.tut.susp ?? s.susp;
+    afterMsg = () => { s.susp = before; tutorNext(); };
+    say(['赤メイド', '「……今のです。わたしの視界が赤くなったでしょう。わたし以外の人だったら、旦那様に報告されて、執事さんへの疑いが強まる」'],
+      ['赤メイド', '「……用があるとき（その部屋が担当の仕事のとき）は大丈夫。今のは練習だから、黙っておく」'],
+      '（左上の「疑惑」が100になると、正体が露見してしまう。私室を調べるときは、人の視界に入らないように）');
+  } else if (key !== 'archive') st.tut.susp = s.susp;
+}
+function ensureButlerChore() {
+  const mine = s.today.chores.filter(c => c.assignee === 'butler' && !CHORES[c.id].optional);
+  if (mine.length) return;
+  const c = s.today.chores.filter(c => c.id !== 'cook' && !CHORES[c.id].butlerOnly && WORK[c.id][0] !== 'grounds').sort((a, b) => CHORES[a.id].hours - CHORES[b.id].hours)[0];
+  if (!c) return;
+  c.assignee = 'butler';
+  buildPlan(s);
+}
+
+// ============================================================
+// 決行の夜（12月26日、深夜1時〜夜明け5時）
+// ============================================================
+function makeLadder(parent) {
+  const g = new THREE.Group();
+  for (const sx of [-0.25, 0.25]) box(g, 0.06, 4.6, 0.06, M.lightWood, sx, 0, 0);
+  for (let i = 0; i < 14; i++) box(g, 0.5, 0.04, 0.04, M.lightWood, 0, 0.25 + i * 0.32, 0);
+  parent.add(g);
+  return g;
+}
+const carried = { ladder: null, painting: null };
+let wallLadder = null;
+function setupNightProps() {
+  if (!carried.ladder) {
+    carried.ladder = makeLadder(player.g);
+    carried.ladder.rotation.set(0, 0, Math.PI / 2); carried.ladder.position.set(1.6, 1.1, -0.25); carried.ladder.scale.set(1, 0.7, 1);
+    carried.painting = new THREE.Group(); player.g.add(carried.painting);
+    box(carried.painting, 1.0, 0.75, 0.06, mat('#ffffff', { map: TEX.painting }), 0, 0.7, 0.32);
+    wallLadder = makeLadder(areas.grounds.group);
+    wallLadder.position.set(HOUSE.x + 24, 0, HOUSE.z + 18.45); wallLadder.rotation.x = -0.18;
+  }
+  carried.ladder.visible = false; carried.painting.visible = false; wallLadder.visible = false;
+}
+function nightPerson(p, dt) {
+  const n = p.nightRole;
+  if (!n) { p.area = null; return false; }
+  if (n.path) {
+    if (p.wait > 0) { p.wait -= dt; p.look += dt; p.g.rotation.y = p.baseYaw + Math.sin(p.look * 1.4) * 0.9; return false; }
+    const [tx, tz, w] = n.path[n.i];
+    const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
+    if (d < 0.05) { n.i = (n.i + 1) % n.path.length; if (w) { p.wait = w; p.look = 0; p.baseYaw = p.g.rotation.y; } return false; }
+    const step = Math.min(d, 1.4 * dt);
+    p.x += dx / d * step; p.z += dz / d * step; p.g.rotation.y = Math.atan2(dx, dz);
+    return true;
+  }
+  p.look += dt; p.g.rotation.y = n.yaw + Math.sin(p.look * 0.7) * 0.5;
+  return false;
+}
+function nightThings() {
+  const N = st.night;
+  if (!N) return [];
+  const list = [], at = (x, z) => () => [x, z];
+  if (cur.id === 'f1' && !N.ladderTaken) list.push({ name: '庭師の梯子', at: at(1.3, 5), label: '梯子を持つ', night: () => {
+    if (N.carry) return say('両手がふさがっている。');
+    N.ladderTaken = true; N.carry = 'ladder';
+    say('長い梯子を担いだ。重い……。前庭へ回って、2階のバルコニーに掛けよう。');
+  } });
+  const below = [HOUSE.x + 24, HOUSE.z + 18.9];
+  if (cur.id === 'grounds' && N.carry === 'ladder') list.push({ name: 'バルコニーの下', at: at(...below), label: '梯子を掛ける', night: () => {
+    N.carry = null; N.ladderUp = true;
+    say('バルコニーの手すりに、そっと梯子を掛けた。');
+  } });
+  if (cur.id === 'grounds' && N.ladderUp && !N.carry) list.push({ name: '梯子', at: at(...below), label: '梯子を登る', night: () => {
+    if (!s.flags.balcony_open) return say('登ってみたが、バルコニーのガラス戸には鍵が掛かっていた。こじ開ければ音が出る……別の道を探すしかない。');
+    travel({ area: 'f2', x: 24, z: 16.4 });
+  } });
+  if (cur.id === 'grounds' && N.ladderUp && N.carry === 'painting') list.push({ name: '梯子', at: at(...below), label: '梯子を登る', night: () => say('絵を抱えたままでは登れない。') });
+  if (cur.id === 'f2' && N.ladderUp) list.push({ name: '梯子', at: at(24, 17.4), label: '梯子で降りる', night: () => travel({ area: 'grounds', x: below[0], z: below[1] + 0.6 }) });
+  if (cur.id === 'f2' && s.flags.hidden_open && !N.taken) list.push({ name: '月下の庭', at: at(8, 3.2), label: '絵を外す', night: takePainting });
+  if (cur.id === 'f2' && N.route === 'swap' && N.carry === 'painting') list.push({ name: 'クローゼット', at: at(41.3, 14), label: '本物を隠す', night: () => {
+    N.carry = null;
+    afterMsg = () => endNight('swap');
+    say('お嬢様の寝息を確かめ、クローゼットの奥に本物をそっと隠した。……あとは、何食わぬ顔で朝を迎えるだけだ。');
+  } });
+  if (cur.id === 'grounds' && N.route === 'night' && N.carry === 'painting') list.push({ name: '正門', at: at(38, 56.6), label: '屋敷を去る', night: () => {
+    afterMsg = () => endNight('night');
+    say('門の鍵を外し、夜の街へ出た。腕の中の額縁が、月明かりを受けて鈍く光った。');
+  } });
+  return list;
+}
+function takePainting() {
+  const N = st.night;
+  if (N.carry) return say('両手がふさがっている。梯子はどこかに置いてこよう。');
+  if (!N.alarmOff) { afterMsg = () => endNight('caught'); return say('額縁に手をかけた瞬間、甲高い警報が屋敷中に鳴り響いた！'); }
+  N.taken = true; N.carry = 'painting';
+  areas.f2.secret.objs[0].visible = false;
+  if (N.route === 'swap') return say('青の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。', '本物をお嬢様の部屋のクローゼットに隠そう。');
+  say('「月下の庭」を額ごと外し、布で包んだ。……あとは、誰にも見つからずに正門から出るだけだ。');
+}
+function nightAct(t) {
+  const N = st.night;
+  if (t.exit) {
+    if (/玄関/.test(t.name)) return say('玄関は内側から閂が掛けられている。');
+    if (N.carry === 'ladder' && t.exit.area !== 'grounds' && cur.id === 'grounds') return say('梯子を担いだままでは、屋敷の中を通れない。');
+    return travel(t.exit);
+  }
+  if (t.spot && t.spot[0] === 'kback') {
+    if (N.alarmOff) return say('警報の系統のランプが消えている。白は約束を守ってくれた。');
+    if (!confirm('配電盤を自分で操作しますか？')) return;
+    afterMsg = () => endNight('caught');
+    return say('どれが警報の系統か分からないまま切ったブレーカーは、屋敷全体の電源だった。真っ暗な屋敷に、家族の悲鳴が響く。');
+  }
+  if (t.special === 'shelf') {
+    if (s.flags.hidden_open) return say('本棚の奥に、隠し部屋が口を開けている。');
+    s.flags.hidden_open = true; openShelf();
+    return say('赤い本を引き、鍵を差し込む。本棚が音もなく開いた。');
+  }
+  if (t.special === 'notebook') return hooks.notebook();
+  if (t.say) return say(...t.say);
+  say('今は調べている場合ではない。');
+}
+function nightGoal() {
+  const N = st.night;
+  if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す' : '絵を抱えて、正門から屋敷を出る';
+  if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
+  if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
+  return '2階の書斎へ。大広間は黒メイドが、キッチン裏は赤メイドが見張っている';
+}
+function endNight(id) {
+  running = false;
+  root.classList.add('hidden');
+  setLights(false);
+  hooks.ending(id);
+}
+let seenTime = 0;
+function nightTick(dt) {
+  const N = st.night;
+  if (!st.busy) {
+    N.min += dt * 60 / NIGHT_SEC_PER_HOUR;
+    if (N.min >= 240 && !N.dawn) {
+      N.dawn = true;
+      afterMsg = () => endNight('caught');
+      say('東の空が白み始めた。屋敷の明かりが一つ、また一つと灯っていく……。');
+    }
+  }
+  const seers = Object.values(people).filter(p => p.area === cur.id && p.seeing && !isAlly(s, p.id));
+  seenTime = seers.length ? seenTime + dt : 0;
+  if (seenTime > 0.3 && !st.busy && !N.caught) {
+    N.caught = true;
+    const p = seers[0];
+    afterMsg = () => endNight('caught');
+    say([p.name, p.id === 'black' ? '「……執事さん？ こんな時間に、何をしているんですか」' : '「……誰？ ……執事さん？」'], '懐中電灯の光が、執事の顔を照らした。');
   }
 }
 
@@ -417,8 +715,7 @@ function drawLabels(list) {
 const mmCanvas = $('minimap'), mm = mmCanvas.getContext('2d');
 function drawMinimap(here) {
   const W = mmCanvas.width, H = mmCanvas.height;
-  const ex = cur.id === 'grounds' ? 92 : Math.max(...cur.rooms.map(r => r.x + r.w));
-  const ez = cur.id === 'grounds' ? 58 : Math.max(...cur.rooms.map(r => r.z + r.d));
+  const [ex, ez] = AREA_SIZE[cur.id];
   const S = Math.min((W - 10) / ex, (H - 10) / ez), ox = (W - ex * S) / 2, oz = (H - ez * S) / 2;
   const px = x => ox + x * S, pz = z => oz + z * S;
   mm.clearRect(0, 0, W, H);
@@ -433,22 +730,38 @@ function drawMinimap(here) {
       mm.fillRect(px(r.x) + 0.5, pz(r.z) + 0.5, r.w * S - 1, r.d * S - 1);
     }
   }
-  for (const t of choreThings()) { const [x, z] = t.at(); mm.fillStyle = '#7ad08a'; mm.fillRect(px(x) - 4, pz(z) - 4, 8, 8); }
+  for (const t of [...choreThings(), ...tutorTargets()]) { const [x, z] = t.at(); mm.fillStyle = t.tut ? '#e3c06f' : '#7ad08a'; mm.fillRect(px(x) - 4, pz(z) - 4, 8, 8); }
   for (const p of Object.values(people)) {
     if (p.area !== cur.id) continue;
     mm.fillStyle = PEOPLE[p.id].color; mm.beginPath(); mm.arc(px(p.x), pz(p.z), 4, 0, 7); mm.fill();
   }
   mm.fillStyle = '#e3c06f'; mm.beginPath(); mm.arc(px(player.x), pz(player.z), 5, 0, 7); mm.fill();
 }
+// チュートリアルの「ここ」の印
+function tutorTargets() {
+  if (!st.tut) return [];
+  const step = TUT[st.tut.step];
+  return step && step.at && step.at[0] === cur.id ? [{ at: () => [step.at[1], step.at[2]], tut: true }] : [];
+}
 function drawHud(room) {
-  const t = s.today, mm2 = String(Math.floor(t.min || 0)).padStart(2, '0');
-  $('clock3d').textContent = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${mm2}`}`;
+  const t = s.today;
+  let clock, text;
+  if (st.mode === 'night') {
+    const m = Math.floor(st.night.min), h = 1 + Math.floor(m / 60);
+    clock = `12月26日　深夜 ${h}:${String(m % 60).padStart(2, '0')}`;
+    text = '目的：' + nightGoal();
+  } else {
+    clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}`;
+    const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${CHORES[c.id].optional ? '（任意）' : ''}`);
+    text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
+      : st.tut && TUT[st.tut.step] ? `【新しい決まり ${st.tut.step + 1}/3】${TUT[st.tut.step].goal}`
+      : todo.length ? todo.join('　') : '執事の担当なし';
+  }
+  $('clock3d').textContent = clock;
   $('place3d').textContent = `${AREA_INFO[cur.id].name}　${room ? room.name : ''}`;
   $('trust3d').style.width = `${s.trust}%`;
   $('susp3d').style.width = `${s.susp}%`;
-  const todo = s.today.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${CHORES[c.id].optional ? '（任意）' : ''}`);
-  $('end3d').classList.toggle('hidden', st.mode === 'morning');
-  const text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう' : todo.length ? todo.join('　') : '執事の担当なし';
+  $('end3d').classList.toggle('hidden', st.mode !== 'day');
   if ($('todo3d').textContent !== text) $('todo3d').textContent = text;
 }
 
@@ -475,6 +788,7 @@ function tick(now) {
   if (!running) return;
   const dt = Math.min(0.05, (now - last) / 1000 || 0);
   last = now;
+  const night = st.mode === 'night';
 
   // 時間が進む（メッセージや操作待ちの間は止まる）
   if (st.mode === 'day' && !st.busy && !document.querySelector('.modal-back')) {
@@ -498,30 +812,42 @@ function tick(now) {
   }
   const il = Math.hypot(ix, iy), moving = il > 0.15 && !st.lying;
   if (moving) {
-    const sp = WALK_SPEED * Math.min(1, il) / il;
+    const speed = night && st.night.carry === 'ladder' ? 3.0 : night && st.night.carry === 'painting' ? 4.0 : WALK_SPEED;
+    const sp = speed * Math.min(1, il) / il;
     const dx = (FWD.x * iy + RIGHT.x * ix) * sp * dt, dz = (FWD.y * iy + RIGHT.y * ix) * sp * dt;
     moveBy(player, dx, dz, player.r);
     player.g.rotation.y = Math.atan2(dx, dz);
   }
   if (st.lying) { player.g.position.set(player.x, 0.62, player.z); player.g.rotation.set(-Math.PI / 2, 0, 0); }
   else { player.g.position.set(player.x, 0, player.z); animate(player, moving, dt); }
+  if (night) {
+    carried.ladder.visible = st.night.carry === 'ladder';
+    carried.painting.visible = st.night.carry === 'painting';
+    wallLadder.visible = !!st.night.ladderUp;
+  }
 
   // 今いる部屋
   const room = roomAt(player.x, player.z);
   const key = room && room.key || null;
-  s.today.loc = key || 'elsewhere';
-  if (key !== st.lastKey) {
-    const owner = OWNERS[key];
-    if (st.lastKey !== undefined && owner && whereIs(s, owner, s.today.hour) === key && !choreHere(key) && !st.busy) say(DL.intrude(s, owner));
-    st.lastKey = key;
+  if (!night) {
+    s.today.loc = key || 'elsewhere';
+    if (key !== st.lastKey) {
+      const owner = OWNERS[key];
+      if (st.lastKey !== undefined && owner && whereIs(s, owner, s.today.hour) === key && !choreHere(key) && !st.busy && !st.tut) say(DL.intrude(s, owner));
+      st.lastKey = key;
+    }
   }
 
   for (const p of Object.values(people)) updatePerson(p, dt);
-  const seen = watchers();
-  const inPrivate = !!(room && room.private) && !choreHere(key);
-  for (const p of Object.values(people)) p.coneMat.color.set(isAlly(s, p.id) ? '#8ad0a0' : p.seeing && inPrivate ? '#ff5a4a' : '#ffe08a');
-  if (!st.busy && seen.length && inPrivate) s.susp = clamp(s.susp + 8 * dt);
-  if (fatal()) return;
+  st.placeNow = false;
+  const inPrivate = !night && !!(room && room.private) && !choreHere(key);
+  for (const p of Object.values(people)) p.coneMat.color.set(isAlly(s, p.id) ? '#8ad0a0' : (night || inPrivate) && p.seeing ? '#ff5a4a' : night ? '#fff2b0' : '#ffe08a');
+  if (night) nightTick(dt);
+  else {
+    if (!st.busy && watchers().length && inPrivate) s.susp = clamp(s.susp + 8 * dt);
+    tutorCheck(key);
+    if (fatal()) return;
+  }
 
   if (st.shelfAnim > 0 && st.shelfAnim < 1) {
     st.shelfAnim = Math.min(1, st.shelfAnim + dt * 0.6);
@@ -544,17 +870,19 @@ function tick(now) {
   const talking = !msgEl.classList.contains('hidden');
   target = st.busy ? null : findTarget();
   actBtn.classList.toggle('hidden', !target && !talking);
-  actBtn.textContent = talking ? '次へ' : target ? (target.exit ? '移動' : target.person ? '話す' : target.chore !== undefined ? '仕事' : target.meeting ? '朝礼' : target.rest ? '休む' : '調べる') : '';
+  const verb = t => t.night ? t.label : t.exit ? '移動' : t.person ? '話す' : t.chore !== undefined ? '仕事' : t.meeting ? '朝礼' : t.rest ? '休む' : '調べる';
+  actBtn.textContent = talking ? '次へ' : target ? verb(target) : '';
   const labels = [];
   for (const p of Object.values(people)) {
     if (p.area !== cur.id) continue;
-    const alert = p.seeing && inPrivate && !isAlly(s, p.id);
+    const alert = p.seeing && (inPrivate || night) && !isAlly(s, p.id);
     labels.push({ x: p.x, y: 2.1, z: p.z, text: alert ? '！' : p.name, cls: alert ? 'alert' : 'name' });
   }
   for (const t of choreThings()) { const [x, z] = t.at(); labels.push({ x, y: 0.6, z, text: `仕事：${t.name}`, cls: 'work' }); }
+  for (const t of tutorTargets()) { const [x, z] = t.at(); labels.push({ x, y: 0.6, z, text: 'ここ', cls: 'work' }); }
   if (target) {
     const [x, z] = target.at();
-    labels.push({ x, z, y: target.person ? 2.5 : 1.6, text: target.person ? 'TALK' : target.exit || target.meeting || target.rest ? target.label : target.chore !== undefined ? '仕事' : '調べる', cls: target.exit ? 'exit' : '' });
+    labels.push({ x, z, y: target.person ? 2.5 : 1.6, text: target.person ? 'TALK' : target.night || target.exit || target.meeting || target.rest ? target.label : verb(target), cls: target.exit ? 'exit' : '' });
   }
   drawLabels(labels);
   drawMinimap(room);
@@ -564,8 +892,7 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 
-// 本編から呼ばれる：朝、執事の部屋のベッドで目を覚ますところから1日を始める
-export function startMorning(state, h) {
+function prepare(state, h) {
   s = state; hooks = h;
   root.classList.remove('hidden');
   resize();
@@ -573,21 +900,62 @@ export function startMorning(state, h) {
     for (const id of ['grounds', 'cottage', 'f1', 'f2']) getArea(id);
     makePeople();
   }
-  st.mode = 'morning';
-  for (const p of Object.values(people)) p.key = undefined;
+  for (const p of Object.values(people)) { p.key = undefined; p.route = null; p.nightRole = null; p.range = VIEW_RANGE; }
   syncSecret();
-  refreshMarkers();
-  s.today.min = s.today.min || 0;
-  ending = false; st.busy = false; st.shelfAnim = 0; msgQueue = []; afterMsg = null;
-  enter('cottage', 1.2, 13.3);
-  st.lying = true;
-  afterMsg = () => { st.lying = false; player.g.rotation.set(0, Math.PI / 2, 0); player.x = 2.4; player.z = 12.5; };
-  say(['執事', `（${dateLabel(s)}、朝7時30分。……さて、今日も完璧な執事を演じるとしよう）`],
-    '身支度を整えたら、共用室の席に着いて朝礼を始めよう。');
+  ending = false; st.busy = false; st.shelfAnim = 0; st.tut = null; st.tutPending = false; st.night = null; msgQueue = []; afterMsg = null;
+}
+function run() {
   running = true;
   last = performance.now();
   requestAnimationFrame(tick);
 }
 
+// 本編から呼ばれる：朝、執事の部屋のベッドで目を覚ますところから1日を始める
+export function startMorning(state, h) {
+  prepare(state, h);
+  st.mode = 'morning';
+  setLights(false);
+  refreshMarkers();
+  s.today.min = s.today.min || 0;
+  enter('cottage', 1.2, 13.3);
+  st.lying = true;
+  afterMsg = () => { st.lying = false; player.g.rotation.set(0, Math.PI / 2, 0); player.x = 2.4; player.z = 12.5; };
+  // 初日だけ、赤メイドが「新しい決まり」の確認に来る
+  const firstDay = s.chapter === 0 && s.week === 0 && s.day === 0 && !s.flags.tutorial_done;
+  st.tutPending = firstDay;
+  if (firstDay) {
+    say(['執事', `（${dateLabel(s)}、朝7時30分。……さて、今日も完璧な執事を演じるとしよう）`],
+      ['赤メイド', '「……執事さん、起きてる？ 今日から、旦那様の新しい決まりが始まる日。朝礼で説明する」'],
+      ['執事', '（12月の来客に備えて、旦那様が屋敷の決まりを改めると言っていたな。……ちょうどいい。屋敷を見直す口実になる）'],
+      '身支度を整えたら、共用室の席に着いて朝礼を始めよう。');
+  } else {
+    say(['執事', `（${dateLabel(s)}、朝7時30分。……さて、今日も完璧な執事を演じるとしよう）`],
+      '身支度を整えたら、共用室の席に着いて朝礼を始めよう。');
+  }
+  run();
+}
+
+// 本編から呼ばれる：決行の夜。route は 'night'（一夜で持ち去る）か 'swap'（贋作とすり替える）
+export function startNight(state, route, h) {
+  prepare(state, h);
+  st.mode = 'night';
+  st.night = { route, min: 0, carry: null, ladderTaken: false, ladderUp: false, taken: false, alarmOff: !!s.flags.white_ally };
+  setLights(true);
+  setupNightProps();
+  refreshMarkers();
+  // 夜の見張り：黒メイドは懐中電灯で大広間と玄関ホールを見回り、赤メイドはキッチン裏で仕込み
+  const black = people.black, red = people.red;
+  Object.assign(black, { area: 'f1', x: 24, z: 10.5, range: 7.5, wait: 0, look: 0,
+    nightRole: { i: 0, path: [[24, 10.5, 2], [20.5, 7.5], [20.5, 4.5, 2.5], [27.5, 4.5, 2], [27.5, 10.5], [24, 15, 2.5], [24, 10.5]] } });
+  Object.assign(red, { area: 'f1', x: 44.6, z: 4.6, range: 5.5, look: 0, nightRole: { yaw: 0 } });
+  red.g.rotation.y = 0;
+  enter('cottage', 2.4, 12.5);
+  player.g.rotation.set(0, Math.PI / 2, 0);
+  say('12月26日、深夜1時。会食の客も帰り、屋敷は寝静まった。',
+    s.flags.white_ally ? ['執事', '（白は約束どおり、警報の系統を落としてくれたはずだ）'] : ['執事', '（警報はまだ生きている。絵に触れれば鳴るだろう……）'],
+    ['執事', '（夜明けまでに、終わらせる）']);
+  run();
+}
+
 // テスト用
-window.__day3d = { get state() { return s; }, st, player, people, areas, enter, act, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r) };
+window.__day3d = { get state() { return s; }, st, player, people, areas, enter, act, planRoute, ROOM_OF, GATE, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r) };
