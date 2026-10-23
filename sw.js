@@ -1,5 +1,5 @@
 // オフラインでも遊べるよう、ゲームのファイルをキャッシュする
-const CACHE = 'oyashiki-v7';
+const CACHE = 'oyashiki-v8';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css', 'css/day3d.css',
   'js/main.js', 'js/lockdown.js', 'js/game.js', 'js/daylogic.js', 'js/state.js', 'js/data.js', 'js/actions.js', 'js/story.js',

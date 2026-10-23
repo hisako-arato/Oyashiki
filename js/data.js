@@ -13,7 +13,7 @@ export const PEOPLE = {
   red:     { name: '赤メイド', color: '#c8362d', maid: true, from: 0 },
   blue:    { name: '青メイド', color: '#2f6fd0', maid: true, from: 1 },
   black:   { name: '黒メイド', color: '#222222', maid: true, from: 2 },
-  white:   { name: '白メイド', color: '#9aa3ad', maid: true, from: 2 },
+  white:   { name: '白メイド', color: '#9aa3ad', maid: true, from: 1 },
 };
 
 export const MAIDS = ['red', 'blue', 'black', 'white'];
