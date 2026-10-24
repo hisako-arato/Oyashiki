@@ -1,12 +1,15 @@
 // 人物照会の VRM ビューア
-//  1本指（マウスはドラッグ）：くるくる回す（画面の幅いっぱいで半回転）。勢いよく離すと少し惰性で回る
-//  上下に動かすと見下ろし・見上げ　2本指でつまむ／ホイール：ズーム（顔のアップから全身まで）
-//  2本指で上下になぞる：見る高さを変える　ダブルタップ：元に戻す
-//  向きは setAngle（0〜360度）でも変えられる（スライダーや「背面」ボタン用）
+//  1本指（マウスはドラッグ）：左右になぞると横に、上下になぞると縦に、どちらも360度くるくる回る
+//    （画面の幅いっぱいで半回転。勢いよく離すと少し惰性で回る）
+//  2本指でつまむ／ホイール：ズーム（顔のアップから全身まで）　2本指で上下になぞる：見る高さを変える
+//  ダブルタップ：元に戻す　向きは setAngle（0〜360度）でも変えられる（スライダーや「背面」ボタン用）
+//  回すときの中心は、いま見ている所（全身なら体の中ほど、寄れば顔）なので、逆さにしても画面から外れない
 import { THREE, loadVRM, disposeVRM, driveVRM } from './vrm.js';
 
 export const FACES = [['neutral', 'ふつう'], ['happy', '笑顔'], ['angry', '怒り'], ['sad', '悲しみ'], ['surprised', '驚き'], ['relaxed', '穏やか']];
 export const POSES = [['stand', '立ち姿'], ['bow', 'お辞儀'], ['wave', '手を振る']];
+
+const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0);
 
 // canvas に id の人物を表示する。戻り値の close() で後片付けする
 export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle } = {}) {
@@ -19,15 +22,19 @@ export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle }
   scene.add(new THREE.HemisphereLight('#fff4e6', '#5a4a40', 1.6));
   const key = new THREE.DirectionalLight('#ffffff', 2.2);
   key.position.set(1.2, 2.5, 2.5); key.castShadow = true; key.shadow.mapSize.set(1024, 1024);
-  Object.assign(key.shadow.camera, { left: -1, right: 1, top: 2.2, bottom: -0.2 });
+  Object.assign(key.shadow.camera, { left: -1.2, right: 1.2, top: 2.4, bottom: -0.4 });
   scene.add(key);
+  // 足元の円（立っているときだけ見せる）
+  const ground = new THREE.Group(); scene.add(ground);
   const floor = new THREE.Mesh(new THREE.CircleGeometry(0.9, 48), new THREE.ShadowMaterial({ opacity: 0.25 }));
-  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.86, 0.9, 64), new THREE.MeshBasicMaterial({ color: '#c9a45c', transparent: true, opacity: 0.6 }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.002; scene.add(ring);
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; ground.add(floor);
+  const ringMat = new THREE.MeshBasicMaterial({ color: '#c9a45c', transparent: true, opacity: 0.6 });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.86, 0.9, 64), ringMat);
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.002; ground.add(ring);
 
-  // 視点：モデルを回し（照明はそのまま）、カメラは見下ろし角と距離と高さで決める
-  const view = { yaw: 0, pitch: 0.08, dist: 3, pan: 0, vyaw: 0, goal: null };
+  // 回転は pivot の向き（クォータニオン）で持つ。pivot は「いま見ている高さ」に置き、モデルをその分下げて吊るす
+  const pivot = new THREE.Group(); scene.add(pivot);
+  const view = { dist: 3, pan: 0, vx: 0, vy: 0, goal: null };
   window.__viewer = view;   // テスト用
   let home = { ...view }, height = 1.6, vrm = null, alive = true, face = 'neutral', pose = 'stand';
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -37,15 +44,30 @@ export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle }
     const k = clamp((home.dist - view.dist) / (home.dist - limits().minD), 0, 1);
     return clamp(height * (0.55 + 0.37 * k) + view.pan, height * 0.1, height);
   };
+  // 画面の横・縦方向に回す（どちらも制限なし）
+  const q = new THREE.Quaternion(), tmp = new THREE.Quaternion();
+  const turn = (ax, ay) => {
+    if (ax) q.premultiply(tmp.setFromAxisAngle(Y, ax));
+    if (ay) q.premultiply(tmp.setFromAxisAngle(X, ay));
+    q.normalize();
+  };
+  // 正面からの横の向き（度）と、どれだけまっすぐ立っているか（1：直立、-1：逆さ）
+  const facing = () => {
+    const f = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    return ((Math.atan2(f.x, f.z) * 180 / Math.PI) % 360 + 360) % 360;
+  };
+  const upright = () => new THREE.Vector3(0, 1, 0).applyQuaternion(q).y;
+  window.__viewerQ = q;   // テスト用
 
   loadVRM(id, 'view', onProgress).then(v => {
     if (!alive) return;
     vrm = v;
-    scene.add(vrm.scene);
-    vrm.scene.rotation.y = 0;
+    vrm.scene.rotation.set(0, 0, 0);
+    vrm.scene.position.set(0, 0, 0);
     const box = new THREE.Box3().setFromObject(vrm.scene);
     height = box.max.y - box.min.y;
-    home = { ...view, yaw: 0, pitch: 0.08, dist: height * 1.75, pan: 0, vyaw: 0 };
+    pivot.add(vrm.scene);
+    home = { ...view, dist: height * 1.75, pan: 0, vx: 0, vy: 0, goal: null };
     Object.assign(view, home);
     onReady && onReady();
   }).catch(e => onError && onError(e));
@@ -56,7 +78,7 @@ export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle }
   const down = e => {
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* 古い端末 */ }
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    view.vyaw = 0; view.goal = null; moved = 0; trail = [];
+    view.vx = view.vy = 0; view.goal = null; moved = 0; trail = [];
     if (pts.size === 2) pinch = gesture();
   };
   const gesture = () => {
@@ -71,11 +93,11 @@ export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle }
     const L = limits();
     if (pts.size === 1) {
       moved += Math.abs(dx) + Math.abs(dy);
-      view.yaw += dx * Math.PI / Math.max(240, canvas.clientWidth);
-      view.pitch = clamp(view.pitch + dy * 0.004, -0.35, 0.9);
+      const k = Math.PI / Math.max(240, canvas.clientWidth);
+      turn(dx * k, dy * k);
       // 離したときの勢いは、直前0.1秒の動きから決める
       const now = performance.now();
-      trail.push([now, view.yaw]);
+      trail.push([now, dx * k, dy * k]);
       while (trail.length > 2 && now - trail[0][0] > 100) trail.shift();
     } else if (pts.size === 2 && pinch) {
       const g = gesture();
@@ -88,12 +110,16 @@ export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle }
     pts.delete(e.pointerId);
     if (pts.size < 2) pinch = null;
     if (pts.size === 0 && trail.length >= 2) {
-      const [t0, y0] = trail[0], [t1, y1] = trail[trail.length - 1], now = performance.now();
-      view.vyaw = now - t1 < 80 && t1 > t0 ? clamp((y1 - y0) / ((t1 - t0) / 1000), -5, 5) : 0;
+      const t0 = trail[0][0], t1 = trail[trail.length - 1][0], now = performance.now();
+      if (now - t1 < 80 && t1 > t0) {
+        const sx = trail.slice(1).reduce((a, s) => a + s[1], 0), sy = trail.slice(1).reduce((a, s) => a + s[2], 0);
+        view.vx = clamp(sx / ((t1 - t0) / 1000), -5, 5);
+        view.vy = clamp(sy / ((t1 - t0) / 1000), -5, 5);
+      }
     }
     if (pts.size === 0 && moved < 8) {
       const now = performance.now();
-      if (now - lastTap < 320) { Object.assign(view, home); lastTap = 0; } else lastTap = now;
+      if (now - lastTap < 320) { reset(); lastTap = 0; } else lastTap = now;
     }
   };
   const wheel = e => {
@@ -101,13 +127,14 @@ export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle }
     const L = limits();
     view.dist = clamp(view.dist * (1 + Math.sign(e.deltaY) * 0.1), L.minD, L.maxD);
   };
+  const reset = () => { Object.assign(view, home); q.identity(); };
   canvas.style.touchAction = 'none';
   canvas.addEventListener('pointerdown', down);
   canvas.addEventListener('pointermove', move);
   canvas.addEventListener('pointerup', up);
   canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('wheel', wheel, { passive: false });
-  canvas.addEventListener('dblclick', () => Object.assign(view, home));
+  canvas.addEventListener('dblclick', reset);
 
   // ---- 描画 ----
   const resize = () => {
@@ -124,24 +151,30 @@ export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle }
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     resize();
     if (!pts.size) {
-      if (view.goal != null) {
-        // ボタンやスライダーで選んだ向きへ、近い回り方でなめらかに向ける
-        const d = Math.atan2(Math.sin(view.goal - view.yaw), Math.cos(view.goal - view.yaw));
-        view.yaw += d * Math.min(1, dt * 8);
-        if (Math.abs(d) < 0.002) view.goal = null;
-      } else {
-        view.yaw += view.vyaw * dt;
-        view.vyaw *= Math.pow(0.12, dt);             // 惰性は1秒ほどで止まる
-        if (Math.abs(view.vyaw) < 0.02) view.vyaw = 0;
+      if (view.goal) {
+        // ボタンやスライダーで選んだ向きへ、立った姿勢でなめらかに向ける
+        q.slerp(view.goal, Math.min(1, dt * 8));
+        if (q.angleTo(view.goal) < 0.002) { q.copy(view.goal); view.goal = null; }
+      } else if (view.vx || view.vy) {
+        turn(view.vx * dt, view.vy * dt);
+        const f = Math.pow(0.12, dt);                // 惰性は1秒ほどで止まる
+        view.vx *= f; view.vy *= f;
+        if (Math.hypot(view.vx, view.vy) < 0.02) view.vx = view.vy = 0;
       }
     }
-    if (onAngle) onAngle(((view.yaw * 180 / Math.PI) % 360 + 360) % 360);
+    if (onAngle) onAngle(facing());
+    const ty = lookY();
+    pivot.position.set(0, ty, 0);
+    pivot.quaternion.copy(q);
     if (vrm) {
-      vrm.scene.rotation.y = view.yaw;
+      vrm.scene.position.y = -ty;
       driveVRM(vrm, false, dt, { pose, face: Object.fromEntries(FACES.filter(([k]) => k !== 'neutral').map(([k]) => [k, k === face ? 1 : 0])) });
     }
-    const ty = lookY();
-    camera.position.set(0, ty + Math.sin(view.pitch) * view.dist, Math.cos(view.pitch) * view.dist);
+    // 足元の円は、まっすぐ立っているときだけ見せる（逆さや横倒しのときは消す）
+    const u = upright();
+    ground.visible = u > 0.5;
+    ringMat.opacity = 0.6 * clamp((u - 0.5) * 4, 0, 1);
+    camera.position.set(0, ty + Math.sin(0.08) * view.dist, Math.cos(0.08) * view.dist);
     camera.lookAt(0, ty, 0);
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
@@ -151,13 +184,13 @@ export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle }
   return {
     setFace(f) { face = f; },
     setPose(p) { pose = p; },
-    // 向き（度）。0 が正面、180 が背面。smooth なら近い回り方でなめらかに向ける
+    // 横の向き（度）。0 が正面、180 が背面。立った姿勢に戻す。smooth ならなめらかに向ける
     setAngle(deg, smooth) {
-      view.vyaw = 0;
-      const r = deg * Math.PI / 180;
-      if (smooth) view.goal = r; else { view.goal = null; view.yaw = r; }
+      view.vx = view.vy = 0;
+      const g = new THREE.Quaternion().setFromAxisAngle(Y, deg * Math.PI / 180);
+      if (smooth) view.goal = g; else { view.goal = null; q.copy(g); }
     },
-    reset() { Object.assign(view, home); },
+    reset,
     close() {
       alive = false;
       canvas.removeEventListener('pointerdown', down);
@@ -165,7 +198,8 @@ export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle }
       canvas.removeEventListener('pointerup', up);
       canvas.removeEventListener('pointercancel', up);
       canvas.removeEventListener('wheel', wheel);
-      if (vrm) scene.remove(vrm.scene);
+      canvas.removeEventListener('dblclick', reset);
+      if (vrm) { pivot.remove(vrm.scene); vrm.scene.position.set(0, 0, 0); }
       disposeVRM(id, 'view');
       renderer.dispose();
       renderer.forceContextLoss();

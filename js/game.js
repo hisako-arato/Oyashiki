@@ -697,7 +697,7 @@ async function openPerson(id) {
   const close = () => { viewer && viewer.close(); root.remove(); if (day3d) day3d.resume(); openNotebook('people'); };
   const root = el('div', { class: 'viewer' },
     el('div', { class: 'vstage' }, canvas, status,
-      el('div', { class: 'vhelp' }, '1本指で左右に回す／2本指でズーム／ダブルタップで元に戻す'),
+      el('div', { class: 'vhelp' }, '1本指で上下左右に回す／2本指でズーム／ダブルタップで元に戻す'),
       el('button', { class: 'vclose', onclick: close }, '×')),
     el('div', { class: 'vpanel' }, turnRow, faceBtns, poseBtns, info));
   document.body.append(root);
