@@ -347,8 +347,19 @@ function refreshMarkers() {
     const [area, x, z] = WORK[c.id];
     const a = areas[area], m = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.6, 20), workMat);
     m.rotation.x = -Math.PI / 2; m.position.set(x, 0.03, z);
-    a.group.add(m); a.markers.push(m);
+    // 人や家具に隠れても分かるよう、頭より高い所に揺れる目印を浮かべる
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.32), gemMat);
+    gem.position.set(x, 2.4, z); gem.userData.bob = Math.random() * 6;
+    a.group.add(m, gem); a.markers.push(m, gem);
   });
+}
+const gemMat = new THREE.MeshBasicMaterial({ color: '#5fe08a', transparent: true, opacity: 0.9, depthTest: false });
+function bobMarkers(dt) {
+  for (const m of cur.markers) if (m.userData.bob != null) {
+    m.userData.bob += dt * 3;
+    m.position.y = 2.4 + Math.sin(m.userData.bob) * 0.15;
+    m.rotation.y += dt * 1.5;
+  }
 }
 // 朝礼の席（朝礼前だけ）と、ベッドで休む（仕事中だけ）
 const SEAT = [9.05, 7.5];
@@ -420,7 +431,7 @@ function findTarget() {
   for (const t of choreThings()) consider(t);
   for (const t of cottageThings()) consider(t, 0.8);
   for (const t of nightThings()) consider(t, 0.8);   // 夜だけの操作を、同じ場所の昼の調べものや出入口より優先する
-  if (st.mode !== 'night') for (const p of Object.values(people)) if (p.area === cur.id) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p });
+  if (st.mode !== 'night') for (const p of Object.values(people)) if (p.area === cur.id && !guiding(p)) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p });
   return best;
 }
 function act() {
@@ -879,10 +890,14 @@ function drawMinimap(here) {
       mm.fillRect(px(r.x) + 0.5, pz(r.z) + 0.5, r.w * S - 1, r.d * S - 1);
     }
   }
-  for (const t of [...choreThings(), ...tutorTargets()]) { const [x, z] = t.at(); mm.fillStyle = t.tut ? '#e3c06f' : '#7ad08a'; mm.fillRect(px(x) - 4, pz(z) - 4, 8, 8); }
   for (const p of Object.values(people)) {
     if (p.area !== cur.id) continue;
     mm.fillStyle = PEOPLE[p.id].color; mm.beginPath(); mm.arc(px(p.x), pz(p.z), 4, 0, 7); mm.fill();
+  }
+  for (const t of [...choreThings(), ...tutorTargets()]) {
+    const [x, z] = t.at();
+    mm.fillStyle = '#ffffff'; mm.fillRect(px(x) - 6, pz(z) - 6, 12, 12);
+    mm.fillStyle = t.tut ? '#e3c06f' : '#3fc06a'; mm.fillRect(px(x) - 4, pz(z) - 4, 8, 8);
   }
   mm.fillStyle = '#e3c06f'; mm.beginPath(); mm.arc(px(player.x), pz(player.z), 5, 0, 7); mm.fill();
 }
@@ -1006,6 +1021,7 @@ function tick(now) {
   }
 
   for (const p of Object.values(people)) updatePerson(p, dt);
+  bobMarkers(dt);
   st.placeNow = false;
   const inPrivate = !night && !!(room && room.private) && !choreHere(key);
   for (const p of Object.values(people)) p.coneMat.color.set(isAlly(s, p.id) ? '#8ad0a0' : (night || inPrivate) && p.seeing ? '#ff5a4a' : night ? '#fff2b0' : '#ffe08a');
