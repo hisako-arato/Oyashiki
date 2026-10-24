@@ -49,7 +49,11 @@ export const ROOMS = {
   hidden:   { name: '隠し部屋',       floor: 2, secret: true },
   master:   { name: '主寝室',         floor: 2, owner: 'mother' },
   droom:    { name: 'お嬢様の部屋',   floor: 2, owner: 'daughter' },
+  // 地下（資料室の床の扉から降りる。見つけるまでは出てこない）。ここにいる間は「不在」になる
+  cellar:   { name: 'ワイン貯蔵庫',   floor: 0, secret: true, reveal: 'b_found', under: true },
+  vault:    { name: '保管庫と搬入路', floor: 0, secret: true, reveal: 'b_vault', under: true, private: true },
 };
+ROOMS.hidden.reveal = 'hidden_open';
 
 // 仕事の定義。butlerOnly は執事しか担当できない。optional は未完了でも減点なし
 export const CHORES = {
@@ -122,4 +126,23 @@ export const CLUES = {
   eve_daughter: { ch: 3, text: '【イブの夜】お嬢様の部屋に招かれている。決行は2階から始められる。' },
   family_rift:  { ch: 1, text: '【鉢合わせ】お母様とお嬢様に、互いの関係を知られてしまった。家族の溝は深い。' },
   hide_ok:      { ch: 3, text: '【協力者】お嬢様が「贈り物の絵」を部屋で預かってくれる。' },
+  // ---- 地下室 ----
+  b_well:       { ch: 1, text: '庭の古井戸から、冷たい風が上がってくる。地下に空洞があるのだろうか。' },
+  b_circuit:    { ch: 1, text: '白メイドの話：配電盤に、どこにもつながっていない系統がある。屋敷のどこかに、知られていない部屋の電灯が……？' },
+  b_wine:       { ch: 1, text: '赤メイドの話：旦那様はワインを取りに行くと、いつもなかなか戻ってこない。ワインセラーはどこにある？' },
+  b_plan:       { ch: 1, text: '資料室の設計図：資料室の床下に、階段の記号が描かれている。' },
+  b_hatch:      { ch: 2, text: '【発見】資料室の敷物の下に、床の扉がある。鍵穴が付いている。' },
+  b_key:        { ch: 2, text: '【入手】旦那様のワインセラーの鍵。' },
+  b_light:      { ch: 1, text: '倉庫の懐中電灯を借りた。暗い場所を照らせる。' },
+  b_tool:       { ch: 2, text: '倉庫のバール。錆びたボルトくらいなら外せそうだ。' },
+  b_found:      { ch: 2, text: '【地下】資料室の下は、古いワイン貯蔵庫だった。地下にいる間は、屋敷のどこにも姿が見えない。長くいると怪しまれる。' },
+  b_vault:      { ch: 2, text: '【地下】ワイン棚の一つが隠し扉だった。奥は温度と湿度が管理された保管庫だ。' },
+  b_frames:     { ch: 2, text: '保管庫に、布を掛けた額縁が十数枚。どれも、美術館の盗難のニュースで見た覚えのある構図だ。' },
+  b_ledger:     { ch: 2, text: '【証拠】仕入れ帳：符丁で書かれた絵の名前、金額、仲介人の頭文字。20年前の「月の庭」の行もある。写真に収めた。' },
+  b_letter:     { ch: 2, text: 'オークション会社との手紙：「年明けの出品は、来歴を整えた上で」。盗品の来歴を偽っている。' },
+  b_slip:       { ch: 2, text: '12月25日の発送伝票：「月下の庭」と一緒に、保管庫の絵がすべて運び出される。' },
+  b_tunnel:     { ch: 2, text: '保管庫の奥の古い搬入路は、庭の古井戸へ続いている。出口は錆びた鉄格子でふさがれている。' },
+  b_grate:      { ch: 2, text: '【準備】搬入路の鉄格子のボルトを外しておいた。古井戸から地下へ出入りできる。' },
 };
+// 地下室の存在を示す手がかり（2つ集めると、資料室の床が気になり出す）
+export const BASEMENT_HINTS = ['b_well', 'b_circuit', 'b_wine', 'b_plan'];

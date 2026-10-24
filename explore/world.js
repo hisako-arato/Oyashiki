@@ -299,6 +299,28 @@ const F = {
     box(g, 0.12, 0.5, 0.12, mat('#7a8a7a'), 0.25, 1.4, 0).rotation.z = -0.6;
   }),
   sacks: (x, z) => piece(x, z, 0, 0.8, 0.5, g => { for (const s of [-0.2, 0.2]) ball(g, 0.25, mat('#d8c8a0'), s, 0.25, 0); }),
+  // ---- 地下 ----
+  wineRack: (x, z, rot, w = 3) => piece(x, z, rot, w, 0.5, g => {
+    box(g, w, 2.2, 0.06, M.darkWood, 0, 0, -0.22);
+    for (let y = 0; y < 5; y++) box(g, w, 0.05, 0.5, M.wood, 0, 0.1 + y * 0.45, 0);
+    for (const s of [-1, 1]) box(g, 0.06, 2.2, 0.5, M.darkWood, s * (w / 2 - 0.03), 0, 0);
+    const bottle = mat('#2a3a22');
+    for (let y = 0; y < 4; y++) for (let i = 0; i < Math.floor(w / 0.2); i++) if ((i * 7 + y * 3) % 5) {
+      const b = cyl(g, 0.045, 0.045, 0.32, bottle, -w / 2 + 0.15 + i * 0.2, 0.3 + y * 0.45, 0.04, 6); b.rotation.x = Math.PI / 2; b.position.y = 0.3 + y * 0.45;
+    }
+  }),
+  barrel: (x, z) => piece(x, z, 0, 0.9, 0.9, g => {
+    const b = cyl(g, 0.42, 0.42, 1.0, mat('#7a5232'), 0, 0, 0, 12); b.rotation.z = Math.PI / 2; b.position.y = 0.45;
+    for (const s of [-0.3, 0.3]) { const h = cyl(g, 0.44, 0.44, 0.05, M.metal, s, 0, 0, 12); h.rotation.z = Math.PI / 2; h.position.y = 0.45; }
+  }),
+  covered: (x, z, rot, w = 1.2, h = 1.0) => piece(x, z, rot, w, 0.25, g => {
+    const c = box(g, w, h, 0.12, mat('#d8d2c4'), 0, 0.15, 0); c.rotation.x = -0.12;
+    box(g, w + 0.06, 0.15, 0.2, M.darkWood, 0, 0, 0);
+  }),
+  grate: (x, z, rot, w = 2) => piece(x, z, rot, w, 0.15, g => {
+    for (let i = 0; i <= 8; i++) box(g, 0.05, 2.4, 0.05, M.metal, -w / 2 + i * w / 8, 0, 0);
+    for (const y of [0.4, 1.4, 2.3]) box(g, w, 0.06, 0.06, M.metal, 0, y, 0);
+  }),
 };
 
 // ---- クリスマスの飾り（飾り付けを終えるまで見えない。A.deco[仕事の名前] に登録） ----
@@ -519,9 +541,10 @@ const spot = (name, x, z, key, id, extra = {}) => A.things.push({ name, at: () =
 const flavor = (name, x, z, ...lines) => A.things.push({ name, at: () => [x, z], label: '調べる', say: lines });
 const special = (name, x, z, kind, extra = {}) => A.things.push({ name, at: () => [x, z], label: '調べる', special: kind, ...extra });
 const exitMat = mat('#e3c06f', { emissive: '#e3c06f', emissiveIntensity: 0.35, transparent: true, opacity: 0.55 });
-function exit(name, x, z, to) {
-  A.things.push({ name, at: () => [x, z], label: name, exit: to });
-  plane(A.group, 0.9, 0.9, exitMat, x, 0.02, z).receiveShadow = false;
+function exit(name, x, z, to, extra = {}) {
+  const mark = plane(A.group, 0.9, 0.9, exitMat, x, 0.02, z);
+  mark.receiveShadow = false;
+  A.things.push({ name, at: () => [x, z], label: name, exit: to, mark, ...extra });
 }
 
 // 本編の仕事をする場所 [エリア, x, z]
@@ -677,7 +700,8 @@ AREAS.grounds = {
     flavor('家庭菜園', 30, 8, 'トマトとハーブが育っている。赤メイドが世話をしているらしい。');
     flavor('正門', 40.5, 56.8, '正門には鍵が掛かっている。夜は閉ざされる。');
     flavor('小鳥の水浴び場', 7, 20.6, '朝になると、すずめが水浴びに来る。お嬢様は子どもの頃、一羽ずつ名前を付けていたらしい。');
-    flavor('古井戸', 8, 48.2, '今は使われていない古井戸。覗き込むと、ひんやりとした風が上がってくる。');
+    spot('古井戸', 8, 48.2, 'garden', 'well');
+    exit('古井戸を降りる', 8, 45.6, { area: 'basement', x: 28.4, z: 3 }, { when: s => !!s.flags.b_grate });
     flavor('温室', 77, 29.6, 'ガラス張りの温室。冬の間、バラの苗と蘭がここで眠る。');
     flavor('犬小屋', 68, 23.9, '空っぽの犬小屋。表札に「ジョン」とある。お嬢様が小学生の頃までいたそうだ。');
     flavor('薪の山', 84, 23.8, '暖炉用の薪。この冬で全部使い切るらしい。');
@@ -717,6 +741,14 @@ AREAS.f1 = {
     F.cabinet(12, 0.35, 0, 2, 1.0, '#5a4a3a');
     F.shelf(8.2, 0.3, 0, 2.4); F.shelf(15.8, 0.3, 0, 2.4); F.shelf(15.5, 7.7, 2, 2.4);
     F.table(12, 4.5, 2.4, 1.2); F.chair(11.2, 5.4, 2); F.chair(12.8, 5.4, 2);
+    // 床の敷物の下に、地下への床の扉（見つけるまでは見えない）
+    F.rug(8.5, 6.2, 2, 1.4, TEX.carpet);
+    A.hatch = new THREE.Group(); A.hatch.visible = false; A.group.add(A.hatch);
+    box(A.hatch, 1.1, 0.03, 1.1, M.darkWood, 8.5, 0.015, 6.2); box(A.hatch, 0.12, 0.04, 0.12, M.gold, 8.5, 0.03, 6.6);
+    // 夜は倉庫から資料室への扉に鍵を掛ける（決行の夜だけ閉まる）
+    A.nightDoor = { g: new THREE.Group(), box: solid(-999, -999, -999, -999, 'furniture') };
+    A.nightDoor.g.visible = false; A.group.add(A.nightDoor.g);
+    box(A.nightDoor.g, 0.08, 2.4, 2, M.darkWood, 6, 0, 4);
     // 応接室
     F.rug(8, 13, 7, 5, TEX.redCarpet);
     F.sofa(8, 11.2, 0); F.sofa(8, 14.8, 2); F.table(8, 13, 1.6, 0.9, M.darkWood);
@@ -768,6 +800,9 @@ AREAS.f1 = {
     exit('勝手口から外へ', 45, 0.9, { area: 'grounds', x: HX + 45, z: HZ - 0.7 });
     exit('裏階段で2Fへ', 45.2, 10.5, { area: 'f2', x: 45.2, z: 10.5 });
     spot('古い図面棚', 12, 1.1, 'archive', 'blueprint');
+    spot('床の敷物', 8.5, 6.2, 'archive', 'floor', { when: s => !s.flags.b_hatch });
+    special('床の扉', 8.5, 6.2, 'hatch', { when: s => s.flags.b_hatch, label: '地下へ' });
+    spot('工具棚', 1.1, 2.6, 'storage', 'flashlight');
     spot('運送伝票', 4.7, 2.0, 'storage', 'slips');
     spot('庭師の梯子', 1.3, 5, 'storage', 'ladder');
     spot('洗濯かご', 44.5, 16.7, 'laundry', 'basket');
@@ -932,6 +967,48 @@ AREAS.f2 = {
   },
 };
 
+// ---- 地下（資料室の下。表向きはワイン貯蔵庫、奥に隠された保管庫と、古井戸へ続く搬入路） ----
+AREAS.basement = {
+  name: '地下', wallStyle: 'plain', origin: { x: HOUSE.x + 6, z: HOUSE.z }, underground: true,
+  rooms: [
+    { name: 'ワイン貯蔵庫', x: 0, z: 0, w: 10, d: 7, floor: 'stone', wall: 'plain', key: 'cellar' },
+    { name: '保管庫', x: 10, z: 0, w: 6, d: 7, floor: 'stone', wall: 'plain', private: true, key: 'vault' },
+    { name: '搬入路', x: 16, z: 2, w: 14, d: 2, floor: 'stone', wall: 'plain' },
+  ],
+  doors: [['v', 16, 2, 2]],
+  windows: [],
+  build() {
+    // 石段（資料室の床の扉へ）
+    for (let i = 0; i < 6; i++) box(A.group, 1.4, 0.4 * (i + 1), 0.4, mat('#8a8478'), 1, 0, 2.6 - i * 0.4);
+    // ワイン貯蔵庫
+    F.wineRack(5.2, 0.3, 0, 3.2); F.wineRack(5.2, 6.7, 2, 3.2); F.wineRack(9.7, 3.5, 3, 3);
+    F.barrel(2.2, 6.2); F.barrel(3.3, 6.2); F.barrel(7.6, 1.1);
+    F.table(5, 3.6, 1.6, 0.8);
+    const bulb = new THREE.PointLight('#ffd9a0', 2.5, 7, 1.6); bulb.position.set(5, 2.6, 3.5); A.group.add(bulb);
+    // 保管庫：布を掛けた額縁、机、手紙の棚、発送待ちの木箱
+    for (const [x, z, r] of [[11.4, 6.65, 2], [13, 6.65, 2], [14.6, 6.65, 2], [15.65, 5.2, 3], [15.65, 1.6, 3]]) F.covered(x, z, r);
+    F.desk(12.8, 0.6, 0, 1.4); F.cabinet(10.5, 1.0, 1, 1.0, 1.2, '#4a3a2a');
+    F.crate(14.2, 4.4, 0.7); F.crate(13.4, 5.5, 0.6);
+    const lamp = new THREE.PointLight('#cfe0ff', 1.8, 6, 1.6); lamp.position.set(13, 2.6, 3.5); A.group.add(lamp);
+    // 搬入路の先の鉄格子（外すまでは通れない）
+    A.grate = { g: F.grate(29.9, 3, 1, 2), box: A.solids[A.solids.length - 1] };
+  },
+  setup() {
+    exit('資料室へ上がる', 1.0, 3.4, { area: 'f1', x: 8.5, z: 5.2 });
+    spot('ワイン棚', 9.0, 2.6, 'cellar', 'rack');
+    exit('隠し扉を抜ける', 9.1, 4.8, { area: 'basement', x: 10.9, z: 4.4 }, { when: s => !!s.flags.b_vault });
+    spot('樽', 2.7, 5.4, 'cellar', 'barrel');
+    flavor('作業台', 5, 4.3, 'コルク抜きと、なぜか額縁用の金具が散らばっている。ワインの手入れだけの部屋ではない。');
+    exit('貯蔵庫へ戻る', 10.7, 3.4, { area: 'basement', x: 8.7, z: 4.2 });
+    spot('布を掛けた額縁', 13, 5.9, 'vault', 'frames');
+    spot('仕入れ帳', 12.8, 1.4, 'vault', 'ledger');
+    spot('手紙の束', 11.1, 1.8, 'vault', 'letters');
+    spot('発送伝票', 13.6, 3.7, 'vault', 'slip');
+    spot('搬入路の鉄格子', 29.2, 3, 'vault', 'grate', { when: s => !s.flags.b_grate });
+    exit('古井戸から地上へ', 29.2, 3, { area: 'grounds', x: 8, z: 45 }, { when: s => !!s.flags.b_grate });
+  },
+};
+
 export function buildArea(id, scene) {
   const def = AREAS[id];
   A = { id, def, name: def.name, group: new THREE.Group(), solids: [], walls: [], blocks: [], things: [], rooms: def.rooms, zones: def.zones || [], secret: null, shelf: null, deco: {} };
@@ -943,4 +1020,4 @@ export function buildArea(id, scene) {
   A = null;
   return area;
 }
-export const AREA_INFO = Object.fromEntries(Object.entries(AREAS).map(([k, v]) => [k, { name: v.name, outdoor: !!v.outdoor, origin: v.origin, hide: v.hide, below: v.below || 0 }]));
+export const AREA_INFO = Object.fromEntries(Object.entries(AREAS).map(([k, v]) => [k, { name: v.name, outdoor: !!v.outdoor, underground: !!v.underground, origin: v.origin, hide: v.hide, below: v.below || 0 }]));

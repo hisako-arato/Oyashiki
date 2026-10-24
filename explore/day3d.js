@@ -17,7 +17,7 @@ const WALK_SPEED = 5.2;      // 歩く速さ（m/秒）
 const NPC_SPEED = 2.2;       // 人物が部屋を移るときの速さ
 const LOW = 0.17, VIEW_RANGE = 5.5, VIEW_FOV = Math.PI * 0.42, CONE_RAYS = 24;
 const OWNERS = { master: 'mother', droom: 'daughter' };
-const AREA_SIZE = { grounds: [92, 58], cottage: [20, 15], f1: [48, 18], f2: [48, 18] };
+const AREA_SIZE = { grounds: [92, 58], cottage: [20, 15], f1: [48, 18], f2: [48, 18], basement: [30, 7] };
 const GATE = { area: 'grounds', x: 38, z: 56 };
 
 let s = null, hooks = null, cur = null, running = false;
@@ -92,7 +92,7 @@ function getArea(id) {
   }
   return areas[id];
 }
-const SKY = new THREE.Color('#9cbfd6'), NIGHT_SKY = new THREE.Color('#0b1020');
+const SKY = new THREE.Color('#9cbfd6'), NIGHT_SKY = new THREE.Color('#0b1020'), UNDER_SKY = new THREE.Color('#050404');
 let zoomBase = 1;
 function enter(id, x, z) {
   const a = getArea(id);
@@ -103,19 +103,21 @@ function enter(id, x, z) {
   const info = AREA_INFO[id];
   // 屋内にいるときも、窓や低くした壁の向こうに庭が見えるよう、敷地を一緒に表示する
   const g = getArea('grounds');
-  g.group.visible = true;
+  g.group.visible = !info.underground;
   if (info.outdoor) g.group.position.set(0, 0, 0);
   else g.group.position.set(-info.origin.x, -0.03 - info.below, -info.origin.z);
   for (const b of g.blocks) b.g.visible = info.outdoor || b.name !== info.hide;
   const night = st.mode === 'night';
-  scene.background = night ? NIGHT_SKY : SKY;
-  hemi.intensity = night ? (info.outdoor ? 0.35 : 0.25) : info.outdoor ? 1.4 : 1.0;
-  sun.intensity = night ? 0.45 : info.outdoor ? 2.4 : 1.2;
+  scene.background = info.underground ? UNDER_SKY : night ? NIGHT_SKY : SKY;
+  hemi.intensity = info.underground ? 0.12 : night ? (info.outdoor ? 0.35 : 0.25) : info.outdoor ? 1.4 : 1.0;
+  sun.intensity = info.underground ? 0.05 : night ? 0.45 : info.outdoor ? 2.4 : 1.2;
+  lantern.intensity = night || info.underground ? 7 : 0;
   camTarget.set(x, 0, z);
   zoomBase = info.outdoor ? 0.6 : 1;
   camera.zoom = zoomBase;
   camera.updateProjectionMatrix();
   st.lastKey = undefined;
+  if (areas.basement && areas.f1) syncUnder();
 }
 function setLights(night) {
   hemi.color.set(night ? '#6a7aa8' : '#fff1dc');
@@ -131,7 +133,14 @@ function fade(text, mid, ms = 280) {
   fadeEl.classList.add('on');
   setTimeout(() => { mid(); fadeEl.classList.remove('on'); }, ms);
 }
-const travel = to => fade('', () => { enter(to.area, to.x, to.z); st.busy = false; });
+const travel = to => fade('', () => {
+  const from = cur && cur.id;
+  enter(to.area, to.x, to.z);
+  st.busy = false;
+  if (st.mode !== 'day') return;
+  if (to.area === 'basement' && from !== 'basement') DL.goUnder(s);
+  if (from === 'basement' && to.area !== 'basement') { st.busy = true; hooks.askAbsence(msg => { st.busy = false; if (msg) say(msg); fatal(); }); }
+});
 
 function roomAt(x, z) {
   for (const r of cur.zones) if (x >= r.x && x <= r.x + r.w && z >= r.z && z <= r.z + r.d) return r;
@@ -361,6 +370,14 @@ function syncSecret() {
   a.shelf.hinge.rotation.y = open ? Math.PI : Math.PI / 2;
   Object.assign(a.shelf.box, open ? { minX: 10.6, maxX: 12.8, minZ: 1.8, maxZ: 2.3 } : { minX: 10.1, maxX: 10.6, minZ: 1.8, maxZ: 4.0 });
 }
+// 地下まわり：床の扉、搬入路の鉄格子、条件付きの出入口の印
+function syncUnder() {
+  areas.f1.hatch.visible = !!s.flags.b_hatch;
+  const gr = areas.basement.grate, open = !!s.flags.b_grate;
+  gr.g.visible = !open;
+  Object.assign(gr.box, open ? { minX: -999, maxX: -998, minZ: -999, maxZ: -998 } : (gr.at ||= { ...gr.box }));
+  for (const a of Object.values(areas)) for (const th of a.things) if (th.mark && th.when) th.mark.visible = !!th.when(s);
+}
 // クリスマスの飾り：飾り付けを終えた物だけ見せ、当たり判定を置く。人物の道順も作り直す
 function syncDeco() {
   for (const [id, a] of Object.entries(areas)) {
@@ -388,6 +405,7 @@ function findTarget() {
   // bias を引いた距離で比べる（朝礼の席やベッドは、近くの人物より優先する）
   const consider = (t, bias = 0) => {
     if (t.secretOnly && !s.flags.hidden_open) return;
+    if (t.when && !t.when(s)) return;
     const [x, z] = t.at(), d = Math.hypot(x - player.x, z - player.z) - bias;
     if (d < bd) { bd = d; best = t; }
   };
@@ -478,11 +496,20 @@ function search([key, id], extraMsg) {
   if (res.clue) hooks.toast('手帳に記録した');
   if (res.code) { st.busy = true; return hooks.askCode(res.msg, m => { say(m); }); }
   say(extraMsg, res.msg);
+  syncUnder();
   if (st.tut) tutorEvent('search', key, id);
 }
 function special(kind) {
   if (kind === 'notebook') return hooks.notebook();
   if (kind === 'garage') return say(fatherHome(s) ? 'お父様の車はガレージの奥に停めてある。今日は一日、書斎にいるらしい。' : 'シャッターが半分開いている。中は空っぽだ。お父様は車で会社に出かけている。');
+  if (kind === 'hatch') {
+    const first = !s.flags.b_found;
+    const why = DL.openHatch(s, watchers());
+    if (why) return say(why);
+    afterMsg = () => travel({ area: 'basement', x: 1.0, z: 4.0 });
+    return say(first ? '床の扉を開け、懐中電灯を手に石段を降りた。……ひんやりとした空気。ここにいる間は、屋敷のどこにも姿が見えない。長くいれば、誰かが探し始めるだろう。'
+      : '床の扉を開け、石段を降りる。');
+  }
   if (kind === 'shelf') {
     if (s.flags.hidden_open) return say('本棚の奥に、暗い小部屋が続いている。');
     if (s.flags.red_book && s.flags.key_hidden) {
@@ -617,6 +644,7 @@ function nightThings() {
   const N = st.night;
   if (!N) return [];
   const list = [], at = (x, z) => () => [x, z];
+  if (cur.id === 'f1') list.push({ name: '資料室への扉', at: at(5.4, 4), label: '調べる', night: () => say('内側から鍵が掛かっている。夜は、倉庫から屋敷の奥へは入れない。') });
   if (cur.id === 'f1' && !N.ladderTaken) list.push({ name: '庭師の梯子', at: at(1.3, 5), label: '梯子を持つ', night: () => {
     if (N.carry) return say('両手がふさがっている。');
     N.ladderTaken = true; N.carry = 'ladder';
@@ -673,6 +701,7 @@ function nightAct(t) {
     return say('赤い本を引き、鍵を差し込む。本棚が音もなく開いた。');
   }
   if (t.special === 'notebook') return hooks.notebook();
+  if (t.special === 'hatch') return s.flags.b_key ? travel({ area: 'basement', x: 1.0, z: 4.0 }) : say('床の扉には鍵が掛かっている。');
   if (t.say) return say(...t.say);
   say('今は調べている場合ではない。');
 }
@@ -681,7 +710,7 @@ function nightGoal() {
   if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す' : '絵を抱えて、正門から屋敷を出る';
   if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
   if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
-  return '2階の書斎へ。大広間は雫が見逃してくれる。キッチン裏には赤メイド、2階の廊下には巡回員がいる';
+  return '2階の書斎へ。夜は倉庫から奥への扉に鍵。勝手口の先には赤メイド、大広間は雫、2階の廊下には巡回員';
 }
 function endNight(id) {
   running = false;
@@ -849,6 +878,7 @@ function drawHud(room) {
     text = '目的：' + nightGoal();
   } else {
     clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}`;
+    if (t.goneAt != null) clock += `　不在 ${DL.absentMin(s)}分${DL.absentMin(s) > DL.UNDER_SAFE ? '（探されているかも）' : ''}`;
     const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${CHORES[c.id].optional ? '（任意）' : ''}`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
       : st.tut && TUT[st.tut.step] ? `【新しい決まり ${st.tut.step + 1}/3】${TUT[st.tut.step].goal}`
@@ -990,7 +1020,7 @@ function prepare(state, h) {
   root.classList.remove('hidden');
   resize();
   if (!areas.grounds) {
-    for (const id of ['grounds', 'cottage', 'f1', 'f2']) getArea(id);
+    for (const id of ['grounds', 'cottage', 'f1', 'f2', 'basement']) getArea(id);
     makePeople();
   }
   syncCast();
@@ -998,6 +1028,9 @@ function prepare(state, h) {
   for (const p of Object.values(people)) { p.key = undefined; p.route = null; p.nightRole = null; p.range = VIEW_RANGE; }
   syncSecret();
   syncDeco();
+  syncUnder();
+  Object.assign(areas.f1.nightDoor.box, { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
+  areas.f1.nightDoor.g.visible = false;
   ending = false; st.busy = false; st.shelfAnim = 0; st.tut = null; st.tutPending = false; st.night = null; msgQueue = []; afterMsg = null;
 }
 function run() {
@@ -1044,6 +1077,8 @@ export function startNight(state, route, h) {
   setLights(true);
   setupNightProps();
   refreshMarkers();
+  Object.assign(areas.f1.nightDoor.box, { minX: 5.86, maxX: 6.14, minZ: 3, maxZ: 5 });
+  areas.f1.nightDoor.g.visible = true;
   // 夜の見張り：黒メイド（雫）は大広間と玄関ホールを見回るが、兄を見逃す。赤メイドはキッチン裏で仕込み
   // 2階の廊下は警備会社の巡回員が往復し、西の端（物置の前）で立ち止まって窓の外を眺める
   const black = people.black, red = people.red, guard = people.guard;

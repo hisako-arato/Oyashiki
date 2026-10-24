@@ -1,7 +1,9 @@
 // 執事パートで行える調査・会話の内容
-import { setFlag } from './state.js';
+import { setFlag, fatherHome } from './state.js';
+import { BASEMENT_HINTS } from './data.js';
 
 const ch = s => s.chapter;
+const hints = s => BASEMENT_HINTS.filter(f => s.flags[f]).length;
 
 // 各部屋の調査ポイント。run は {text} を返す。code:true ならダイヤル錠入力へ
 export const SPOTS = {
@@ -15,7 +17,12 @@ export const SPOTS = {
     { id: 'stairs', name: '大階段', run: () => ({ text: '2階へ続く大階段。夜でも誰かの目に付きやすい場所だ。' }) },
   ],
   kitchen: [
-    { id: 'pantry', name: '食料庫', run: () => ({ text: '赤メイドが整理した食料庫。几帳面に並んでいる。' }) },
+    { id: 'pantry', name: '食料庫', run: s => {
+      if (!s.flags.b_hatch || s.flags.b_key) return { text: '赤メイドが整理した食料庫。几帳面に並んでいる。' };
+      if (fatherHome(s)) return { text: '奥の釘には何も掛かっていない。旦那様が家にいる日は、鍵束を持ち歩いているのだろう。' };
+      setFlag(s, 'b_key');
+      return { text: '食料庫の奥の釘に、古い鍵が一本だけ掛かっていた。札には「セラー」。旦那様は出かけるとき、ここに置いていくらしい。', clue: true };
+    } },
   ],
   kback: [
     { id: 'breaker', name: '配電盤', run: s => {
@@ -27,8 +34,19 @@ export const SPOTS = {
   archive: [
     { id: 'blueprint', name: '古い図面棚', run: s => {
       if (ch(s) < 1) return { text: '図面棚には古い書類が詰まっている。今は手を付ける理由がない。' };
-      setFlag(s, 'h_blueprint');
-      return { text: '屋敷の古い設計図を見つけた。2階、書斎の奥に用途の書かれていない空間がある……。', clue: true };
+      if (!s.flags.h_blueprint) {
+        setFlag(s, 'h_blueprint');
+        return { text: '屋敷の古い設計図を見つけた。2階、書斎の奥に用途の書かれていない空間がある……。', clue: true };
+      }
+      if (s.flags.b_plan) return { text: '設計図の1階、資料室の床下に描かれた階段の記号。……地下がある。' };
+      setFlag(s, 'b_plan');
+      return { text: 'もう一度設計図を見直すと、1階の資料室の床下に、小さく階段の記号が描かれていた。地下……？', clue: true };
+    } },
+    { id: 'floor', name: '床の敷物', run: s => {
+      if (s.flags.b_hatch) return { text: '敷物の下に、床の扉がある。' };
+      if (ch(s) < 2 || hints(s) < 2) return { text: hints(s) ? '古い敷物。踏むと、下の床が少しだけ響く気がする。' : '古い敷物。端がすり切れている。' };
+      setFlag(s, 'b_hatch');
+      return { text: '敷物をめくると、床に四角い扉が埋め込まれていた。真鍮の鍵穴がある。……設計図の階段は、ここだ。', clue: true };
     } },
   ],
   laundry: [
@@ -39,11 +57,25 @@ export const SPOTS = {
   ],
   garden: [
     { id: 'path', name: '裏口への小道', run: () => ({ text: '裏庭から倉庫へ抜ける小道。屋敷の窓からは死角になっている。' }) },
+    { id: 'well', name: '古井戸', run: s => {
+      if (s.flags.b_grate) return { text: '古井戸の底の横穴は、地下の搬入路につながっている。鉄格子はもう外してある。' };
+      if (ch(s) < 1) return { text: '今は使われていない古井戸。覗き込むと、ひんやりとした風が上がってくる。' };
+      setFlag(s, 'b_well');
+      return { text: '覗き込むと、底の方から冷たい風が上がってくる。井戸の底に横穴……？ 地下に空洞があるのかもしれない。', clue: true };
+    } },
   ],
   storage: [
     { id: 'slips', name: '古い伝票の束', run: s => {
       setFlag(s, 'c_import');
       return { text: '20年前の運送伝票。差出人不明、品名は「額装品」。宛先はこの屋敷、受取人は旦那様だ。', clue: true };
+    } },
+    { id: 'flashlight', name: '工具棚', run: s => {
+      if (ch(s) < 1) return { text: '庭師さんの工具棚。よく手入れされている。' };
+      const got = [];
+      if (setFlag(s, 'b_light')) got.push('懐中電灯');
+      if (ch(s) >= 2 && setFlag(s, 'b_tool')) got.push('バール');
+      if (!got.length) return { text: '工具棚。必要な物は、もう借りてある。' };
+      return { text: `工具棚から${got.join('と')}をこっそり借りた。`, clue: true };
     } },
     { id: 'ladder', name: '庭師の梯子', run: s => {
       setFlag(s, 'ladder');
@@ -81,6 +113,43 @@ export const SPOTS = {
     { id: 'painting', name: '布の掛かった額', run: s => {
       setFlag(s, 'found_painting');
       return { text: '布をめくると、月明かりの庭が現れた。「月下の庭」——母と見た、あの絵だ。額縁には警報センサーの線が繋がっている。触れれば警報が鳴るだろう。', clue: true };
+    } },
+  ],
+  // ---- 地下（ワイン貯蔵庫と、奥の保管庫・搬入路） ----
+  cellar: [
+    { id: 'rack', name: 'ワイン棚', run: s => {
+      if (s.flags.b_vault) return { text: '奥への隠し扉になっているワイン棚。押せば、静かに動く。' };
+      s.counters.rack = (s.counters.rack || 0) + 1;
+      if (s.counters.rack < 2) return { text: '年代物のワインがぎっしり並んでいる。……床に、棚を引きずったような弧の跡がある。（調査 1/2）' };
+      setFlag(s, 'b_vault');
+      return { text: '一つだけ、床に擦れた跡のある棚を押すと、棚ごと奥へ動いた。冷たい空気が流れ出してくる。隠し扉だ。', clue: true };
+    } },
+    { id: 'barrel', name: '樽', run: () => ({ text: '古い樽がいくつも並んでいる。……どれも空だ。ワインのための部屋にしては、手入れが雑すぎる。' }) },
+  ],
+  vault: [
+    { id: 'frames', name: '布を掛けた額縁', run: s => {
+      setFlag(s, 'b_frames');
+      return { text: '布をめくると、どれも見覚えのある構図だった。美術館の盗難のニュースで見た絵ばかりだ。……この一枚一枚にも、誰かの思い出があったのかもしれない。', clue: true };
+    } },
+    { id: 'ledger', name: '仕入れ帳', run: s => {
+      if (s.flags.b_ledger) return { text: '仕入れ帳。必要なページは、もう写真に収めてある。' };
+      setFlag(s, 'b_ledger');
+      return { text: '革の帳面に、符丁で書かれた絵の名前、金額、仲介人の頭文字が並ぶ。最初のページに「月の庭」――20年前の日付だ。要所を写真に収めた。', clue: true };
+    } },
+    { id: 'letters', name: '手紙の束', run: s => {
+      setFlag(s, 'b_letter');
+      return { text: 'オークション会社からの手紙。「年明けの出品は、来歴を整えた上で」。盗品の出所を、書類ごとすり替えるつもりだ。', clue: true };
+    } },
+    { id: 'slip', name: '発送伝票', run: s => {
+      setFlag(s, 'b_slip');
+      return { text: '12月25日付の発送伝票。「月下の庭」の名前の下に、この部屋の絵がすべて書き連ねてある。全部まとめて、海の向こうへ消すつもりだ。', clue: true };
+    } },
+    { id: 'grate', name: '搬入路の鉄格子', run: s => {
+      if (s.flags.b_grate) return { text: '鉄格子のボルトは外してある。古井戸から出入りできる。' };
+      setFlag(s, 'b_tunnel');
+      if (!s.flags.b_tool) return { text: '細い搬入路の先に、錆びた鉄格子。その向こうに古井戸の底が見える。……ボルトを外す道具があれば。', clue: true };
+      setFlag(s, 'b_grate');
+      return { text: 'バールで錆びたボルトを外した。鉄格子は、押せば開く。古井戸から地下へ、誰にも見られずに出入りできる。', clue: true };
     } },
   ],
   balcony: [
@@ -129,6 +198,8 @@ export const TALKS = {
       line: '「……夜中、旦那様が書斎で電話してた。『あの絵は年明けに海外で』って。……それだけ」' },
     { if: s => s.aff.red >= 40 && !s.flags.ladder, flag: 'ladder',
       line: '「……倉庫に庭師さんの梯子。2階のバルコニーまで届く。危ないから、使っちゃだめって言われてる」' },
+    { if: s => s.aff.red >= 45 && ch(s) >= 1 && !s.flags.b_wine, flag: 'b_wine',
+      line: '「……旦那様、ワインを取りに行くと、いつもなかなか戻ってこない。……セラー、どこにあるのか知らない」' },
     { if: s => s.aff.red >= 70, line: '「……執事さんが何をしてても、私は見てないことにする」' },
     { line: '「……（ぼーっとしている）……あ、お昼もうできてます」' },
   ],
@@ -148,6 +219,8 @@ export const TALKS = {
   white: [
     { if: s => s.aff.white >= 40 && !s.flags.white_elec, flag: 'white_elec',
       line: '「この屋敷、警報だけ独立した系統なんですよ。大学で電気工学をやってたので、配線を見れば分かります」' },
+    { if: s => s.aff.white >= 45 && ch(s) >= 1 && s.flags.white_elec && !s.flags.b_circuit, flag: 'b_circuit',
+      line: '「そういえば配電盤に、どこにもつながっていない系統があるんですよ。屋敷のどこかに、誰も知らない部屋の電灯がある計算になります」' },
     { if: s => s.aff.white >= 70, line: '「執事さんの頼みなら、多少のことは聞きますよ。理由は聞きません」' },
     { line: '「担当分、全部片付けておきました。他に何かあります？」' },
   ],
