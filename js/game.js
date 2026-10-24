@@ -9,6 +9,7 @@ import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ARRIVAL } from './story.js';
 import { hasNight, nightOptions, nightScene } from './night.js';
 import { morningEvents, joined } from './sister.js';
 import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profiles.js';
+import { faceOf } from './faces.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -71,11 +72,13 @@ export function title() {
 }
 
 function startNew() {
+  loadPortrait();
   s = newState();
   playScript(PROLOGUE, () => chapterIntro());
 }
 
 function resume(saved) {
+  loadPortrait();
   s = saved;
   if (s.phase === 'weekend') startWeekend();
   else startWeekday();
@@ -87,7 +90,7 @@ function playScript(steps, done) {
   const next = () => {
     if (!queue.length) return done();
     const st = queue.shift();
-    if (Array.isArray(st)) return showLine(st[0], st[1], next);
+    if (Array.isArray(st)) return showLine(st[0], st[1], next, st[2]);
     if (st.fx) { const notes = applyFx(s, typeof st.fx === 'function' ? st.fx(s) : st.fx); if (notes.length) toast(notes.join('／')); return next(); }
     if (st.call) { st.call(s); return next(); }
     if (st.if) { queue.unshift(...((st.if(s) ? st.then : st.else) || [])); return next(); }
@@ -103,17 +106,37 @@ function playScript(steps, done) {
   next();
 }
 
-function stage(who, content) {
+// 会話の顔：3D が使えて VRM を表示する設定なら、話し手の VRM を胸から上で映す（台詞に合わせて表情を変える）
+let portrait = null;
+const VRM_OF = { shizuku: 'black' };
+const CAST_IDS = ['butler', 'father', 'mother', 'daughter', 'red', 'blue', 'white', 'black', 'guard'];
+function vrmOn() {
+  if (!can3D() || new URLSearchParams(location.search).has('lowpoly')) return false;
+  try { return localStorage.getItem('oyashiki-vrm') !== 'off'; } catch (e) { return true; }
+}
+function loadPortrait() {
+  if (portrait || !vrmOn()) return;
+  portrait = import('../explore/portrait.js').then(m => (portrait = m)).catch(e => { console.warn(e); portrait = null; });
+}
+function portraitFor(who, text, face) {
+  const id = VRM_OF[who] || who;
+  if (!portrait || portrait instanceof Promise || !vrmOn() || !CAST_IDS.includes(id)) return null;
+  portrait.showPortrait(id, faceOf(text, face, who), /^（/.test(text) ? 0 : text.length);   // 心の声（…）では口を動かさない
+  return portrait.portraitCanvas();
+}
+
+function stage(who, content, text = '', face) {
   const p = PEOPLE[who];
+  const vrm = p ? portraitFor(who, text, face) : null;
   return el('div', { class: 'stage' },
     s && s.phase !== 'prologue' ? statusBar() : null,
-    el('div', { class: 'scene' },
-      p ? el('div', { class: 'portrait', style: `--c:${p.color}` }, p.name.slice(0, 1)) : null),
+    el('div', { class: `scene ${vrm ? 'has-vrm' : ''}` },
+      p ? el('div', { class: 'portrait', style: `--c:${p.color}` }, p.name.slice(0, 1)) : null, vrm),
     el('div', { class: 'textbox' }, p ? el('div', { class: 'speaker', style: `--c:${p.color}` }, p.name) : null, content));
 }
 
-function showLine(who, text, next) {
-  const box = stage(who === 'n' ? null : who, el('p', { class: who === 'n' ? 'narr' : '' }, text, el('span', { class: 'cursor' }, '▼')));
+function showLine(who, text, next, face) {
+  const box = stage(who === 'n' ? null : who, el('p', { class: who === 'n' ? 'narr' : '' }, text, el('span', { class: 'cursor' }, '▼')), text, face);
   box.addEventListener('click', next, { once: true });
   render(box);
 }
@@ -579,13 +602,14 @@ function settingsTab(back) {
     el('div', { class: 'row' },
       el('button', { class: vrmOn ? 'on' : 'ghost', onclick: () => setVRM(true) }, '3Dモデル（VRM）'),
       el('button', { class: vrmOn ? 'ghost' : 'on', onclick: () => setVRM(false) }, '簡易モデル（軽い）')),
-    el('p', { class: 'hint' }, '動きが重いときは「簡易モデル」にすると軽くなる。人物照会の3D表示は、どちらでも使える。'),
+    el('p', { class: 'hint' }, '動きが重いときは「簡易モデル」にすると軽くなる（会話の顔も簡易表示になる）。人物照会の3D表示は、どちらでも使える。'),
     el('h4', {}, 'ゲーム'),
     el('button', { class: 'ghost', onclick: () => { back.remove(); if (confirm('タイトルに戻りますか？（その日の朝からやり直しになります）')) title(); } }, 'タイトルへ戻る'),
   ];
   function setVRM(on) {
     try { localStorage.setItem('oyashiki-vrm', on ? 'on' : 'off'); } catch (e) { /* noop */ }
     if (day3d) day3d.refreshCast();
+    if (on) loadPortrait();
     back.remove(); openNotebook('settings');
   }
 }
@@ -596,7 +620,7 @@ async function openPerson(id) {
   const canvas = el('canvas', { class: 'vcanvas' });
   const status = el('div', { class: 'vstatus' }, '読み込み中…');
   const aff = s.aff[id] != null && !(id === 'black' && joined(s));
-  const faceBtns = el('div', { class: 'vbtns' }), poseBtns = el('div', { class: 'vbtns' });
+  const faceBtns = el('div', { class: 'vbtns' }), poseBtns = el('div', { class: 'vbtns' }), turnRow = el('div', { class: 'vturn' });
   const info = el('div', { class: 'vinfo' },
     el('h3', {}, pr.name, pr.age ? el('small', {}, `　${pr.age}`) : null),
     el('p', {}, pr.text),
@@ -607,16 +631,25 @@ async function openPerson(id) {
   const close = () => { viewer && viewer.close(); root.remove(); if (day3d) day3d.resume(); openNotebook('people'); };
   const root = el('div', { class: 'viewer' },
     el('div', { class: 'vstage' }, canvas, status,
-      el('div', { class: 'vhelp' }, '1本指で回す／2本指でズーム／ダブルタップで元に戻す'),
+      el('div', { class: 'vhelp' }, '1本指で左右に回す／2本指でズーム／ダブルタップで元に戻す'),
       el('button', { class: 'vclose', onclick: close }, '×')),
-    el('div', { class: 'vpanel' }, faceBtns, poseBtns, info));
+    el('div', { class: 'vpanel' }, turnRow, faceBtns, poseBtns, info));
   document.body.append(root);
   if (!can3D()) { canvas.remove(); status.textContent = 'この端末では3D表示が使えない。'; return; }
   if (day3d) day3d.suspend();
   try {
     const { openViewer, FACES, POSES } = await import('../explore/viewer.js');
     if (!root.isConnected) return;
+    // 向き：スライダーで0〜360度、ボタンで正面・右・背面・左
+    let sliding = false;
+    const slider = el('input', { type: 'range', min: '0', max: '359', value: '0', 'aria-label': '向き' });
+    slider.addEventListener('pointerdown', () => { sliding = true; });
+    slider.addEventListener('pointerup', () => { sliding = false; });
+    slider.addEventListener('input', () => viewer && viewer.setAngle(+slider.value));
+    turnRow.append(el('span', {}, '向き'), slider,
+      ...[['正面', 0], ['右', 270], ['背面', 180], ['左', 90]].map(([label, deg]) => el('button', { class: 'ghost', onclick: () => viewer.setAngle(deg, true) }, label)));
     viewer = openViewer(canvas, id, {
+      onAngle: deg => { if (!sliding) slider.value = String(Math.round(deg) % 360); },
       onProgress: r => { status.textContent = `読み込み中… ${Math.round(r * 100)}%`; },
       onReady: () => status.remove(),
       onError: () => { status.textContent = '3Dモデルを読み込めなかった。'; },
@@ -628,8 +661,7 @@ async function openPerson(id) {
       box.append(...btns, ...(extra || []));
     };
     group(faceBtns, FACES, f => viewer.setFace(f));
-    const auto = el('button', { class: 'on', onclick: () => { viewer.setAuto(!viewer.auto); auto.className = viewer.auto ? 'on' : 'ghost'; } }, '自動回転');
-    group(poseBtns, POSES, p => viewer.setPose(p), [auto]);
+    group(poseBtns, POSES, p => viewer.setPose(p));
   } catch (e) {
     console.error(e);
     status.textContent = '3D表示を開けなかった。';

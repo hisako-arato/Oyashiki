@@ -34,6 +34,7 @@ let startY = 0;
 document.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
 document.addEventListener('touchmove', e => {
   if (e.touches.length > 1) return e.preventDefault();
+  if (isEditable(e.target)) return;   // スライダーなどの入力部品は、指で動かせるようにする
   const dy = e.touches[0].clientY - startY;
   const sc = scroller(e.target);
   if (!sc) return e.preventDefault();

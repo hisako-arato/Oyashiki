@@ -51,3 +51,7 @@
 /* 決行の夜は、心象・疑惑のメーターを出さない */
 #day3d.night .meters { display: none; }
 #day3d.night .hud { border-color: #6a7aa8; }
+/* 会話の顔（VRM）：メッセージ欄の左に、胸から上を映す */
+#day3d .msg3d.with-face { padding-left: 116px; min-height: 96px; }
+#day3d .msg3d .vportrait { position: absolute; left: 0; bottom: 0; width: 112px; height: 150px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#day3d .msg3d .vportrait.ready { opacity: 1; }

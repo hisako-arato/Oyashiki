@@ -12,10 +12,11 @@ loader.register(p => new VRMLoaderPlugin(p));
 const cache = new Map();
 
 // 同じ人物の VRM は一度だけ読み込む。onProgress(0〜1)
-export function loadVRM(id, kind = 'lite', onProgress) {
-  const key = `${kind}/${id}`;
+// slot：同じファイルを別の場面（会話の顔など）で同時に使うときの、別の複製の名前
+export function loadVRM(id, kind = 'lite', onProgress, slot = '') {
+  const key = `${kind}/${id}${slot ? '#' + slot : ''}`;
   if (!cache.has(key)) {
-    const url = new URL(`../assets/vrm/${key}.vrm`, import.meta.url).href;
+    const url = new URL(`../assets/vrm/${kind}/${id}.vrm`, import.meta.url).href;
     cache.set(key, loader.loadAsync(url, e => onProgress && e.total && onProgress(e.loaded / e.total)).then(g => {
       const vrm = g.userData.vrm;
       VRMUtils.removeUnnecessaryVertices(g.scene);
@@ -30,8 +31,8 @@ export function loadVRM(id, kind = 'lite', onProgress) {
   return cache.get(key);
 }
 // 人物照会では使い終わったら捨てる（屋敷の中の lite は残す）
-export function disposeVRM(id, kind) {
-  const key = `${kind}/${id}`;
+export function disposeVRM(id, kind, slot = '') {
+  const key = `${kind}/${id}${slot ? '#' + slot : ''}`;
   const p = cache.get(key);
   if (!p) return;
   cache.delete(key);
@@ -91,6 +92,8 @@ export function driveVRM(vrm, moving, dt, extra = {}) {
       em.setValue(k, now); busy = Math.max(busy, now);
     }
     em.setValue('blink', b * (1 - busy));
+    // 話している間は口を動かす（extra.talk：0〜1）
+    if (extra.talk != null) em.setValue('aa', extra.talk * (0.25 + 0.5 * Math.abs(Math.sin(m.t * 13))) * (1 - busy * 0.5));
   }
   vrm.update(dt);
 }

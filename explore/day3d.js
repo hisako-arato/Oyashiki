@@ -4,6 +4,7 @@ import { THREE, renderer, scene, camera, CAM_OFFSET, hemi, sun, makeChar, animat
 import { buildArea, AREA_INFO, HOUSE, LOOKS, WORK } from './world.js';
 import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, END_HOUR, MAIDS } from '../js/data.js';
+import { faceOf } from '../js/faces.js';
 import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
@@ -35,9 +36,24 @@ player.g.add(lantern);
 const msgEl = $('msg3d');
 let msgQueue = [], afterMsg = null, actLock = 0;
 function say(...lines) { msgQueue = lines.filter(Boolean); nextMsg(); }
+// 台詞の話し手（表示名 → 人物）。会話の顔を映し、屋敷の中の VRM の表情も変える
+const SPEAKER = { '執事': 'butler', '雫': 'black', ...Object.fromEntries(Object.entries(LOOKS).map(([id, l]) => [l.name, id])) };
+let portrait = null, faced = null;
+function speakerOf(l) {
+  if (Array.isArray(l)) return [SPEAKER[l[0]], l[1], l[2]];
+  const m = typeof l === 'string' && l.match(/^([^「（]+)([「（].*)$/s);
+  return m && SPEAKER[m[1]] ? [SPEAKER[m[1]], m[2]] : [null, ''];
+}
+function setFace(id, face) {
+  if (faced && faced.vrm) faced.vrm.motion.face = Object.fromEntries(Object.keys(faced.vrm.motion.face).map(k => [k, 0]));
+  faced = id ? (id === 'butler' ? player : people[id]) : null;
+  if (faced && faced.vrm && face !== 'neutral') faced.vrm.motion.face = { [face]: 1 };
+}
 function nextMsg() {
   const l = msgQueue.shift();
   if (!l) {
+    setFace(null);
+    msgEl.classList.remove('with-face');
     msgEl.classList.add('hidden'); st.busy = false;
     actLock = performance.now() + 500;
     if (afterMsg) { const f = afterMsg; afterMsg = null; f(); }
@@ -47,6 +63,12 @@ function nextMsg() {
   msgEl.replaceChildren();
   if (Array.isArray(l)) { const b = document.createElement('b'); b.textContent = l[0]; msgEl.append(b, l[1]); }
   else msgEl.append(l);
+  const [who, text, override] = speakerOf(l);
+  // 二人きりの雫（「お兄ちゃん」と呼ぶとき）は、雫としての顔にする
+  const face = who ? faceOf(text, override, who === 'black' && /お兄ちゃん/.test(text) ? 'shizuku' : who) : 'neutral';
+  setFace(who, face);
+  msgEl.classList.toggle('with-face', !!(who && portrait && useVRM()));
+  if (who && portrait && useVRM()) { portrait.showPortrait(who, face, /^（/.test(text) ? 0 : text.length); msgEl.prepend(portrait.portraitCanvas()); }
   msgEl.classList.remove('hidden');
 }
 msgEl.addEventListener('click', nextMsg);
@@ -943,6 +965,7 @@ function prepare(state, h) {
     makePeople();
   }
   syncCast();
+  if (!portrait && useVRM()) import('./portrait.js').then(m => { portrait = m; }).catch(() => {});
   for (const p of Object.values(people)) { p.key = undefined; p.route = null; p.nightRole = null; p.range = VIEW_RANGE; }
   syncSecret();
   syncDeco();

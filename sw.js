@@ -1,11 +1,11 @@
 // オフラインでも遊べるよう、ゲームのファイルをキャッシュする
-const CACHE = 'oyashiki-v13';
+const CACHE = 'oyashiki-v14';
 // VRM は大きいので、版を上げても消さない別のキャッシュに置き、キャッシュを優先して使う
 const VRM_CACHE = 'oyashiki-vrm-v1';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css', 'css/day3d.css',
-  'js/main.js', 'js/lockdown.js', 'js/game.js', 'js/daylogic.js', 'js/night.js', 'js/sister.js', 'js/profiles.js', 'js/state.js', 'js/data.js', 'js/actions.js', 'js/story.js',
-  'explore/day3d.js', 'explore/engine.js', 'explore/world.js', 'explore/nav.js', 'explore/vrm.js', 'explore/viewer.js',
+  'js/main.js', 'js/lockdown.js', 'js/game.js', 'js/daylogic.js', 'js/night.js', 'js/sister.js', 'js/profiles.js', 'js/faces.js', 'js/state.js', 'js/data.js', 'js/actions.js', 'js/story.js',
+  'explore/day3d.js', 'explore/engine.js', 'explore/world.js', 'explore/nav.js', 'explore/vrm.js', 'explore/viewer.js', 'explore/portrait.js',
   'vendor/three.module.min.js', 'vendor/GLTFLoader.js', 'vendor/BufferGeometryUtils.js', 'vendor/three-vrm.module.min.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-512-maskable.png',
 ];
