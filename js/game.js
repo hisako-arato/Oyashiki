@@ -8,6 +8,7 @@ import * as DL from './daylogic.js';
 import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ARRIVAL } from './story.js';
 import { hasNight, nightOptions, nightScene } from './night.js';
 import { morningEvents, joined } from './sister.js';
+import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profiles.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -40,7 +41,7 @@ function statusBar() {
   return el('header', { class: 'status' },
     el('div', { class: 'date' }, dateLabel(s) + hour),
     meter('心象', s.trust, 'trust'), meter('疑惑', s.susp, 'susp'),
-    el('button', { class: 'ghost', onclick: openNotebook }, '手帳'));
+    el('button', { class: 'ghost', onclick: () => openNotebook() }, 'メニュー'));
 }
 function modal(...content) {
   const back = el('div', { class: 'modal-back' });
@@ -520,9 +521,20 @@ function ending(id) {
   });
 }
 
-// ---- 手帳 ----
-function openNotebook() {
+// ---- メニュー（手帳・人物・ストーリー・設定） ----
+const MENU_TABS = [['note', '手帳'], ['people', '人物'], ['story', 'ストーリー'], ['settings', '設定']];
+function openNotebook(tab = 'note') {
   if (!s) return;
+  document.querySelector('.modal-back.game-menu')?.remove();
+  const body = el('div', { class: 'menu-body' });
+  const tabs = el('div', { class: 'tabs' }, MENU_TABS.map(([id, label]) =>
+    el('button', { class: id === tab ? 'on' : 'ghost', onclick: () => { back.remove(); openNotebook(id); } }, label)));
+  const back = modal(tabs, body, el('div', { class: 'row' }, el('button', { onclick: () => back.remove() }, '閉じる')));
+  back.classList.add('game-menu');
+  body.append(...({ note: noteTab, people: peopleTab, story: storyTab, settings: settingsTab })[tab](back));
+}
+
+function noteTab() {
   const got = Object.entries(CLUES).filter(([k]) => s.flags[k]);
   const goals = [
     !s.flags.hidden_room && '屋敷の構造を調べ、絵の隠し場所を突き止める',
@@ -532,15 +544,96 @@ function openNotebook() {
     s.chapter >= 3 && s.flags.ladder && !s.flags.balcony_open && '昼のうちに、バルコニーのガラス戸の鍵を外しておく',
     s.flags.found_painting && !s.flags.white_ally && '絵の警報をどうにかする方法が要る',
   ].filter(Boolean);
-  const back = modal(
-    el('h3', {}, '手帳'),
+  return [
     goals.length ? el('div', {}, el('h4', {}, 'いまの目標'), el('ul', {}, goals.map(g => el('li', {}, g)))) : null,
     el('h4', {}, '手がかり'),
     got.length ? el('ul', { class: 'clues' }, got.map(([, c]) => el('li', {}, c.text))) : el('p', {}, 'まだ何もない。'),
-    el('h4', {}, '人物'), affList(),
+    el('h4', {}, '好感度'), affList(),
+  ];
+}
+
+function peopleTab(back) {
+  return [
+    el('p', { class: 'hint' }, can3D() ? 'タップすると、その人物を3Dで眺められる。' : '人物の情報（この端末では3D表示は使えない）。'),
+    el('div', { class: 'people' }, PROFILES.map(p => {
+      if (!p.shown(s)) return el('button', { class: 'person ghost', disabled: true }, el('b', {}, '？？？'), el('small', {}, 'まだ会っていない'));
+      const pr = profileOf(p, s);
+      return el('button', { class: 'person', style: `--c:${PEOPLE[p.id].color}`, onclick: () => { back.remove(); openPerson(p.id); } },
+        el('b', {}, pr.name), el('small', {}, pr.age || '　'));
+    })),
+  ];
+}
+
+function storyTab() {
+  return [
+    el('p', { class: 'hint' }, `${dateLabel(s)}（${chapterProgress(s)}）`),
+    ...STORY.filter(e => e.from(s)).map(e => el('section', { class: 'story' }, el('h4', {}, e.title), el('p', {}, storyText(e, s)))),
+  ];
+}
+
+function settingsTab(back) {
+  let vrmOn = true;
+  try { vrmOn = localStorage.getItem('oyashiki-vrm') !== 'off'; } catch (e) { /* noop */ }
+  return [
+    el('h4', {}, '屋敷の中のキャラクター'),
     el('div', { class: 'row' },
-      el('button', { onclick: () => back.remove() }, '閉じる'),
-      el('button', { class: 'ghost', onclick: () => { back.remove(); if (confirm('タイトルに戻りますか？（その日の朝からやり直しになります）')) title(); } }, 'タイトルへ')));
+      el('button', { class: vrmOn ? 'on' : 'ghost', onclick: () => setVRM(true) }, '3Dモデル（VRM）'),
+      el('button', { class: vrmOn ? 'ghost' : 'on', onclick: () => setVRM(false) }, '簡易モデル（軽い）')),
+    el('p', { class: 'hint' }, '動きが重いときは「簡易モデル」にすると軽くなる。人物照会の3D表示は、どちらでも使える。'),
+    el('h4', {}, 'ゲーム'),
+    el('button', { class: 'ghost', onclick: () => { back.remove(); if (confirm('タイトルに戻りますか？（その日の朝からやり直しになります）')) title(); } }, 'タイトルへ戻る'),
+  ];
+  function setVRM(on) {
+    try { localStorage.setItem('oyashiki-vrm', on ? 'on' : 'off'); } catch (e) { /* noop */ }
+    if (day3d) day3d.refreshCast();
+    back.remove(); openNotebook('settings');
+  }
+}
+
+// 人物照会：VRM を回したりズームしたりして眺める
+async function openPerson(id) {
+  const pr = profileOf(PROFILES.find(p => p.id === id), s);
+  const canvas = el('canvas', { class: 'vcanvas' });
+  const status = el('div', { class: 'vstatus' }, '読み込み中…');
+  const aff = s.aff[id] != null && !(id === 'black' && joined(s));
+  const faceBtns = el('div', { class: 'vbtns' }), poseBtns = el('div', { class: 'vbtns' });
+  const info = el('div', { class: 'vinfo' },
+    el('h3', {}, pr.name, pr.age ? el('small', {}, `　${pr.age}`) : null),
+    el('p', {}, pr.text),
+    aff ? el('div', { class: 'aff' }, badge(id), el('div', { class: 'bar' }, el('i', { style: `width:${s.aff[id]}%;background:${PEOPLE[id].color}` })),
+      el('b', {}, String(s.aff[id])), isAlly(s, id) ? el('small', { class: 'ally' }, '協力者') : null) : null,
+    pr.notes.length ? el('ul', { class: 'clues' }, pr.notes.map(n => el('li', {}, n))) : null);
+  let viewer = null;
+  const close = () => { viewer && viewer.close(); root.remove(); if (day3d) day3d.resume(); openNotebook('people'); };
+  const root = el('div', { class: 'viewer' },
+    el('div', { class: 'vstage' }, canvas, status,
+      el('div', { class: 'vhelp' }, '1本指で回す／2本指でズーム／ダブルタップで元に戻す'),
+      el('button', { class: 'vclose', onclick: close }, '×')),
+    el('div', { class: 'vpanel' }, faceBtns, poseBtns, info));
+  document.body.append(root);
+  if (!can3D()) { canvas.remove(); status.textContent = 'この端末では3D表示が使えない。'; return; }
+  if (day3d) day3d.suspend();
+  try {
+    const { openViewer, FACES, POSES } = await import('../explore/viewer.js');
+    if (!root.isConnected) return;
+    viewer = openViewer(canvas, id, {
+      onProgress: r => { status.textContent = `読み込み中… ${Math.round(r * 100)}%`; },
+      onReady: () => status.remove(),
+      onError: () => { status.textContent = '3Dモデルを読み込めなかった。'; },
+    });
+    const group = (box, list, set, extra) => {
+      const btns = list.map(([k, label], i) => el('button', { class: i ? 'ghost' : 'on', onclick: e => {
+        set(k); btns.forEach(b => b.className = b === e.currentTarget ? 'on' : 'ghost');
+      } }, label));
+      box.append(...btns, ...(extra || []));
+    };
+    group(faceBtns, FACES, f => viewer.setFace(f));
+    const auto = el('button', { class: 'on', onclick: () => { viewer.setAuto(!viewer.auto); auto.className = viewer.auto ? 'on' : 'ghost'; } }, '自動回転');
+    group(poseBtns, POSES, p => viewer.setPose(p), [auto]);
+  } catch (e) {
+    console.error(e);
+    status.textContent = '3D表示を開けなかった。';
+  }
 }
 
 // テスト用に状態を覗けるようにする

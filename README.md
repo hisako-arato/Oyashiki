@@ -54,17 +54,45 @@ GitHub Pages などの静的ホスティングにそのまま置ける。
 - 調べる・話すと20分進む。人に見られながら調べたり、私室で見つかったりすると疑惑が上がる
 - 移動：矢印キー / WASD（スマホは左下のスティック）、調べる・話す・仕事：スペース / E（スマホは右下のボタン）
 - 3D描画が使えない端末や、URLに `?2d` を付けたときは、ボタン式の画面で遊べる
-- 3D描画に [Three.js](https://threejs.org/)（MIT License）を `vendor/` に同梱している
+- 3D描画に [Three.js](https://threejs.org/)、VRM の読み込みに [three-vrm](https://github.com/pixiv/three-vrm)（どちらも MIT License）を `vendor/` に同梱している
+- 人物は VRM で表示する（読み込みが終わるまでは簡易モデル）。メニューの「設定」で簡易モデルに戻せる。URLに `?lowpoly` を付けても簡易モデルになる
 
 | ファイル | 内容 |
 |---|---|
 | `explore/day3d.js` | 執事パートと決行の夜の3D画面（操作・時間・人物の動き・視線・仕事・調査・会話・チュートリアル） |
 | `explore/nav.js` | 人物の道順（歩ける場所の網目と A*、エリアをまたぐ道順） |
 | `explore/world.js` | 間取り・家具・調べられる場所・仕事の場所（間取りを変えるときはここ） |
-| `explore/engine.js` | 描画の土台・素材・人物モデル |
+| `explore/engine.js` | 描画の土台・素材・人物の簡易モデル |
+| `explore/vrm.js` | VRM の読み込みと動き（歩く・まばたき・お辞儀・手を振る・表情） |
+| `explore/viewer.js` | 人物照会の3Dビューア（回転・ズーム・表情・ポーズ） |
 | `js/daylogic.js` | 仕事・調査・会話の処理（3Dとボタン式の両方で使う） |
 
 間取りは `world.js` の `rooms`（部屋の矩形）と `doors`（開口部）から、壁・扉・床を自動で組み立てる。
+
+## メニュー
+
+画面右上の「メニュー」から開く。
+- **手帳**：いまの目標・手がかり・好感度
+- **人物**：登場人物の紹介と、物語で分かったこと。タップすると VRM を3Dで眺められる（1本指で360度回転・離すと惰性で回る／2本指でつまんでズーム・寄ると顔へ／2本指で上下になぞると見る高さが変わる／ダブルタップで元に戻す／触らずにいると自動で回る／表情とポーズの切り替え）。物語で明かされるまでは伏せる
+- **ストーリー**：たどり着いた章までのあらすじ
+- **設定**：屋敷の中のキャラクター（VRM／簡易モデル）、タイトルへ戻る
+
+## VRM（キャラクターの3Dモデル）
+
+| フォルダ | 内容 |
+|---|---|
+| `assets/vrm/*.vrm` | 元のファイル（VRoid Studio で作成。ゲームでは読み込まない） |
+| `assets/vrm/view/` | 人物照会用（テクスチャ1024px、表情に使わない顔のモーフを除去）。約6〜8MB |
+| `assets/vrm/lite/` | 屋敷の中用（テクスチャ512px、モーフの法線も除去）。約4MB |
+
+元のファイルを差し替えたら、次のコマンドで作り直す（要 Python と Pillow）。
+```
+for id in butler father mother daughter red blue white black guard; do
+  python3 tools/vrm_lite.py assets/vrm/$id.vrm assets/vrm/view/$id.vrm --tex 1024
+  python3 tools/vrm_lite.py assets/vrm/$id.vrm assets/vrm/lite/$id.vrm --tex 512 --no-morph-normals
+done
+```
+VRM は、一度読み込むとオフライン用に端末へ保存する。作り直したときは `sw.js` の `VRM_CACHE` の名前を変えると、新しいファイルが読み込まれる。
 
 ## ファイル構成
 
@@ -76,6 +104,7 @@ GitHub Pages などの静的ホスティングにそのまま置ける。
 | `js/actions.js` | 調査ポイントと会話 |
 | `js/night.js` | 平日の夜（密談・部屋への訪問）の場面 |
 | `js/sister.js` | 妹・雫の仕組み（噂・打ち明け・嫉妬・昼の会話） |
+| `js/profiles.js` | 人物照会の紹介文と、ストーリーのあらすじ |
 | `js/state.js` | ゲーム状態・セーブ・1日の予定の計算 |
 | `js/game.js` | 進行と画面描画 |
 | `css/style.css` | 見た目 |

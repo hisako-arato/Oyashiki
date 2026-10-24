@@ -170,6 +170,7 @@ export function makeChar(parent, { outfit, hair, maid, dress, longHair, apron = 
   return { g, body, legs, walk: 0 };
 }
 export function animate(ch, moving, dt) {
+  if (ch.drive) return ch.drive(moving, dt);   // VRM に差し替え済み（explore/vrm.js）
   ch.walk = moving ? ch.walk + dt * 10 : 0;
   const s = Math.sin(ch.walk);
   ch.legs[0].rotation.x = s * 0.6;

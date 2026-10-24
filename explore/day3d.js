@@ -154,6 +154,33 @@ function makePeople() {
     people[id] = { id, name: LOOKS[id].name, ...ch, cone, coneGeo: geo, coneMat: mat, x: 0, z: 0, area: null, key: undefined, target: null, wait: 0, look: 0, seeing: false, range: VIEW_RANGE };
   }
 }
+// 人物を VRM に差し替える。読み込みが終わった人から順に入れ替わる（それまでは簡易モデル）
+// 設定で「簡易モデル」を選んだときや ?lowpoly のときは使わない
+export const useVRM = () => {
+  if (new URLSearchParams(location.search).has('lowpoly')) return false;
+  try { return localStorage.getItem('oyashiki-vrm') !== 'off'; } catch (e) { return true; }
+};
+let castLoading = null;
+async function syncCast() {
+  const chars = { butler: player, ...people };
+  if (!useVRM()) {
+    if (castLoading) { const V = await import('./vrm.js'); for (const ch of Object.values(chars)) V.detachVRM(ch); }
+    return;
+  }
+  if (castLoading) {   // 一度読み込んだ後に設定で戻したとき
+    const V = await import('./vrm.js');
+    for (const [id, ch] of Object.entries(chars)) if (!ch.vrm) V.loadVRM(id).then(v => V.attachVRM(ch, v)).catch(() => {});
+    return;
+  }
+  castLoading = (async () => {
+    const V = await import('./vrm.js');
+    // 主人公から順に、1人ずつ読み込む（同時に読み込むとスマホのメモリが足りなくなる）
+    for (const id of V.CAST) {
+      if (!chars[id]) continue;
+      try { V.attachVRM(chars[id], await V.loadVRM(id)); } catch (e) { console.warn('VRM', id, e); }
+    }
+  })().catch(e => console.warn('VRM', e));
+}
 function freePoint(a, r) {
   for (let i = 0; i < 40; i++) {
     const x = r.x + 0.8 + Math.random() * (r.w - 1.6), z = r.z + 0.8 + Math.random() * (r.d - 1.6);
@@ -460,7 +487,7 @@ function tutorNext() {
   people.red.key = undefined;   // 自分の持ち場へ戻る
   say(['赤メイド', '「……決まりは以上。あとは、いつもどおり。わたしは持ち場に戻る」'],
     ['赤メイド', '「……夕方になったら、使用人棟のベッドで休んで。お疲れさま」'],
-    '（手帳で、手がかりや好感度をいつでも確認できる）');
+    '（メニューの「手帳」で、手がかりや好感度をいつでも確認できる）');
 }
 function tutorEvent(kind, key, id) {
   if (!st.tut) return;
@@ -915,6 +942,7 @@ function prepare(state, h) {
     for (const id of ['grounds', 'cottage', 'f1', 'f2']) getArea(id);
     makePeople();
   }
+  syncCast();
   for (const p of Object.values(people)) { p.key = undefined; p.route = null; p.nightRole = null; p.range = VIEW_RANGE; }
   syncSecret();
   syncDeco();
@@ -980,6 +1008,12 @@ export function startNight(state, route, h) {
     ['執事', '（夜明けまでに、終わらせる）']);
   run();
 }
+
+// 人物照会を開いている間は、屋敷の時間と描画を止める
+let suspended = false;
+export function suspend() { if (!running) return; running = false; suspended = true; }
+export function resume() { if (suspended) { suspended = false; run(); } }
+export function refreshCast() { if (areas.grounds) syncCast(); }
 
 // テスト用
 window.__day3d = { get state() { return s; }, st, player, people, areas, enter, act, planRoute, ROOM_OF, GATE, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r) };

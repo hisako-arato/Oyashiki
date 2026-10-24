@@ -145,3 +145,31 @@ select, input { font: inherit; background: var(--panel2); color: var(--text); bo
 .nightopts button { text-align: left; }
 .nightopts small { color: var(--muted); margin-left: 6px; }
 .panel.night { background: linear-gradient(#141428, var(--bg) 40%); min-height: 100%; }
+
+/* ---- メニュー（手帳・人物・ストーリー・設定） ---- */
+.tabs { display: flex; gap: 4px; margin-bottom: 8px; position: sticky; top: -16px; background: var(--panel); padding: 4px 0; z-index: 1; }
+.tabs button { flex: 1; padding: 8px 2px; font-size: .85rem; white-space: nowrap; }
+button.on { background: var(--gold); color: var(--bg); border-color: var(--gold); font-weight: bold; }
+.people { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.person { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; border-left: 6px solid var(--c, var(--line)); background: var(--panel2); color: var(--text); }
+.person small { color: var(--muted); }
+.story h4 { color: var(--gold); }
+.story p { margin: 4px 0 12px; line-height: 1.7; }
+
+/* ---- 人物照会（VRM ビューア） ---- */
+.viewer { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: radial-gradient(circle at 50% 35%, #4a3a4e 0%, #1c1420 75%); }
+.vstage { position: relative; flex: 1 1 auto; min-height: 0; }
+.vcanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.vstatus { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); color: var(--muted); pointer-events: none; }
+.vhelp { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-size: .75rem; color: var(--muted); pointer-events: none; }
+.vclose { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 10px; width: 44px; height: 44px; padding: 0; border-radius: 22px; font-size: 1.4rem; background: rgba(28, 20, 32, .8); }
+.vpanel { flex: 0 0 auto; max-height: 42vh; overflow-y: auto; background: var(--panel); border-top: 1px solid var(--gold); padding: 10px 14px calc(14px + env(safe-area-inset-bottom)); }
+.vbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.vbtns button { padding: 6px 10px; font-size: .85rem; }
+.vinfo h3 { color: var(--gold); margin: 6px 0; }
+.vinfo h3 small { color: var(--muted); font-weight: normal; }
+.vinfo p { line-height: 1.7; margin: 4px 0 8px; }
+@media (min-aspect-ratio: 4/3) {
+  .viewer { flex-direction: row; }
+  .vpanel { max-height: none; width: min(380px, 40vw); border-top: 0; border-left: 1px solid var(--gold); }
+}
