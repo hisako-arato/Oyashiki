@@ -183,3 +183,8 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .vturn { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: .85rem; color: var(--muted); }
 .vturn input[type=range] { flex: 1; min-width: 80px; accent-color: var(--gold); touch-action: pan-y; }
 .vturn button { padding: 6px 8px; font-size: .8rem; }
+.settings h4 { color: var(--muted); margin: 18px 0 6px; }
+.update .notice { margin: 6px 0; }
+.choice2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.choice2 button { padding: 10px 4px; }
+.panel > button.primary { width: calc(100% - 32px); }

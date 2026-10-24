@@ -10,6 +10,7 @@ import { hasNight, nightOptions, nightScene } from './night.js';
 import { morningEvents, joined } from './sister.js';
 import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profiles.js';
 import { faceOf } from './faces.js';
+import { VERSION, VERSION_DATE } from './version.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -67,8 +68,81 @@ export function title() {
     el('p', { class: 'sub2' }, '執事と月下の絵'),
     el('div', { class: 'menu' },
       saved && saved.phase !== 'ending' ? el('button', { onclick: () => resume(saved) }, 'つづきから') : null,
-      el('button', { onclick: startNew }, 'はじめから')),
-    el('p', { class: 'note' }, '試作版')));
+      el('button', { onclick: startNew }, 'はじめから'),
+      el('button', { class: 'ghost', onclick: titleSettings }, '設定')),
+    el('p', { class: 'note' }, versionLabel())));
+  // 新しい版で初めて起動したときに、一度だけ知らせる
+  try {
+    const seen = localStorage.getItem('oyashiki-version');
+    if (seen && seen !== VERSION) toast(`バージョン ${VERSION} に更新しました`);
+    localStorage.setItem('oyashiki-version', VERSION);
+  } catch (e) { /* noop */ }
+}
+
+// ---- バージョンと更新 ----
+const versionLabel = (v = VERSION, d = VERSION_DATE) => `バージョン ${v}（${d.replaceAll('-', '/')} 更新）`;
+const newerThan = (a, b) => {
+  const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+};
+// 公開ページの最新バージョンを聞く（オフラインなら null）
+async function latestVersion() {
+  try {
+    const r = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
+// 端末に保存しているゲームのファイルを捨てて、最新版を読み込み直す（セーブと VRM は残す）
+async function updateGame() {
+  try {
+    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if (reg) await reg.update().catch(() => {});
+    if (window.caches) for (const k of await caches.keys()) if (!k.startsWith('oyashiki-vrm')) await caches.delete(k);
+  } catch (e) { /* noop */ }
+  location.reload();
+}
+// 「最新です」／「新しい版があります」と、更新ボタン
+function updateBox() {
+  const status = el('p', { class: 'hint' }, '最新の版を確認しています…');
+  const btn = el('button', { class: 'ghost', onclick: () => { btn.disabled = true; btn.textContent = '更新しています…'; updateGame(); } }, '最新版に更新する');
+  latestVersion().then(v => {
+    if (!v) status.textContent = '最新の版を確認できなかった（オフラインかもしれない）。';
+    else if (newerThan(v.version, VERSION)) {
+      status.textContent = `新しい版（${v.version}）があります。`;
+      status.className = 'notice'; btn.className = 'primary';
+    } else status.textContent = 'いま遊んでいるのが最新です。';
+  });
+  return el('div', { class: 'update' }, status, btn,
+    el('p', { class: 'hint' }, '更新しても、セーブデータとキャラクターのモデルはそのまま残る。'));
+}
+// キャラクター表示の切り替え（トップ画面とゲーム中の両方で使う）
+function vrmChoice(after) {
+  let vrmOn = true;
+  try { vrmOn = localStorage.getItem('oyashiki-vrm') !== 'off'; } catch (e) { /* noop */ }
+  const setVRM = on => {
+    try { localStorage.setItem('oyashiki-vrm', on ? 'on' : 'off'); } catch (e) { /* noop */ }
+    if (day3d) day3d.refreshCast();
+    if (on) loadPortrait();
+    after();
+  };
+  return [
+    el('div', { class: 'choice2' },
+      el('button', { class: vrmOn ? 'on' : 'ghost', onclick: () => setVRM(true) }, '3Dモデル（VRM）'),
+      el('button', { class: vrmOn ? 'ghost' : 'on', onclick: () => setVRM(false) }, '簡易モデル（軽い）')),
+    el('p', { class: 'hint' }, '動きが重いときは「簡易モデル」にすると軽くなる（会話の顔も簡易表示になる）。人物照会の3D表示は、どちらでも使える。'),
+  ];
+}
+// トップ画面の設定
+function titleSettings() {
+  render(el('div', { class: 'panel settings' },
+    el('h2', {}, '設定'),
+    el('h4', {}, 'バージョン'),
+    el('p', {}, versionLabel()),
+    updateBox(),
+    el('h4', {}, 'キャラクターの表示'),
+    ...vrmChoice(titleSettings),
+    el('button', { class: 'primary', onclick: title }, 'タイトルに戻る')));
 }
 
 function startNew() {
@@ -595,23 +669,15 @@ function storyTab() {
 }
 
 function settingsTab(back) {
-  let vrmOn = true;
-  try { vrmOn = localStorage.getItem('oyashiki-vrm') !== 'off'; } catch (e) { /* noop */ }
   return [
-    el('h4', {}, '屋敷の中のキャラクター'),
-    el('div', { class: 'row' },
-      el('button', { class: vrmOn ? 'on' : 'ghost', onclick: () => setVRM(true) }, '3Dモデル（VRM）'),
-      el('button', { class: vrmOn ? 'ghost' : 'on', onclick: () => setVRM(false) }, '簡易モデル（軽い）')),
-    el('p', { class: 'hint' }, '動きが重いときは「簡易モデル」にすると軽くなる（会話の顔も簡易表示になる）。人物照会の3D表示は、どちらでも使える。'),
+    el('h4', {}, 'キャラクターの表示'),
+    ...vrmChoice(() => { back.remove(); openNotebook('settings'); }),
+    el('h4', {}, 'バージョン'),
+    el('p', {}, versionLabel()),
+    el('p', { class: 'hint' }, '更新はタイトル画面の「設定」から行う。'),
     el('h4', {}, 'ゲーム'),
     el('button', { class: 'ghost', onclick: () => { back.remove(); if (confirm('タイトルに戻りますか？（その日の朝からやり直しになります）')) title(); } }, 'タイトルへ戻る'),
   ];
-  function setVRM(on) {
-    try { localStorage.setItem('oyashiki-vrm', on ? 'on' : 'off'); } catch (e) { /* noop */ }
-    if (day3d) day3d.refreshCast();
-    if (on) loadPortrait();
-    back.remove(); openNotebook('settings');
-  }
 }
 
 // 人物照会：VRM を回したりズームしたりして眺める
