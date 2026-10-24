@@ -1,6 +1,7 @@
 // 屋敷の間取り・家具・人物・調べられる場所
 // 座標は1マス1m。x は東向き、z は南向き（間取り図の上が北＝z の小さい側）
 import { THREE, TEX, M, mat, tiled, box, cyl, ball, mesh, plane, rand } from './engine.js';
+import { activeMaids } from '../js/state.js';
 
 const WALL_H = 3, WALL_T = 0.2;
 export const HOUSE = { x: 14, z: 16 };    // 屋敷の1F原点が敷地のどこにあるか
@@ -538,6 +539,7 @@ export const LOOKS = {
 
 // ---- 調べられる場所・出入口 ----
 const spot = (name, x, z, key, id, extra = {}) => A.things.push({ name, at: () => [x, z], label: '調べる', spot: [key, id], ...extra });
+// lines の要素は文字列か、状態に応じて文を返す関数 s => '…'
 const flavor = (name, x, z, ...lines) => A.things.push({ name, at: () => [x, z], label: '調べる', say: lines });
 const special = (name, x, z, kind, extra = {}) => A.things.push({ name, at: () => [x, z], label: '調べる', special: kind, ...extra });
 const exitMat = mat('#e3c06f', { emissive: '#e3c06f', emissiveIntensity: 0.35, transparent: true, opacity: 0.55 });
@@ -617,7 +619,12 @@ AREAS.cottage = {
     flavor('港町の絵', 3.5, 14.3, '前の住人が残していった、港町の風景画。誰が描いたのかは分からない。');
     flavor('壁掛け時計', 14.1, 9.55, '少し進んでいる時計。赤メイドいわく「遅刻しないため」。');
     flavor('当番表', 10.5, 5.6, '「お風呂掃除：赤→青→白→黒」。誰かが青の名前の横に、小さく猫の絵を描いている。');
-    flavor('食器棚', 15.8, 6.0, 'メイドたちのマグカップが並んでいる。赤、青、白、黒……執事のは無地の白。');
+    // マグカップは最初から五つ。使用人がまだ揃っていないうちは、この先メイドが増えることをそれとなく示す
+    flavor('食器棚', 15.8, 6.0, s => {
+      const n = 1 + activeMaids(s).length;
+      return n < 5 ? `食器やマグカップが並んでいる。マグカップは五つ。……今いる使用人は${n}人。残りは誰の分だろう。`
+        : '食器やマグカップが並んでいる。マグカップは五つ。今は、ちょうど使用人の数だ。';
+    });
     flavor('傘立て', 15.5, 14.0, '黒い傘が数本。一本だけ、青い水玉の傘が混じっている。');
     flavor('靴箱', 15.9, 11.8, '磨き上げた革靴がずらり。執事の靴が一番よく光っている。');
     flavor('浴槽', 18, 1.5, '使用人用の浴槽。入る順番が決まっていて、執事はいつも最後だ。');

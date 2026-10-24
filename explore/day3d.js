@@ -444,9 +444,10 @@ function act() {
   if (t.chore !== undefined) return work(t.chore);
   if (t.say) {
     // 調べた物は手帳の「屋敷で調べた物」に数える
-    if (s.flags[lookKey(t)]) return say(...t.say);
+    const text = t.say.map(l => typeof l === 'function' ? l(s) : l);
+    if (s.flags[lookKey(t)]) return say(...text);
     s.flags[lookKey(t)] = true;
-    const { seen, total } = lookStats(), lines = [...t.say];
+    const { seen, total } = lookStats(), lines = text;
     lines[lines.length - 1] += `〔屋敷で調べた物 ${seen} / ${total}〕`;
     return say(...lines);
   }
@@ -718,7 +719,7 @@ function nightAct(t) {
   }
   if (t.special === 'notebook') return hooks.notebook();
   if (t.special === 'hatch') return s.flags.b_key ? travel({ area: 'basement', x: 1.0, z: 4.0 }) : say('床の扉には鍵が掛かっている。');
-  if (t.say) return say(...t.say);
+  if (t.say) return say(...t.say.map(l => typeof l === 'function' ? l(s) : l));
   say('今は調べている場合ではない。');
 }
 function nightGoal() {
