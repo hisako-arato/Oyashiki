@@ -1,9 +1,9 @@
 // 執事パートの処理（仕事・調査・会話）。画面の描き方に依らない部分
 // ボタン式の画面（game.js）と3Dの屋敷（explore/day3d.js）の両方から使う
 import { PEOPLE, CHORES, ROOMS, PASSCODE, END_HOUR, SISTER } from './data.js';
-import { applyFx, fxNote, setFlag, dayIndex, whereIs, isAlly, peopleIn, activeMaids, rng } from './state.js';
+import { applyFx, fxNote, setFlag, dayIndex, whereIs, isAlly, peopleIn, fatherHome } from './state.js';
 import { pickTalk } from './actions.js';
-import { joined, sisterTalk, sulking, otherMaids, told } from './sister.js';
+import { joined, sisterTalk, told } from './sister.js';
 
 export const FORGERY_DAYS = 5;
 
@@ -102,68 +102,76 @@ export function intrude(s, owner) {
 export const witnessesIn = (s, room) => peopleIn(s, room).filter(p => !isAlly(s, p));
 
 // ---- 地下室 ----
-// 地下にいる間は、屋敷のどこにも姿が見えない「不在」になる。30分までは気づかれない。
-// それを過ぎると15分ごとに、誰かが執事を探し始める確率が上がる（自分が付き添う仕事の時間なら必ず探される）
-export const UNDER_SAFE = 30, UNDER_STEP = 15;
-const nowMin = s => s.today.hour * 60 + (s.today.min || 0);
+// 地下にいる時間そのものに罰はない。家の者に「無断で地下に入っている」ところを見られると罰がある
+//  ・床の扉（資料室）や古井戸から上がった瞬間に、そこに人がいれば見られる（協力者・雫・打ち明けたメイドは見逃す）
+//  ・旦那様が在宅の日は、17時台に晩酌のワインを取りに降りてくる。貯蔵庫にいれば見つかる。保管庫の奥か搬入路に隠れればやり過ごせる
+//    （最終章は発送前の荷物を確かめに保管庫まで入ってくるので、隠れられるのは搬入路だけ）
+export const WINE_HOUR = 17;
 export const isUnder = room => !!(ROOMS[room] && ROOMS[room].under);
-export const absentMin = s => s.today && s.today.goneAt != null ? Math.max(0, Math.floor(nowMin(s) - s.today.goneAt)) : 0;
-export function goUnder(s) { if (s.today.goneAt == null) s.today.goneAt = nowMin(s); }
+const quiet = (s, p) => isAlly(s, p) || told(s, p);
+// その部屋で、地下から上がってくるところを見てしまう人
+export const watchersAt = (s, room) => peopleIn(s, room).filter(p => !quiet(s, p));
+export const wineDue = s => fatherHome(s) && s.today.hour === WINE_HOUR && !s.today.wineDone;
 
 // 資料室の床の扉を開けて降りる。降りられたら null、だめなら理由の文を返す
 export function openHatch(s, seen) {
-  if (!s.flags.b_key) return '床の扉には鍵が掛かっている。旦那様のセラーの鍵が要る。';
+  if (!s.flags.b_key) return s.flags.b_key_lost ? '床の扉の錠が、新しい物に付け替えられている。手持ちの鍵は合わない。' : '床の扉には鍵が掛かっている。旦那様のセラーの鍵が要る。';
   if (!s.flags.b_light) return '扉を少し持ち上げてみたが、下は真っ暗で何も見えない。明かりが要る。';
   if (seen.length) return '人の目がある。今は降りられない。';
   setFlag(s, 'b_found');
   return null;
 }
 
-// 地上に戻ったとき。探されていたら { line, options } を返す（options は言い訳の選択肢。run() で結果の文を返す）
-export function comeBack(s) {
-  const t = s.today, gone = absentMin(s);
-  t.goneAt = null;
-  const duty = t.chores.find(c => c.assignee === 'butler' && !c.done && CHORES[c.id].with && choreAvailability(s, c).ok);
-  if (gone <= UNDER_SAFE && !duty) return null;
-  const steps = Math.max(0, Math.floor((gone - UNDER_SAFE) / UNDER_STEP) + 1);
-  const chance = duty ? 1 : Math.min(0.9, 0.25 * steps);
-  if (rng(dayIndex(s) * 977 + Math.round(nowMin(s)))() >= chance) return null;
-  const base = Math.min(25, 6 + 4 * Math.max(0, steps - 1) + (duty ? 6 : 0));
-  const pool = activeMaids(s).filter(m => m !== SISTER);
-  const seeker = duty ? CHORES[duty.id].with : pool[dayIndex(s) % pool.length];
-  const line = duty
-    ? `${PEOPLE[seeker].name}「執事さん、どこに行ってたの？ ずっと待ってたのに」（不在 ${gone}分）`
-    : `${PEOPLE[seeker].name}「執事さん、どこにいたんですか？ さっきから探してたんですけど」（不在 ${gone}分）`;
-  return { line, options: excuses(s, base) };
+// 上がる前の気配。上に人がいれば { line, options }（待つか、思い切って上がるか）を返す
+export function listenAbove(s, room) {
+  const w = watchersAt(s, room);
+  if (!w.length) return null;
+  return {
+    line: room === 'archive' ? '頭上から、足音が聞こえる……。資料室に誰かいるようだ。' : '井戸の上から、話し声が聞こえる……。庭に誰かいるようだ。',
+    options: [
+      { t: '様子をうかがって待つ（15分）', wait: true, run: () => { spendMinutes(s, 15); return '……しばらく息をひそめて待った。'; } },
+      { t: '思い切って上がる', go: true, run: () => '' },
+    ],
+  };
 }
-function excuses(s, base) {
-  const hour = s.today.hour, out = [];
-  const lie = (where, room) => ({ t: `「${where}をしていました」とごまかす`, run: () => {
-    const seen = peopleIn(s, room, hour).filter(p => !isAlly(s, p));
-    return seen.length
-      ? `……${PEOPLE[seen[0]].name}がずっと${ROOMS[room].name}にいた。嘘はすぐにばれた。${fxNote(applyFx(s, { susp: Math.round(base * 1.5) }))}`
-      : `なんとか信じてもらえたようだ。${fxNote(applyFx(s, { susp: Math.round(base * 0.5) }))}`;
-  } });
-  if (!s.today.covered) {
-    if (joined(s) && !sulking(s)) out.push({ t: '雫にかばってもらう', run: () => {
-      s.today.covered = true;
-      return '黒メイド「執事さんには、私の仕事を手伝っていただいていました」……雫が、表情ひとつ変えずに言い切った。';
-    } });
-    const ally = otherMaids(s).find(m => isAlly(s, m) || told(s, m));
-    if (ally) out.push({ t: `${PEOPLE[ally].name}に口裏を合わせてもらう`, run: () => {
-      s.today.covered = true;
-      return `${PEOPLE[ally].name}「執事さんなら、さっきまで私と一緒でしたよ」……助かった。`;
-    } });
+
+// 上がったところを見られた。{ line, options }（言い訳の選択肢）を返す
+export function caughtEmerging(s, room) {
+  const who = watchersAt(s, room)[0];
+  if (!who) return null;
+  const name = PEOPLE[who].name;
+  const fx = n => fxNote(applyFx(s, { susp: n }));
+  if (room === 'archive') return {
+    line: `床の扉から顔を出した瞬間、${name}と目が合った。${name}「……執事さん？ 今、床の下から……」`,
+    options: [
+      { t: '「旦那様に頼まれて、ワインを選びに」', run: () => fatherHome(s)
+        ? `${name}「……そうなんですか」　どうにか納得してもらえたようだ。${fx(5)}`
+        : `${name}「でも旦那様、今日はお出かけですよね……？」　苦しい言い訳だった。${fx(15)}` },
+      { t: '「床がきしむので、下を点検していました」', run: () => `${name}「……ふうん」　疑わしそうな目だ。${fx(10)}` },
+      { t: '黙って頭を下げる', run: () => `「……申し訳ありません。見なかったことに」${fx(15)}` },
+    ],
+  };
+  return {
+    line: `古井戸から這い出したところを、${name}に見られた。${name}「……執事さん？ 井戸で、何を……？」`,
+    options: [
+      { t: '「井戸の蓋が外れていないか、確かめていました」', run: () => `${name}「……そうですか」${fx(8)}` },
+      { t: '黙って頭を下げる', run: () => `「……申し訳ありません」${fx(12)}` },
+    ],
+  };
+}
+
+// 旦那様が晩酌のワインを取りに降りてきた。where は 'cellar' / 'vault' / 'tunnel' / 'up'（石段を上がろうとした）/ 'out'（古井戸から逃げた）
+export function fatherWine(s, where) {
+  s.today.wineDone = true;
+  const check = s.chapter >= 3;   // 最終章は保管庫の荷物も確かめに来る
+  const loseKey = () => { s.flags.b_key = false; s.flags.b_key_lost = true; };
+  if (where === 'out' || where === 'tunnel' || (where === 'vault' && !check))
+    return where === 'out' ? '古井戸から地上へ抜け出した。……下で、旦那様の足音が遠ざかっていく。'
+      : `${where === 'tunnel' ? '搬入路の暗がりで' : '保管庫の棚の陰で'}息をひそめた。旦那様は${check ? '保管庫の荷物を確かめ、' : ''}ワインを一本選ぶと、上へ戻っていった。……危なかった。`;
+  if (where === 'vault') {
+    const notes = applyFx(s, { susp: 40, trust: -20 }); loseKey();
+    return `保管庫の扉が開いた。懐中電灯の光が、執事の顔を照らす。お父様「……貴様、ここで何をしている」　低い声だった。「今すぐ上がれ。次はないと思え」　セラーの鍵は取り上げられ、錠は付け替えられた。${fxNote(notes)}`;
   }
-  out.push(lie('庭の手入れ', 'garden'), lie('倉庫の整理', 'storage'));
-  out.push({ t: '黙って頭を下げる', run: () => `「……申し訳ありません」${fxNote(applyFx(s, { susp: base }))}` });
-  return out;
-}
-// 地下にいるまま一日が終わったとき（夕方まで姿を見せなかった）
-export function dayEndAbsence(s) {
-  if (s.today.goneAt == null) return '';
-  const gone = absentMin(s);
-  s.today.goneAt = null;
-  if (gone <= UNDER_SAFE) return '';
-  return `夕方まで姿を見せなかった。${fxNote(applyFx(s, { susp: Math.min(20, 6 + Math.floor(gone / 30) * 3) }))}`;
+  const notes = applyFx(s, { susp: 20, trust: -10 }); loseKey();
+  return `石段を降りてきたお父様と、鉢合わせた。お父様「……地下には勝手に入るなと言ったはずだ」　セラーの鍵は取り上げられ、錠は付け替えられた。${fxNote(notes)}`;
 }

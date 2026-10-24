@@ -40,7 +40,7 @@ function meter(label, value, cls) {
     el('div', { class: 'bar' }, el('i', { style: `width:${value}%` })), el('b', {}, String(Math.round(value))));
 }
 function statusBar() {
-  const hour = s.phase === 'day' ? `　${s.today.hour}:${String(Math.floor(s.today.min || 0)).padStart(2, '0')}${s.today.goneAt != null ? `　不在 ${DL.absentMin(s)}分` : ''}` : '';
+  const hour = s.phase === 'day' ? `　${s.today.hour}:${String(Math.floor(s.today.min || 0)).padStart(2, '0')}` : '';
   return el('header', { class: 'status' },
     el('div', { class: 'date' }, dateLabel(s) + hour),
     meter('心象', s.trust, 'trust'), meter('疑惑', s.susp, 'susp'),
@@ -271,7 +271,7 @@ async function startWeekday() {
         meetingHint = hint;
         renderMeeting(() => { meetingHint = null; buildPlan(s); s.phase = 'day'; app().classList.remove('overlay'); app().replaceChildren(); done(); });
       },
-      endDay, fatal: checkFatal, notebook: openNotebook, askCode, askForgery, askAbsence, toast,
+      endDay, fatal: checkFatal, notebook: openNotebook, askCode, askForgery, askChoice, toast,
     });
   }
   renderMeeting(beginDay);
@@ -284,7 +284,7 @@ function renderMeeting(done = meetingDone) {
   const t = s.today;
   const maids = activeMaids(s);
   const info = [
-    `お父様：${fatherHome(s) ? '終日在宅（書斎）' : '出勤'}`,
+    `お父様：${fatherHome(s) ? `終日在宅（書斎）${s.flags.b_found ? `。17時ごろ、地下へワインを取りに行く${s.chapter >= 3 ? '（保管庫の荷物も確かめる）' : ''}` : ''}` : '出勤'}`,
     `お母様：${motherOutDay(s) ? 'エステで外出' : '在宅（午前 大広間／午後 主寝室）'}`,
     `お嬢様：午前は大学、午後は${s.day % 2 === 0 ? '大広間' : '自室'}`,
   ];
@@ -358,6 +358,9 @@ function beginDay() {
 function renderDay(msg) {
   const t = s.today;
   if (t.hour >= END_HOUR) return endDay();
+  const wine = wineCheck();
+  if (wine) { msg = msg ? `${msg}　${wine}` : wine; if (checkFatal()) return; }
+  if (DL.isUnder(t.loc) && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) msg = `${msg ? msg + '　' : ''}（そろそろ旦那様がワインを取りに降りてくる時間だ。貯蔵庫にいると見つかる）`;
   const room = t.loc;
   const here = peopleIn(s, room);
   const shown = r => !r.secret || s.flags[r.reveal];
@@ -387,8 +390,8 @@ function renderDay(msg) {
     actions.push(el('button', { class: 'search', onclick: () => {
       const why = DL.openHatch(s, DL.witnessesIn(s, 'archive'));
       if (why) return renderDay(why);
-      DL.goUnder(s); t.loc = 'cellar';
-      renderDay('床の扉を開け、懐中電灯を手に石段を降りた。……ひんやりとした空気。古いワイン貯蔵庫だ。ここにいる間は、屋敷のどこにも姿が見えない。');
+      t.loc = 'cellar';
+      renderDay('床の扉を開け、懐中電灯を手に石段を降りた。……ひんやりとした空気。古いワイン貯蔵庫だ。上がるときは、人に見られないよう気をつけなければ。');
     } }, '床の扉を開けて地下へ降りる'));
   // 会話
   for (const p of here) actions.push(el('button', { class: 'talk', disabled: !!t.talked[p], onclick: () => talk(p) }, `話す：${PEOPLE[p].name}`));
@@ -416,8 +419,7 @@ function move(id) {
     const out = t.loc === 'cellar' ? 'archive' : s.flags.b_grate ? 'garden' : null;
     if (id !== out && !(t.loc === 'vault' && id === 'archive')) return renderDay(out ? `地上へは${ROOMS[out].name}${t.loc === 'cellar' ? '' : '（古井戸）'}にしか出られない。` : '地上へは、ワイン貯蔵庫の石段から戻る。');
     if (t.loc === 'vault' && id === 'archive') return renderDay('資料室へは、ワイン貯蔵庫の石段から戻る。');
-    t.loc = id;
-    return askAbsence(renderDay);
+    return climbUp(id, msg => { if (msg !== null) renderDay(msg); });
   }
   if (t.loc === 'hidden' && id !== 'study') return renderDay('隠し部屋からは書斎にしか戻れない。');
   if (id === 'hidden') {
@@ -473,15 +475,32 @@ function talk(p) {
   renderDay(msg);
 }
 
-// 地下から地上に戻ったとき、探されていたら言い訳を選ぶ（3Dの屋敷からも使う）
-function askAbsence(done) {
-  const res = DL.comeBack(s);
-  if (!res) return done();
+// 選択肢のモーダル。options は { t, run() → 結果の文 }（3Dの屋敷からも使う）
+function askChoice(line, options, done) {
   const back = el('div', { class: 'modal-back' });
-  const box = el('div', { class: 'modal' }, el('p', {}, res.line),
-    el('div', { class: 'choices' }, res.options.map(o => el('button', { onclick: () => { back.remove(); done(o.run()); checkFatal(); } }, o.t))));
+  const box = el('div', { class: 'modal' }, el('p', {}, line),
+    el('div', { class: 'choices' }, options.map(o => el('button', { onclick: () => { back.remove(); done(o.run(), o); checkFatal(); } }, o.t))));
   back.append(box);
   document.body.append(back);
+}
+// ボタン式の画面：地下から地上（資料室・庭）へ上がる。上に人がいれば、待つか上がるかを選ぶ。見られたら言い訳
+function climbUp(room, done) {
+  const t = s.today;
+  const go = () => {
+    t.loc = room;
+    const c = DL.caughtEmerging(s, room);
+    if (!c) return done(room === 'archive' ? '床の扉を押し上げ、資料室に戻った。誰にも見られていない。' : '古井戸から這い出した。誰にも見られていない。');
+    askChoice(c.line, c.options, msg => done(msg));
+  };
+  const l = DL.listenAbove(s, room);
+  if (!l) return go();
+  askChoice(l.line, l.options, (msg, o) => o.go ? go() : done(msg));
+}
+// ボタン式の画面：17時台、地下にいると旦那様が降りてくる（保管庫・搬入路に隠れていれば、やり過ごせる）
+function wineCheck() {
+  const t = s.today;
+  if (!DL.isUnder(t.loc) || !DL.wineDue(s)) return null;
+  return DL.fatherWine(s, t.loc === 'vault' ? (s.chapter >= 3 ? 'tunnel' : 'vault') : 'cellar');
 }
 
 // 青メイドへの模写の依頼（3Dの屋敷からも使う）
@@ -513,7 +532,7 @@ function endDay() {
   for (const m of activeMaids(s)) if (!(m in maidFx) && m !== 'red') maidFx[m] = -1;
   if (joined(s)) delete maidFx.black;
   const notes = applyFx(s, { trust: Math.min(trust, 2), aff: maidFx, susp: -2 });
-  const absence = DL.dayEndAbsence(s);
+
   if (s.flags.forgery_start && !s.flags.forgery_ready && dayIndex(s) - s.forgeryDay >= DL.FORGERY_DAYS) {
     setFlag(s, 'forgery_ready');
     notes.push('青メイドの模写が完成した！');
@@ -523,7 +542,7 @@ function endDay() {
     el('h2', {}, '本日の業務報告'),
     el('ul', { class: 'report' }, lines.map(l => el('li', {}, l))),
     el('p', { class: 'hint' }, richNodes(fxNote(notes))),
-    absence ? el('p', { class: 'hint' }, richNodes(absence)) : null,
+
     el('button', { class: 'primary', onclick: () => hasNight(s) ? night() : nextDay() }, '次へ')));
 }
 
@@ -687,7 +706,8 @@ function noteTab() {
     s.chapter >= 2 && BASEMENT_HINTS.filter(f => s.flags[f]).length >= 2 && !s.flags.b_hatch && '地下があるらしい。資料室の床を調べる',
     s.flags.b_hatch && !s.flags.b_key && '床の扉の鍵を手に入れる（旦那様が出かける日の、食料庫あたり？）',
     s.flags.b_hatch && !s.flags.b_light && '地下を照らす明かりが要る（倉庫の工具棚）',
-    s.flags.b_found && !s.flags.b_vault && 'ワイン貯蔵庫の奥を調べる（地下に長くいると怪しまれる）',
+    s.flags.b_found && !s.flags.b_vault && 'ワイン貯蔵庫の奥を調べる（旦那様が在宅の日は、17時台に降りてくる）',
+    s.flags.b_key_lost && !s.flags.b_key && '地下の鍵を取り上げられた。新しい鍵を手に入れる（雫なら……）',
     s.flags.b_tunnel && !s.flags.b_grate && '搬入路の鉄格子を外す道具を探す（倉庫の工具棚）',
     s.chapter >= 3 && !(s.flags.eve_mother || s.flags.eve_daughter || s.flags.b_grate || s.aff.red >= ALLY_AFF || (s.flags.ladder && s.flags.balcony_open))
       && '決行の夜、屋敷に入る道を考える（夜は倉庫の奥の扉に鍵。勝手口の先には赤メイド）',

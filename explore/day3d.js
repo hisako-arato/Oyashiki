@@ -133,14 +133,21 @@ function fade(text, mid, ms = 280) {
   fadeEl.classList.add('on');
   setTimeout(() => { mid(); fadeEl.classList.remove('on'); }, ms);
 }
-const travel = to => fade('', () => {
-  const from = cur && cur.id;
-  enter(to.area, to.x, to.z);
-  st.busy = false;
-  if (st.mode !== 'day') return;
-  if (to.area === 'basement' && from !== 'basement') DL.goUnder(s);
-  if (from === 'basement' && to.area !== 'basement') { st.busy = true; hooks.askAbsence(msg => { st.busy = false; if (msg) say(msg); fatal(); }); }
-});
+const travel = (to, then) => fade('', () => { enter(to.area, to.x, to.z); st.busy = false; if (then) then(); });
+// 地下から地上（資料室・庭の古井戸）へ上がる。上に人がいれば気配で分かる。上がった瞬間を見られたら言い訳
+function climb(to) {
+  const room = to.area === 'f1' ? 'archive' : 'garden';
+  const go = () => travel(to, () => {
+    const c = DL.caughtEmerging(s, room);
+    if (!c) return;
+    st.busy = true;
+    hooks.askChoice(c.line, c.options, msg => { st.busy = false; say(msg); fatal(); });
+  });
+  const l = DL.listenAbove(s, room);
+  if (!l) return go();
+  st.busy = true;
+  hooks.askChoice(l.line, l.options, (msg, o) => { st.busy = false; if (o.go) go(); else say(msg); });
+}
 
 function roomAt(x, z) {
   for (const r of cur.zones) if (x >= r.x && x <= r.x + r.w && z >= r.z && z <= r.z + r.d) return r;
@@ -426,6 +433,9 @@ function act() {
   if (st.mode === 'night') return nightAct(t);
   if (t.meeting) return startMeeting();
   if (t.rest) { if (confirm('今日の業務を終えて休みますか？')) finish(); return; }
+  // 地下から上がるとき・古井戸から降りるとき
+  if (t.exit && st.mode === 'day' && cur.id === 'basement' && t.exit.area !== 'basement') return climb(t.exit);
+  if (t.exit && st.mode === 'day' && cur.id === 'grounds' && t.exit.area === 'basement' && watchers().length) return say('人の目がある。今は降りられない。');
   // 朝礼を済ませるまでは、使用人棟から出られない
   if (t.exit && st.mode === 'morning' && cur.id === 'cottage' && t.exit.area !== 'cottage')
     return say(['執事', '（まだ朝礼が済んでいない。まずは共用室の席に着いて、朝礼を始めよう）']);
@@ -878,7 +888,8 @@ function drawHud(room) {
     text = '目的：' + nightGoal();
   } else {
     clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}`;
-    if (t.goneAt != null) clock += `　不在 ${DL.absentMin(s)}分${DL.absentMin(s) > DL.UNDER_SAFE ? '（探されているかも）' : ''}`;
+    if (st.wine) clock += `　旦那様が降りてくる！ あと${Math.ceil(st.wine.left)}秒`;
+    else if (cur.id === 'basement' && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) clock += '　（17時ごろ旦那様が降りてくる）';
     const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${CHORES[c.id].optional ? '（任意）' : ''}`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
       : st.tut && TUT[st.tut.step] ? `【新しい決まり ${st.tut.step + 1}/3】${TUT[st.tut.step].goal}`
@@ -912,7 +923,8 @@ let last = 0, ending = false;
 
 function tick(now) {
   if (!running) return;
-  const dt = Math.min(0.05, (now - last) / 1000 || 0);
+  const rawDt = Math.min(0.5, (now - last) / 1000 || 0);   // 実時間（描画が重い端末でも、秒数を守る）
+  const dt = Math.min(0.05, rawDt);
   last = now;
   const night = st.mode === 'night';
 
@@ -920,6 +932,20 @@ function tick(now) {
   if (st.mode === 'day' && !st.busy && !document.querySelector('.modal-back')) {
     s.today.min = (s.today.min || 0) + dt * 60 / SEC_PER_HOUR;
     if (s.today.min >= 60) { s.today.min -= 60; s.today.hour++; }
+  }
+  if (st.mode === 'day' && DL.wineDue(s) && !st.wine) {
+    if (cur.id === 'basement') { st.wine = { left: 8 }; hooks.toast('石段の上で、床の扉が開く音……旦那様だ！ 奥に隠れろ！'); }
+    else s.today.wineDone = true;
+  }
+  if (st.wine && !st.busy) {
+    st.wine.left -= rawDt;
+    if (st.wine.left <= 0) {
+      const room = roomAt(player.x, player.z);
+      const where = cur.id !== 'basement' ? (cur.id === 'f1' ? 'up' : 'out') : player.x >= 16 ? 'tunnel' : room && room.key === 'vault' ? 'vault' : 'cellar';
+      st.wine = null;
+      say(DL.fatherWine(s, where === 'up' ? 'cellar' : where));
+      afterMsg = () => fatal();
+    }
   }
   if (st.mode === 'day' && s.today.hour >= END_HOUR && !ending) {
     ending = true;
@@ -1031,7 +1057,7 @@ function prepare(state, h) {
   syncUnder();
   Object.assign(areas.f1.nightDoor.box, { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
   areas.f1.nightDoor.g.visible = false;
-  ending = false; st.busy = false; st.shelfAnim = 0; st.tut = null; st.tutPending = false; st.night = null; msgQueue = []; afterMsg = null;
+  ending = false; st.busy = false; st.shelfAnim = 0; st.tut = null; st.tutPending = false; st.night = null; st.wine = null; msgQueue = []; afterMsg = null;
 }
 function run() {
   running = true;

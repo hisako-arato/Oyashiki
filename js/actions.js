@@ -19,6 +19,7 @@ export const SPOTS = {
   kitchen: [
     { id: 'pantry', name: '食料庫', run: s => {
       if (!s.flags.b_hatch || s.flags.b_key) return { text: '赤メイドが整理した食料庫。几帳面に並んでいる。' };
+      if (s.flags.b_key_lost) return { text: '奥の釘には何も掛かっていない。錠を付け替えてから、旦那様は鍵を肌身離さず持ち歩いている。' };
       if (fatherHome(s)) return { text: '奥の釘には何も掛かっていない。旦那様が家にいる日は、鍵束を持ち歩いているのだろう。' };
       setFlag(s, 'b_key');
       return { text: '食料庫の奥の釘に、古い鍵が一本だけ掛かっていた。札には「セラー」。旦那様は出かけるとき、ここに置いていくらしい。', clue: true };
