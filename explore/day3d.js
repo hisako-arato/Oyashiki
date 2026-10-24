@@ -313,13 +313,13 @@ function sight(p) {
 // 朝礼前の使用人棟：赤はお茶を淹れ、黒は先に席で待ち、青と白は身支度中。家族は母屋にいる
 const MORNING = { red: 'c_kettle', blue: 'c_blue', black: 'servants', white: 'c_white' };
 function wantedKey(p) {
-  if (st.mode === 'morning') return MORNING[p.id] && whereIs(s, p.id, 9) ? MORNING[p.id] : null;
+  if (st.mode === 'morning') return st.tutPending && p.id === 'blue' ? 'servants' : MORNING[p.id] && whereIs(s, p.id, 9) ? MORNING[p.id] : null;
   return whereIs(s, p.id, s.today.hour);
 }
 function updatePerson(p, dt) {
   let moving = false;
   if (st.mode === 'night') moving = nightPerson(p, dt);
-  else if (st.tut && p.id === 'red') moving = tutorGuide(p, dt);
+  else if (st.tut && p.id === 'blue') moving = tutorGuide(p, dt);
   else {
     const key = wantedKey(p);
     if (key !== p.key) goTo(p, key, st.mode === 'morning' || st.placeNow);
@@ -333,8 +333,8 @@ function updatePerson(p, dt) {
   sight(p);
 }
 // 今こちらを見ている人（協力者は数えない）
-// チュートリアルで付き添う赤メイドは、資料室の練習のとき以外は数えない
-const guiding = p => st.tut && p.id === 'red' && st.tut.step !== 2;
+// チュートリアルで付いてくる青メイドは、資料室の練習のとき以外は数えない
+const guiding = p => st.tut && p.id === 'blue' && st.tut.step !== 2;
 const watchers = () => Object.values(people).filter(p => p.area === cur.id && p.seeing && !isAlly(s, p.id) && !guiding(p)).map(p => p.id);
 
 // ---- 仕事の印 ----
@@ -462,7 +462,7 @@ function startMeeting() {
     const [x, z, yaw] = seats[i % seats.length];
     p.x = x; p.z = z; p.g.rotation.y = yaw; p.still = true; p.route = null; p.g.position.set(x, 0, z);
   });
-  const hint = st.tutPending ? '【旦那様の新しい決まり①】朝礼で、メイドと執事の担当を決める。執事が担当した仕事は、屋敷の緑の印の場所で行う。迷ったら「おまかせで割り振る」。' : null;
+  const hint = st.tutPending ? '【朝礼】メイドが二人になったので、今日から執事が仕事を割り振る。赤は料理が速く、新人の青は絵（花の飾り付け）が得意だが、掃除や料理は苦手でときどき失敗する。執事が担当した仕事は、屋敷の緑の印の場所で行う。迷ったら「おまかせで割り振る」。' : null;
   hooks.openMeeting(() => {
     st.mode = 'day';
     s.today.hour = 9; s.today.min = 0;
@@ -534,21 +534,25 @@ function special(kind) {
 }
 
 // ============================================================
-// 初日のチュートリアル：旦那様の「新しい決まり」の確認に、赤メイドが付き添う
-// （執事は何か月も働いているので、屋敷の案内ではなく、11月から変わった決まりの確認という形にする）
+// 初日（11月1日）のチュートリアル：新しく来た青メイドに、執事が屋敷の仕事と決まりを教える
+// （執事は何か月も働いているので、教わる側ではなく教える側。青が後ろを付いて歩く）
 // ============================================================
 const TUT = [
-  { goal: '担当の仕事を、緑の印の場所で済ませる', say: [['赤メイド', '「……新しい決まりの1つめ。執事さんの担当は、緑の印の場所でやる。わたしが付いていく」']] },
-  { goal: '倉庫で、古い運送伝票を確認する（調べる）', at: ['f1', 4.7, 2.0],
-    say: [['赤メイド', '「……決まりの2つめ。倉庫の古い記録を整理し直す。伝票を調べて、手帳に控えておいて」']] },
-  { goal: '試しに、資料室に入ってみる', at: ['f1', 12, 4], red: ['f1', 19.2, 4, -Math.PI / 2],
+  { goal: '青に仕事を見せる：担当の仕事を、緑の印の場所で済ませる', say: [['執事', '「青さん、まずは仕事の流れから。朝礼で決めた担当の仕事は、その場所で片付けます。付いてきてください」'],
+    ['青メイド', '「はいっ！ 執事さんの後ろ、ぴったり付いていきます！」']] },
+  { goal: '青に記録の整理を教える：倉庫の古い運送伝票を調べる', at: ['f1', 4.7, 2.0],
+    say: [['執事', '「次は倉庫です。古い伝票の整理も仕事のうち。気になる物は、こうして手に取って確かめます」'],
+      ['青メイド', '「伝票……！ 字がいっぱい……がんばります！」']] },
+  { goal: '決まりを見せる：青に見られながら、資料室に入ってみる', at: ['f1', 12, 4], post: ['f1', 19.2, 4, -Math.PI / 2],
     say: [['執事', '（何か月も働いた屋敷だ。だが、盗む者の目で見直すと、まるで違って見える）'],
-      ['赤メイド', '「……決まりの3つめ。書斎や資料室、奥様やお嬢様のお部屋に、用もなく入っているのを見られたら、旦那様に報告しなきゃいけない」'],
-      ['赤メイド', '「……試しに、資料室に入ってみて。わたしはここから見てる」']] },
+      ['執事', '「最後に大事な決まりを。書斎や資料室、奥様やお嬢様のお部屋に用もなく入っているのを見られたら、旦那様に報告されます」'],
+      ['執事', '「青さん、そこから見ていてください。私が資料室に入ってみます」'],
+      ['青メイド', '「はいっ、じーっと見てます！」']] },
 ];
 function tutorStart() {
   st.tut = { step: 0, lastPlan: 0 };
-  say(['赤メイド', '「……今日から旦那様の新しい決まり。12月のお客様に備えて、だって。全部いっしょに確認する」'], ...TUT[0].say);
+  say(['青メイド', '「今日からよろしくお願いします！ 掃除も料理も苦手ですけど、元気だけは負けません！」'],
+    ['執事', '（赤と二人で回してきた屋敷も、今日からは三人。仕事の割り振りは、私の役目になった）'], ...TUT[0].say);
 }
 function tutorNext() {
   st.tut.step++;
@@ -556,9 +560,9 @@ function tutorNext() {
   if (step) return say(...step.say);
   setFlag(s, 'tutorial_done');
   st.tut = null;
-  people.red.key = undefined;   // 自分の持ち場へ戻る
-  say(['赤メイド', '「……決まりは以上。あとは、いつもどおり。わたしは持ち場に戻る」'],
-    ['赤メイド', '「……夕方になったら、使用人棟のベッドで休んで。お疲れさま」'],
+  people.blue.key = undefined;   // 自分の持ち場へ戻る
+  say(['青メイド', '「ぜんぶ覚えました！ ……たぶん！ じゃあ、わたしも持ち場に行ってきます！」'],
+    ['執事', '（夕方になったら、使用人棟のベッドで休むとしよう）'],
     '（メニューの「手帳」で、手がかりや好感度をいつでも確認できる）');
 }
 function tutorEvent(kind, key, id) {
@@ -567,11 +571,11 @@ function tutorEvent(kind, key, id) {
   if (step === 0 && kind === 'chore') afterMsg = tutorNext;
   if (step === 1 && kind === 'search' && key === 'storage') afterMsg = tutorNext;
 }
-// 赤メイドは執事についてくる。3つめの決まりの間は、資料室の入口で見張る
+// 青メイドは執事についてくる。最後の決まりの間は、資料室の入口で見ている
 function tutorGuide(p, dt) {
   const step = TUT[st.tut.step];
-  if (step && step.red) {
-    const [area, x, z, yaw] = step.red;
+  if (step && step.post) {
+    const [area, x, z, yaw] = step.post;
     if (p.area !== area || Math.hypot(p.x - x, p.z - z) > 0.2) {
       if (!p.route || p.guideTo !== 'post') { p.route = planRoute(areas, { area: p.area || cur.id, x: p.x, z: p.z }, { area, x, z }) || null; p.ri = 0; p.pt = 0; p.guideTo = 'post'; if (!p.area) p.area = area; }
       if (p.route) return walkLegs(p, dt);
@@ -592,14 +596,16 @@ function tutorGuide(p, dt) {
   if (!p.route) return false;
   return walkLegs(p, dt * 1.4);
 }
-// 3つめの決まり：資料室に入ったところを赤メイドに見られたら、練習として説明する
+// 最後の決まり：資料室に入ったところを青メイドに見せて、見られるとどうなるかを教える
 function tutorCheck(key) {
   if (!st.tut || st.tut.step !== 2 || st.busy) return;
-  if (key === 'archive' && people.red.seeing) {
+  if (key === 'archive' && people.blue.seeing) {
     const before = st.tut.susp ?? s.susp;
     afterMsg = () => { s.susp = before; tutorNext(); };
-    say(['赤メイド', '「……今のです。わたしの視界が赤くなったでしょう。わたし以外の人だったら、旦那様に報告されて、執事さんへの疑いが強まる」'],
-      ['赤メイド', '「……用があるとき（その部屋が担当の仕事のとき）は大丈夫。今のは練習だから、黙っておく」'],
+    say(['青メイド', '「あっ、見えました！ 執事さん、資料室に入ってます！」'],
+      ['執事', '「そう、それです。人の視界に入ると、その人の視線が赤く光る。見たのが旦那様に報告する人なら、私でも疑いをかけられます」'],
+      ['執事', '「担当の仕事でその部屋にいるときは大丈夫。……今のは練習ですから、黙っていてくださいね」'],
+      ['青メイド', '「はいっ、ないしょです！」'],
       '（左上の「疑惑」が100になると、正体が露見してしまう。私室を調べるときは、人の視界に入らないように）');
   } else if (key !== 'archive') st.tut.susp = s.susp;
 }
@@ -892,7 +898,7 @@ function drawHud(room) {
     else if (cur.id === 'basement' && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) clock += '　（17時ごろ旦那様が降りてくる）';
     const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${CHORES[c.id].optional ? '（任意）' : ''}`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
-      : st.tut && TUT[st.tut.step] ? `【新しい決まり ${st.tut.step + 1}/3】${TUT[st.tut.step].goal}`
+      : st.tut && TUT[st.tut.step] ? `【青に教える ${st.tut.step + 1}/3】${TUT[st.tut.step].goal}`
       : todo.length ? todo.join('　') : '執事の担当なし';
   }
   $('clock3d').textContent = clock;
@@ -1075,13 +1081,13 @@ export function startMorning(state, h) {
   enter('cottage', 1.2, 13.3);
   st.lying = true;
   afterMsg = () => { st.lying = false; player.g.rotation.set(0, Math.PI / 2, 0); player.x = 2.4; player.z = 12.5; };
-  // 初日だけ、赤メイドが「新しい決まり」の確認に来る
+  // 初日（11月1日）は、新しいメイド（青）が来る日。赤が起こしに来る
   const firstDay = s.chapter === 0 && s.week === 0 && s.day === 0 && !s.flags.tutorial_done;
   st.tutPending = firstDay;
   if (firstDay) {
     say(['執事', `（${dateLabel(s)}、朝7時30分。……さて、今日も完璧な執事を演じるとしよう）`],
-      ['赤メイド', '「……執事さん、起きてる？ 今日から、旦那様の新しい決まりが始まる日。朝礼で説明する」'],
-      ['執事', '（12月の来客に備えて、旦那様が屋敷の決まりを改めると言っていたな。……ちょうどいい。屋敷を見直す口実になる）'],
+      ['赤メイド', '「……執事さん、起きてる？ 新しい子、今日から。もう共用室で待ってる。……緊張してるみたい」'],
+      ['執事', '（12月の来客に備えて、旦那様が雇ったメイドだ。今日から、屋敷の仕事の割り振りは私が任される。……都合がいい。誰をどこに置くか、私が決められる）'],
       '身支度を整えたら、共用室の席に着いて朝礼を始めよう。');
   } else {
     say(['執事', `（${dateLabel(s)}、朝7時30分。……さて、今日も完璧な執事を演じるとしよう）`],

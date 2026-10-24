@@ -11,7 +11,7 @@ export const PEOPLE = {
   mother:  { name: 'お母様',   color: '#b8436f' },
   daughter:{ name: 'お嬢様',   color: '#d68a1c' },
   red:     { name: '赤メイド', color: '#c8362d', maid: true, from: 0 },
-  blue:    { name: '青メイド', color: '#2f6fd0', maid: true, from: 1 },
+  blue:    { name: '青メイド', color: '#2f6fd0', maid: true, from: 0 },   // 11月1日に来た新人
   black:   { name: '黒メイド', color: '#222222', maid: true, from: 2 },
   white:   { name: '白メイド', color: '#9aa3ad', maid: true, from: 1 },
   // 黒メイドの正体は主人公の妹。二人きりの場面だけ「雫」として話す（好感度は持たない）
