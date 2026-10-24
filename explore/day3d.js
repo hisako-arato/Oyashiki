@@ -1075,6 +1075,14 @@ export function lookStats() {
 }
 
 // 人物照会を開いている間は、屋敷の時間と描画を止める
+// タイトルに戻るとき：屋敷の時間と描画を止めて、画面を閉じる
+export function leave() {
+  running = false; suspended = false;
+  msgQueue = []; afterMsg = null; st.busy = false;
+  msgEl.classList.add('hidden');
+  root.classList.add('hidden');
+  setLights(false);
+}
 let suspended = false;
 export function suspend() { if (!running) return; running = false; suspended = true; }
 export function resume() { if (suspended) { suspended = false; run(); } }

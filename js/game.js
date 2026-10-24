@@ -62,6 +62,10 @@ function toast(text) {
 
 // ---- タイトル ----
 export function title() {
+  // ゲームの途中から戻ったときは、3Dの屋敷・人物照会・朝礼の重ね表示を閉じる
+  if (day3d) day3d.leave();
+  document.querySelectorAll('.viewer, .modal-back').forEach(e => e.remove());
+  app().classList.remove('overlay');
   const saved = load();
   render(el('div', { class: 'title' },
     el('p', { class: 'sub' }, 'お屋敷の宝を盗み出す物語'),
