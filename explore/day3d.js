@@ -3,7 +3,7 @@
 import { THREE, renderer, scene, camera, CAM_OFFSET, hemi, sun, makeChar, animate, resize, box, mat, M, TEX } from './engine.js';
 import { buildArea, AREA_INFO, HOUSE, LOOKS, WORK } from './world.js';
 import { buildNav, planRoute } from './nav.js';
-import { PEOPLE, CHORES, END_HOUR, MAIDS } from '../js/data.js';
+import { PEOPLE, CHORES, ROOMS, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
 import { richNodes } from '../js/richtext.js';
 import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag, maidAvailable } from '../js/state.js';
@@ -539,7 +539,13 @@ function special(kind) {
 // （執事は何か月も働いているので、教わる側ではなく教える側。青が後ろを付いて歩く）
 // ============================================================
 const TUT = [
-  { goal: '青に仕事を見せる：担当の仕事を、緑の印の場所で済ませる', say: [['執事', '「青さん、まずは仕事の流れから。朝礼で決めた担当の仕事は、その場所で片付けます。付いてきてください」'],
+  { goal: () => {
+    // どの仕事を、どこでやるのかを示す（印は別の階や建物にあることもある）
+    const c = s.today.chores.find(c => c.assignee === 'butler' && !c.done && !CHORES[c.id].optional);
+    if (!c) return '青に仕事を見せる：担当の仕事を、緑の印の場所で済ませる';
+    const [area] = WORK[c.id], room = ROOMS[CHORES[c.id].room];
+    return `青に仕事を見せる：担当の「${CHORES[c.id].name}」を済ませる（${AREA_INFO[area].name}${room ? `・${room.name}` : ''}の緑の印）`;
+  }, say: [['執事', '「青さん、まずは仕事の流れから。朝礼で決めた担当の仕事は、その場所で片付けます。付いてきてください」'],
     ['青メイド', '「はいっ！ 執事さんの後ろ、ぴったり付いていきます！」']] },
   { goal: '青に記録の整理を教える：倉庫の古い運送伝票を調べる', at: ['f1', 4.7, 2.0],
     say: [['執事', '「次は倉庫です。古い伝票の整理も仕事のうち。気になる物は、こうして手に取って確かめます」'],
@@ -899,7 +905,7 @@ function drawHud(room) {
     else if (cur.id === 'basement' && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) clock += '　（17時ごろ旦那様が降りてくる）';
     const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${CHORES[c.id].optional ? '（任意）' : ''}`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
-      : st.tut && TUT[st.tut.step] ? `【青に教える ${st.tut.step + 1}/3】${TUT[st.tut.step].goal}`
+      : st.tut && TUT[st.tut.step] ? `【青に教える ${st.tut.step + 1}/3】${typeof TUT[st.tut.step].goal === 'function' ? TUT[st.tut.step].goal() : TUT[st.tut.step].goal}`
       : todo.length ? todo.join('　') : '執事の担当なし';
   }
   $('clock3d').textContent = clock;

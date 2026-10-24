@@ -50,7 +50,8 @@ function modal(...content) {
   const back = el('div', { class: 'modal-back' });
   const box = el('div', { class: 'modal' }, ...content);
   back.append(box);
-  back.addEventListener('click', e => { if (e.target === back) back.remove(); });
+  // 外側をタップして閉じたときは onDismiss を呼ぶ（選ばずに閉じても、3Dの屋敷が入力待ちのまま止まらないように）
+  back.addEventListener('click', e => { if (e.target === back) { back.remove(); if (back.onDismiss) back.onDismiss(); } });
   document.body.append(back);
   return back;
 }
@@ -456,6 +457,7 @@ function askCode(msg, done) {
         else done(msg + '　……開かない。');
       } }, '合わせる'),
       el('button', { class: 'ghost', onclick: () => { back.remove(); done(msg); } }, 'やめる')));
+  back.onDismiss = () => done(msg);
   input.focus();
 }
 
@@ -509,6 +511,7 @@ function askForgery(msg, done) {
     el('div', { class: 'row' },
       el('button', { onclick: () => { back.remove(); done(DL.startForgery(s)); } }, '頼む'),
       el('button', { class: 'ghost', onclick: () => { back.remove(); done(msg); } }, 'やめておく')));
+  back.onDismiss = () => done(msg);
 }
 
 // ---- 1日の終わり ----
