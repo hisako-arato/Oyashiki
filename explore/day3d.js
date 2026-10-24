@@ -6,7 +6,7 @@ import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
 import { richNodes } from '../js/richtext.js';
-import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag } from '../js/state.js';
+import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag, maidAvailable } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 
@@ -903,7 +903,9 @@ function drawHud(room) {
       : todo.length ? todo.join('　') : '執事の担当なし';
   }
   $('clock3d').textContent = clock;
-  $('place3d').textContent = `${AREA_INFO[cur.id].name}　${room ? room.name : ''}`;
+  // まだ来ていないメイドの部屋は「空き部屋」と表示する
+  const roomName = room ? (room.owner && !maidAvailable(s, room.owner) ? '空き部屋' : room.name) : '';
+  $('place3d').textContent = `${AREA_INFO[cur.id].name}　${roomName}`;
   $('trust3d').style.width = `${s.trust}%`;
   $('susp3d').style.width = `${s.susp}%`;
   $('end3d').classList.toggle('hidden', st.mode !== 'day');

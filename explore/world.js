@@ -1,7 +1,7 @@
 // 屋敷の間取り・家具・人物・調べられる場所
 // 座標は1マス1m。x は東向き、z は南向き（間取り図の上が北＝z の小さい側）
 import { THREE, TEX, M, mat, tiled, box, cyl, ball, mesh, plane, rand } from './engine.js';
-import { activeMaids } from '../js/state.js';
+import { activeMaids, maidAvailable } from '../js/state.js';
 
 const WALL_H = 3, WALL_T = 0.2;
 export const HOUSE = { x: 14, z: 16 };    // 屋敷の1F原点が敷地のどこにあるか
@@ -567,11 +567,11 @@ AREAS.cottage = {
   name: '使用人棟', wallStyle: 'plain', origin: COTTAGE, hide: 'cottage',
   rooms: [
     { name: '執事の部屋', x: 0, z: 0, w: 7, d: 15, key: 'c_butler' },
-    { name: '赤の部屋', x: 7, z: 0, w: 4, d: 5, key: 'c_red' },
-    { name: '青の部屋', x: 11, z: 0, w: 4, d: 5, key: 'c_blue' },
+    { name: '赤の部屋', owner: 'red', x: 7, z: 0, w: 4, d: 5, key: 'c_red' },
+    { name: '青の部屋', owner: 'blue', x: 11, z: 0, w: 4, d: 5, key: 'c_blue' },
     { name: '共用室', x: 7, z: 5, w: 8, d: 5, key: 'servants' },
-    { name: '黒の部屋', x: 7, z: 10, w: 4, d: 5, key: 'c_black' },
-    { name: '白の部屋', x: 11, z: 10, w: 4, d: 5, key: 'c_white' },
+    { name: '黒の部屋', owner: 'black', x: 7, z: 10, w: 4, d: 5, key: 'c_black' },
+    { name: '白の部屋', owner: 'white', x: 11, z: 10, w: 4, d: 5, key: 'c_white' },
     { name: '浴室', x: 15, z: 0, w: 5, d: 5, floor: 'tile', wall: 'tile' },
     { name: '給湯室', x: 15, z: 5, w: 5, d: 5, floor: 'tile', wall: 'tile', key: 'c_kettle' },
     { name: '玄関', x: 15, z: 10, w: 5, d: 5, floor: 'stone' },
@@ -611,14 +611,16 @@ AREAS.cottage = {
     flavor('朝礼のテーブル', 11, 9.0, '毎朝ここで朝礼を開き、メイドたちに仕事を割り振る。');
     flavor('赤の部屋', 8.5, 3, 'きちんと片付いている。枕元に料理の本が積まれている。');
     flavor('青の部屋', 12.5, 3, '壁一面にスケッチが貼られている。どれも上手い。');
-    flavor('黒の部屋', 8.5, 12, '物がほとんどない。机の上に聖書が一冊。');
-    flavor('白の部屋', 12.5, 12, '工具箱と電気工学の教科書が置いてある。');
+    // まだ来ていないメイドの部屋は、空き部屋として見せる（加入前のネタバレを避ける）
+    const empty = '誰も使っていない空き部屋。ベッドと棚だけが、新しい住人を待っている。';
+    flavor('黒の部屋', 8.5, 12, s => maidAvailable(s, 'black') ? '物がほとんどない。机の上に聖書が一冊。' : empty);
+    flavor('白の部屋', 12.5, 12, s => maidAvailable(s, 'white') ? '工具箱と電気工学の教科書が置いてある。' : empty);
     flavor('古いトランク', 0.6, 2.9, 'この屋敷に持ってきた、ただ一つの私物。底には、母と撮った写真が一枚だけ入っている。');
     flavor('読書灯', 2.6, 14.0, '眠る前に、少しだけ本を読む。最近はページが進まない。');
     flavor('コート掛け', 6.2, 9.6, '外出用の黒いコート。ポケットに、美術館の古い入場券の半券が入ったままだ。');
     flavor('港町の絵', 3.5, 14.3, '前の住人が残していった、港町の風景画。誰が描いたのかは分からない。');
     flavor('壁掛け時計', 14.1, 9.55, '少し進んでいる時計。赤メイドいわく「遅刻しないため」。');
-    flavor('当番表', 10.5, 5.6, '「お風呂掃除：赤→青→白→黒」。誰かが青の名前の横に、小さく猫の絵を描いている。');
+    flavor('当番表', 10.5, 5.6, s => `「お風呂掃除：${['red', 'blue', 'white', 'black'].filter(m => maidAvailable(s, m)).map(m => ({ red: '赤', blue: '青', white: '白', black: '黒' })[m]).join('→')}」。誰かが青の名前の横に、小さく猫の絵を描いている。`);
     // マグカップは最初から五つ。使用人がまだ揃っていないうちは、この先メイドが増えることをそれとなく示す
     flavor('食器棚', 15.8, 6.0, s => {
       const n = 1 + activeMaids(s).length;
@@ -838,7 +840,7 @@ AREAS.f1 = {
     flavor('じゃがいもの箱', 47.3, 6.6, '北海道から届いたじゃがいも。今夜はポトフだろうか。');
     flavor('銀の燭台', 36, 17.1, 'イブのパーティーで使う銀の燭台。磨くのは執事の役目だ。');
     flavor('静物画', 39, 8.7, '果物と銀の水差しの静物画。悪くないが、「月下の庭」には遠く及ばない。');
-    flavor('洗濯機', 46.9, 15, '年季の入った洗濯機。白メイドが一度直してから、妙に調子がいい。');
+    flavor('洗濯機', 46.9, 15, s => maidAvailable(s, 'white') ? '年季の入った洗濯機。白メイドが一度直してから、妙に調子がいい。' : '年季の入った洗濯機。ときどき、脱水のときに大きく揺れる。');
   },
 };
 
