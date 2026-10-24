@@ -1,5 +1,5 @@
 // オフラインでも遊べるよう、ゲームのファイルをキャッシュする
-const CACHE = 'oyashiki-1.15';
+const CACHE = 'oyashiki-1.16';
 // VRM は大きいので、版を上げても消さない別のキャッシュに置き、キャッシュを優先して使う
 const VRM_CACHE = 'oyashiki-vrm-v1';
 const FILES = [
