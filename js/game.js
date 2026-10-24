@@ -188,8 +188,9 @@ function playScript(steps, done) {
 
 // 会話の顔：3D が使えて VRM を表示する設定なら、話し手の VRM を胸から上で映す（台詞に合わせて表情を変える）
 let portrait = null;
-const VRM_OF = { shizuku: 'black' };
-const CAST_IDS = ['butler', 'father', 'mother', 'daughter', 'red', 'blue', 'white', 'black', 'guard'];
+// 二人きりのとき（話し手が「雫」）は部屋着。来た日の夜の呼び出しだけは、まだメイド服のまま
+const VRM_OF = { shizuku: () => (s.counters.night_black ? 'black2' : 'black') };
+const CAST_IDS = ['butler', 'father', 'mother', 'daughter', 'red', 'blue', 'white', 'black', 'black2', 'guard'];
 function vrmOn() {
   if (!can3D() || new URLSearchParams(location.search).has('lowpoly')) return false;
   try { return localStorage.getItem('oyashiki-vrm') !== 'off'; } catch (e) { return true; }
@@ -199,7 +200,7 @@ function loadPortrait() {
   portrait = import('../explore/portrait.js').then(m => (portrait = m)).catch(e => { console.warn(e); portrait = null; });
 }
 function portraitFor(who, text, face) {
-  const id = VRM_OF[who] || who;
+  const id = VRM_OF[who] ? VRM_OF[who]() : who;
   if (!portrait || portrait instanceof Promise || !vrmOn() || !CAST_IDS.includes(id)) return null;
   portrait.showPortrait(id, faceOf(text, face, who), /^（/.test(text) ? 0 : text.length);   // 心の声（…）では口を動かさない
   return portrait.portraitCanvas();
@@ -762,7 +763,8 @@ function settingsTab(back) {
 }
 
 // 人物照会：VRM を回したりズームしたりして眺める
-async function openPerson(id) {
+// model：表示する VRM（雫は、再会のあとは「部屋着」black2 にも着替えられる）
+async function openPerson(id, model = id) {
   const pr = profileOf(PROFILES.find(p => p.id === id), s);
   const canvas = el('canvas', { class: 'vcanvas' });
   const status = el('div', { class: 'vstatus' }, '読み込み中…');
@@ -780,8 +782,14 @@ async function openPerson(id) {
     el('div', { class: 'vstage' }, canvas, status,
       el('div', { class: 'vhelp' }, '1本指で上下左右に回す／2本指でズーム／ダブルタップで元に戻す'),
       el('button', { class: 'vclose', onclick: close }, '×')),
-    el('div', { class: 'vpanel' }, turnRow, faceBtns, poseBtns, info));
+    el('div', { class: 'vpanel' }, outfitRow(), turnRow, faceBtns, poseBtns, info));
   document.body.append(root);
+  function outfitRow() {
+    if (id !== 'black' || !s.flags.shizuku_reunion) return null;
+    const pick = m => { if (m === model) return; viewer && viewer.close(); root.remove(); openPerson(id, m); };
+    return el('div', { class: 'vbtns' }, el('span', { class: 'hint' }, '服装'),
+      ...[['black', 'メイド服'], ['black2', '部屋着']].map(([m, label]) => el('button', { class: m === model ? 'on' : 'ghost', onclick: () => pick(m) }, label)));
+  }
   if (!can3D()) { canvas.remove(); status.textContent = 'この端末では3D表示が使えない。'; return; }
   if (day3d) day3d.suspend();
   try {
@@ -795,7 +803,7 @@ async function openPerson(id) {
     slider.addEventListener('input', () => viewer && viewer.setAngle(+slider.value));
     turnRow.append(el('span', {}, '向き'), slider,
       ...[['正面', 0], ['右', 270], ['背面', 180], ['左', 90]].map(([label, deg]) => el('button', { class: 'ghost', onclick: () => viewer.setAngle(deg, true) }, label)));
-    viewer = openViewer(canvas, id, {
+    viewer = openViewer(canvas, model, {
       onAngle: deg => { if (!sliding) slider.value = String(Math.round(deg) % 360); },
       onProgress: r => { status.textContent = `読み込み中… ${Math.round(r * 100)}%`; },
       onReady: () => status.remove(),

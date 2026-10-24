@@ -6,7 +6,7 @@ import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, ROOMS, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
 import { richNodes } from '../js/richtext.js';
-import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag, maidAvailable } from '../js/state.js';
+import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 
@@ -72,7 +72,7 @@ function nextMsg() {
   const face = who ? faceOf(said, override, who === 'black' && /お兄ちゃん/.test(said) ? 'shizuku' : who) : 'neutral';
   setFace(who, face);
   msgEl.classList.toggle('with-face', !!(who && portrait && useVRM()));
-  if (who && portrait && useVRM()) { portrait.showPortrait(who, face, /^（/.test(said) ? 0 : said.length); msgEl.prepend(portrait.portraitCanvas()); }
+  if (who && portrait && useVRM()) { portrait.showPortrait(Array.isArray(l) && l[0] === '雫' && s.counters.night_black ? 'black2' : who, face, /^（/.test(said) ? 0 : said.length); msgEl.prepend(portrait.portraitCanvas()); }
   msgEl.classList.remove('hidden');
 }
 msgEl.addEventListener('click', nextMsg);
@@ -478,11 +478,13 @@ function startMeeting() {
   hooks.openMeeting(() => {
     st.mode = 'day';
     s.today.hour = 9; s.today.min = 0;
-    if (st.tutPending) ensureButlerChore();
+    // チュートリアルの日は、執事の担当を一つ決め、割り振られていない仕事はメイドに振っておく
+    let filled = [];
+    if (st.tutPending) { ensureButlerChore(); filled = fillUnassigned(s); buildPlan(s); }
     // メイドは席から持ち場へ歩いていく。家族は最初からそれぞれの場所にいる
     for (const p of Object.values(people)) if (!MAIDS.includes(p.id)) goTo(p, wantedKey(p), true); else p.still = false;
     refreshMarkers();
-    if (st.tutPending) { st.tutPending = false; return tutorStart(); }
+    if (st.tutPending) { st.tutPending = false; return tutorStart(filled); }
     const mine = s.today.chores.filter(c => c.assignee === 'butler').map(c => CHORES[c.id].name);
     say(['朝礼', `9時、仕事の始まりだ。執事の担当は${mine.length ? `「${mine.join('」「')}」` : 'なし'}。`],
       mine.length ? '緑の印が仕事の場所だ。空いた時間で、屋敷を探ろう。' : '今日は自由に動ける。屋敷を探ろう。');
@@ -567,10 +569,11 @@ const TUT = [
       ['執事', '「青さん、そこから見ていてください。私が資料室に入ってみます」'],
       ['青メイド', '「はいっ、じーっと見てます！」']] },
 ];
-function tutorStart() {
+function tutorStart(filled) {
   st.tut = { step: 0, lastPlan: 0 };
   say(['青メイド', '「今日からよろしくお願いします！ 掃除も料理も苦手ですけど、元気だけは負けません！」'],
-    ['執事', '（赤と二人で回してきた屋敷も、今日からは三人。仕事の割り振りは、私の役目になった）'], ...TUT[0].say);
+    ['執事', '（赤と二人で回してきた屋敷も、今日からは三人。仕事の割り振りは、私の役目になった）'],
+    filled.length && `（誰にも割り振られていなかった仕事は、${filled.map(m => PEOPLE[m].name).join('と')}に振り分けておいた）`, ...TUT[0].say);
 }
 function tutorNext() {
   st.tut.step++;

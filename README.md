@@ -112,12 +112,13 @@ GitHub Pages などの静的ホスティングにそのまま置ける。
 | フォルダ | 内容 |
 |---|---|
 | `assets/vrm/*.vrm` | 元のファイル（VRoid Studio で作成。ゲームでは読み込まない） |
+| `assets/vrm/black2.vrm` | 雫の部屋着。二人きりの会話の顔（来た日の夜を除く）と、人物照会の「服装：部屋着」で使う |
 | `assets/vrm/view/` | 人物照会用（テクスチャ1024px、表情に使わない顔のモーフを除去）。約6〜8MB |
 | `assets/vrm/lite/` | 屋敷の中用（テクスチャ512px、モーフの法線も除去）。約4MB |
 
 元のファイルを差し替えたら、次のコマンドで作り直す（要 Python と Pillow）。
 ```
-for id in butler father mother daughter red blue white black guard; do
+for id in butler father mother daughter red blue white black black2 guard; do
   python3 tools/vrm_lite.py assets/vrm/$id.vrm assets/vrm/view/$id.vrm --tex 1024
   python3 tools/vrm_lite.py assets/vrm/$id.vrm assets/vrm/lite/$id.vrm --tex 512 --no-morph-normals
 done

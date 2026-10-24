@@ -131,6 +131,20 @@ export function buildPlan(s) {
   }
 }
 
+// まだ誰にも割り振られていない仕事を、得意で余裕のあるメイドに振る（チュートリアルの日だけ使う）。振ったメイドの一覧を返す
+export function fillUnassigned(s) {
+  const left = s.today.chores.filter(c => c.assignee == null && !CHORES[c.id].butlerOnly)
+    .sort((a, b) => CHORES[b.id].hours - CHORES[a.id].hours);
+  const who = new Set();
+  for (const c of left) {
+    const best = activeMaids(s)
+      .filter(m => maidLoad(s, m) + maidHours(m, c) <= MAID_CAPACITY)
+      .sort((a, b) => maidHours(a, c) - maidHours(b, c) || maidLoad(s, a) - maidLoad(s, b))[0];
+    if (best) { c.assignee = best; who.add(best); }
+  }
+  return [...who];
+}
+
 export function maidLoad(s, m) {
   return s.today.chores.filter(c => c.assignee === m).reduce((a, c) => a + maidHours(m, c), 0);
 }
