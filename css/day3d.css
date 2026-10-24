@@ -32,13 +32,11 @@
 #day3d .msg3d { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100% - 32px));
   background: rgba(30, 22, 34, .95); border: 1px solid var(--gold); border-radius: 8px; padding: 12px 14px; font-size: 15px; line-height: 1.7; cursor: pointer; }
 #day3d .msg3d b { color: var(--gold); display: block; }
-#day3d .act { position: absolute; right: 20px; bottom: 110px; width: 84px; height: 84px; border-radius: 50%; font-size: 14px; font-weight: bold;
-  white-space: nowrap; padding: 0; background: #8a3a50; color: #fff; border: 2px solid var(--gold); }
-#day3d .stick { position: absolute; left: 24px; bottom: 100px; width: 110px; height: 110px; border-radius: 50%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25); }
+/* 指を置いた所に出る、移動の目安の輪（なぞっている間だけ） */
+#day3d .stick { position: absolute; width: 110px; height: 110px; border-radius: 50%; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.3); pointer-events: none; opacity: 0; transition: opacity .12s; }
+#day3d .stick.on { opacity: 1; }
 #day3d .stick i { position: absolute; left: 35px; top: 35px; width: 40px; height: 40px; border-radius: 50%; background: rgba(227,192,111,.6); }
-@media (hover: hover) and (pointer: fine) { #day3d .stick { display: none; } }
-#day3d .help { position: absolute; left: 10px; bottom: 0; margin: 4px; font-size: 11px; color: #a99; }
-@media (hover: none) { #day3d .help { display: none; } }
+#day3d .help { position: absolute; left: 10px; bottom: 0; margin: 4px; font-size: 11px; color: #a99; pointer-events: none; }
 @media (max-width: 480px) {
   #day3d .hud { font-size: 12px; padding: 5px 8px; max-width: calc(100% - 150px); }
   #day3d #minimap { width: 120px; height: 80px; }
@@ -55,3 +53,4 @@
 #day3d .msg3d.with-face { padding-left: 116px; min-height: 96px; }
 #day3d .msg3d .vportrait { position: absolute; left: 0; bottom: 0; width: 112px; height: 150px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 #day3d .msg3d .vportrait.ready { opacity: 1; }
+@media (hover: none) { #day3d .help { display: none; } }   /* スマホでは最初の操作案内で伝える */

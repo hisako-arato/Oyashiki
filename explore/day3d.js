@@ -5,6 +5,7 @@ import { buildArea, AREA_INFO, HOUSE, LOOKS, WORK } from './world.js';
 import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
+import { richNodes } from '../js/richtext.js';
 import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
@@ -61,18 +62,20 @@ function nextMsg() {
   }
   st.busy = true;
   msgEl.replaceChildren();
-  if (Array.isArray(l)) { const b = document.createElement('b'); b.textContent = l[0]; msgEl.append(b, l[1]); }
-  else msgEl.append(l);
   const [who, text, override] = speakerOf(l);
+  // 話し手の名前は太字に、効果のお知らせ（〔好感度 +5〕など）は色付きで別の行に出す
+  const named = Array.isArray(l) ? [l[0], l[1]] : who ? [l.slice(0, l.length - text.length), text] : null;
+  if (named) { const b = document.createElement('b'); b.textContent = named[0]; msgEl.append(b, ...richNodes(named[1])); }
+  else msgEl.append(...richNodes(l));
   // 二人きりの雫（「お兄ちゃん」と呼ぶとき）は、雫としての顔にする
-  const face = who ? faceOf(text, override, who === 'black' && /お兄ちゃん/.test(text) ? 'shizuku' : who) : 'neutral';
+  const said = text.replace(/〔[^〕]*〕/g, '');
+  const face = who ? faceOf(said, override, who === 'black' && /お兄ちゃん/.test(said) ? 'shizuku' : who) : 'neutral';
   setFace(who, face);
   msgEl.classList.toggle('with-face', !!(who && portrait && useVRM()));
-  if (who && portrait && useVRM()) { portrait.showPortrait(who, face, /^（/.test(text) ? 0 : text.length); msgEl.prepend(portrait.portraitCanvas()); }
+  if (who && portrait && useVRM()) { portrait.showPortrait(who, face, /^（/.test(said) ? 0 : said.length); msgEl.prepend(portrait.portraitCanvas()); }
   msgEl.classList.remove('hidden');
 }
 msgEl.addEventListener('click', nextMsg);
-$('view').addEventListener('pointerdown', () => { if (!msgEl.classList.contains('hidden')) nextMsg(); });
 
 // ---- エリア ----
 const ROOM_OF = {};   // 本編の部屋名 → { area, rect }
@@ -405,10 +408,20 @@ function act() {
   if (st.mode === 'night') return nightAct(t);
   if (t.meeting) return startMeeting();
   if (t.rest) { if (confirm('今日の業務を終えて休みますか？')) finish(); return; }
+  // 朝礼を済ませるまでは、使用人棟から出られない
+  if (t.exit && st.mode === 'morning' && cur.id === 'cottage' && t.exit.area !== 'cottage')
+    return say(['執事', '（まだ朝礼が済んでいない。まずは共用室の席に着いて、朝礼を始めよう）']);
   if (t.exit) return travel(t.exit);
   if (t.person) return talkTo(t.person);
   if (t.chore !== undefined) return work(t.chore);
-  if (t.say) return say(...t.say);
+  if (t.say) {
+    // 調べた物は手帳の「屋敷で調べた物」に数える
+    if (s.flags[lookKey(t)]) return say(...t.say);
+    s.flags[lookKey(t)] = true;
+    const { seen, total } = lookStats(), lines = [...t.say];
+    lines[lines.length - 1] += `〔屋敷で調べた物 ${seen} / ${total}〕`;
+    return say(...lines);
+  }
   if (t.special) return special(t.special);
   if (t.spot) return search(t.spot);
 }
@@ -705,22 +718,42 @@ addEventListener('keydown', e => {
   if ((e.key === ' ' || e.key.toLowerCase() === 'e' || e.key === 'Enter') && !e.repeat && !document.querySelector('.modal-back')) { e.preventDefault(); act(); }
 });
 addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
-const stick = { x: 0, y: 0, id: null };
-const stickEl = $('stick'), knob = stickEl.querySelector('i');
-stickEl.addEventListener('pointerdown', e => { stick.id = e.pointerId; stickEl.setPointerCapture(e.pointerId); moveStick(e); });
-stickEl.addEventListener('pointermove', e => { if (e.pointerId === stick.id) moveStick(e); });
-const endStick = () => { stick.id = null; stick.x = stick.y = 0; knob.style.transform = ''; };
-stickEl.addEventListener('pointerup', endStick);
-stickEl.addEventListener('pointercancel', endStick);
-function moveStick(e) {
-  const r = stickEl.getBoundingClientRect();
-  let dx = (e.clientX - r.left - r.width / 2) / (r.width / 2), dy = (e.clientY - r.top - r.height / 2) / (r.height / 2);
-  const l = Math.hypot(dx, dy);
+// 画面のどこでも：触れた所を起点になぞると、その向きへ歩く（離すと止まる）
+// 軽く触れて離すと「決定」（調べる・話す・仕事・移動）。会話中は「次へ」
+const stick = { x: 0, y: 0, id: null, x0: 0, y0: 0, moved: false };
+const stickEl = $('stick'), knob = stickEl.querySelector('i'), view = $('view');
+const STICK_R = 55, TAP_MOVE = 12;
+view.addEventListener('pointerdown', e => {
+  // 新しく触れた指で操作を始め直す（前の指の「離した」を取りこぼしても、操作が固まらないように）
+  knob.style.transform = ''; stickEl.classList.remove('on');
+  Object.assign(stick, { id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, x: 0, y: 0 });
+  try { view.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
+});
+view.addEventListener('pointermove', e => {
+  if (e.pointerId !== stick.id) return;
+  let dx = e.clientX - stick.x0, dy = e.clientY - stick.y0;
+  if (!stick.moved && Math.hypot(dx, dy) < TAP_MOVE) return;
+  if (!stick.moved) {
+    stick.moved = true;
+    const r = root.getBoundingClientRect();
+    stickEl.style.left = `${stick.x0 - r.left - STICK_R}px`; stickEl.style.top = `${stick.y0 - r.top - STICK_R}px`;
+    stickEl.classList.add('on');
+  }
+  const l = Math.hypot(dx, dy) / STICK_R;
   if (l > 1) { dx /= l; dy /= l; }
-  stick.x = dx; stick.y = dy;
-  knob.style.transform = `translate(${dx * 35}px, ${dy * 35}px)`;
-}
-$('act').addEventListener('click', act);
+  stick.x = dx / STICK_R; stick.y = dy / STICK_R;
+  knob.style.transform = `translate(${dx}px, ${dy}px)`;
+});
+const endStick = e => {
+  if (e.pointerId !== stick.id) return;
+  const tap = !stick.moved;   // 指を動かさずに離したら「決定」（長めに押しても同じ）
+  stick.id = null; stick.x = stick.y = 0; knob.style.transform = '';
+  stickEl.classList.remove('on');
+  if (tap && e.type === 'pointerup') act();
+};
+view.addEventListener('pointerup', endStick);
+view.addEventListener('pointercancel', endStick);
+view.addEventListener('lostpointercapture', endStick);
 $('nb3d').addEventListener('click', () => { if (!st.busy) hooks.notebook(); });
 $('end3d').addEventListener('click', () => { if (!st.busy && st.mode === 'day' && confirm('今日の業務を終えますか？')) finish(); });
 
@@ -843,7 +876,6 @@ function fatal() {
   return true;
 }
 
-const actBtn = $('act');
 const camTarget = new THREE.Vector3();
 const FWD = new THREE.Vector2(-1, -1).normalize(), RIGHT = new THREE.Vector2(1, -1).normalize();
 let last = 0, ending = false;
@@ -930,12 +962,9 @@ function tick(now) {
   const zoomTo = room && room.name === 'バルコニー' ? 0.7 : zoomBase;
   if (Math.abs(camera.zoom - zoomTo) > 0.001) { camera.zoom += (zoomTo - camera.zoom) * Math.min(1, dt * 3); camera.updateProjectionMatrix(); }
 
-  // メッセージ表示中もボタンを「次へ」として残し、同じ場所を連打して読み進められるようにする
-  const talking = !msgEl.classList.contains('hidden');
+  // 軽くタップすると、いちばん近い対象（印の付いた物・人・出入口）に決定する
   target = st.busy ? null : findTarget();
-  actBtn.classList.toggle('hidden', !target && !talking);
   const verb = t => t.night ? t.label : t.exit ? '移動' : t.person ? '話す' : t.chore !== undefined ? '仕事' : t.meeting ? '朝礼' : t.rest ? '休む' : '調べる';
-  actBtn.textContent = talking ? '次へ' : target ? verb(target) : '';
   const labels = [];
   for (const p of Object.values(people)) {
     if (p.area !== cur.id) continue;
@@ -946,7 +975,7 @@ function tick(now) {
   for (const t of tutorTargets()) { const [x, z] = t.at(); labels.push({ x, y: 0.6, z, text: 'ここ', cls: 'work' }); }
   if (target) {
     const [x, z] = target.at();
-    labels.push({ x, z, y: target.person ? 2.5 : 1.6, text: target.person ? 'TALK' : target.night || target.exit || target.meeting || target.rest ? target.label : verb(target), cls: target.exit ? 'exit' : '' });
+    labels.push({ x, z, y: target.person ? 2.5 : 1.6, text: `▶ ${target.person ? '話す' : target.night || target.exit || target.meeting || target.rest ? target.label : verb(target)}`, cls: target.exit ? 'exit' : '' });
   }
   drawLabels(labels);
   drawMinimap(room);
@@ -999,6 +1028,11 @@ export function startMorning(state, h) {
     say(['執事', `（${dateLabel(s)}、朝7時30分。……さて、今日も完璧な執事を演じるとしよう）`],
       '身支度を整えたら、共用室の席に着いて朝礼を始めよう。');
   }
+  // 操作の案内（一度だけ）
+  if (!s.flags.hint_touch) {
+    s.flags.hint_touch = true;
+    msgQueue.push('【操作】画面のどこでも、指を置いてなぞると歩く。軽くタップすると、▶の付いた物を調べる・人と話す・会話を進める。');
+  }
   run();
 }
 
@@ -1030,6 +1064,14 @@ export function startNight(state, route, h) {
       : ['執事', '（2階の廊下には、警備会社の巡回員がいるはずだ。懐中電灯の光に気をつけろ）'],
     ['執事', '（夜明けまでに、終わらせる）']);
   run();
+}
+
+// 調べられる小物（ストーリーに関係のない物）の数
+const lookKey = t => `look_${cur.id}_${t.name}`;
+export function lookStats() {
+  const keys = new Set();
+  for (const [id, a] of Object.entries(areas)) for (const t of a.things) if (t.say) keys.add(`look_${id}_${t.name}`);
+  return { total: keys.size, seen: [...keys].filter(k => s && s.flags[k]).length };
 }
 
 // 人物照会を開いている間は、屋敷の時間と描画を止める

@@ -1,7 +1,7 @@
 // 執事パートの処理（仕事・調査・会話）。画面の描き方に依らない部分
 // ボタン式の画面（game.js）と3Dの屋敷（explore/day3d.js）の両方から使う
 import { PEOPLE, CHORES, PASSCODE, END_HOUR, SISTER } from './data.js';
-import { applyFx, setFlag, dayIndex, whereIs, isAlly, peopleIn } from './state.js';
+import { applyFx, fxNote, setFlag, dayIndex, whereIs, isAlly, peopleIn } from './state.js';
 import { pickTalk } from './actions.js';
 import { joined, sisterTalk } from './sister.js';
 
@@ -37,8 +37,8 @@ export function doChore(s, i) {
   if (c.progress >= def.hours) {
     c.done = true;
     if (def.xmas) setFlag(s, `deco_${c.id}`);
-    if (c.id === 'escortM') msg += ' ' + applyFx(s, { aff: { mother: 12 } }).join('／');
-    if (c.id === 'tutorD') msg += ' ' + applyFx(s, { aff: { daughter: 10 } }).join('／');
+    if (c.id === 'escortM') msg += fxNote(applyFx(s, { aff: { mother: 12 } }));
+    if (c.id === 'tutorD') msg += fxNote(applyFx(s, { aff: { daughter: 10 } }));
     if (c.id === 'laundry' && s.chapter >= 1 && setFlag(s, 'p_bday'))
       msg += ' 旦那様のスーツのポケットに、花屋の領収書が入っていた。「麗子様 お誕生日 11月3日」……。（手帳に記録した）';
   }
@@ -51,7 +51,7 @@ export function investigate(s, spot, seen) {
   let msg = res.text;
   if (seen.length) {
     const amount = Math.min(25, seen.length * (seen.includes('father') ? 20 : 10));
-    msg += `　……${seen.map(p => PEOPLE[p].name).join('、')}に見られた！ ` + applyFx(s, { susp: amount }).join('／');
+    msg += `　……${seen.map(p => PEOPLE[p].name).join('、')}に見られた！` + fxNote(applyFx(s, { susp: amount }));
   }
   return { msg, code: !!res.code, clue: !!res.clue };
 }
@@ -76,7 +76,7 @@ export function talk(s, p, others = 0) {
   t.talked[p] = true;
   const notes = applyFx(s, p === 'father' ? { trust: 3 } : { aff: { [p]: 5 } });
   if (tk.flag) { setFlag(s, tk.flag); notes.push('手帳に記録した'); }
-  return { msg: `${PEOPLE[p].name}${tk.line}　${notes.join('／')}`, forgery: !!tk.forgery };
+  return { msg: `${PEOPLE[p].name}${tk.line}${fxNote(notes)}`, forgery: !!tk.forgery };
 }
 
 export function startForgery(s) {
@@ -96,7 +96,7 @@ export function openHidden(s, seen) {
 // 持ち主のいる私室に、用もなく入ったとき
 export function intrude(s, owner) {
   const notes = applyFx(s, { susp: 5, aff: { [owner]: -2 } });
-  return `${PEOPLE[owner].name}「……何か用？」　${notes.join('／')}`;
+  return `${PEOPLE[owner].name}「……何か用？」${fxNote(notes)}`;
 }
 
 export const witnessesIn = (s, room) => peopleIn(s, room).filter(p => !isAlly(s, p));

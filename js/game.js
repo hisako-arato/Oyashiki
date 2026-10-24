@@ -1,6 +1,6 @@
 // ゲーム進行と画面描画
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY } from './data.js';
-import { newState, save, load, clearSave, clamp, applyFx, setFlag, dayIndex, activeMaids, isAlly,
+import { newState, save, load, clearSave, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
@@ -10,6 +10,7 @@ import { hasNight, nightOptions, nightScene } from './night.js';
 import { morningEvents, joined } from './sister.js';
 import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profiles.js';
 import { faceOf } from './faces.js';
+import { richNodes } from './richtext.js';
 import { VERSION, VERSION_DATE } from './version.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
@@ -54,7 +55,7 @@ function modal(...content) {
   return back;
 }
 function toast(text) {
-  const t = el('div', { class: 'toast' }, text);
+  const t = el('div', { class: `toast ${/〔/.test(text) ? 'fx-toast' : ''}` }, richNodes(text));
   document.body.append(t);
   setTimeout(() => t.remove(), 2600);
 }
@@ -165,13 +166,13 @@ function playScript(steps, done) {
     if (!queue.length) return done();
     const st = queue.shift();
     if (Array.isArray(st)) return showLine(st[0], st[1], next, st[2]);
-    if (st.fx) { const notes = applyFx(s, typeof st.fx === 'function' ? st.fx(s) : st.fx); if (notes.length) toast(notes.join('／')); return next(); }
+    if (st.fx) { const notes = applyFx(s, typeof st.fx === 'function' ? st.fx(s) : st.fx); if (notes.length) toast(fxNote(notes)); return next(); }
     if (st.call) { st.call(s); return next(); }
     if (st.if) { queue.unshift(...((st.if(s) ? st.then : st.else) || [])); return next(); }
     if (st.report) return showReport(next);
     if (st.choice) return showChoice(st.choice, c => {
       const notes = applyFx(s, c.fx);
-      if (notes.length) toast(notes.join('／'));
+      if (notes.length) toast(fxNote(notes));
       queue.unshift(...(c.then || []));
       next();
     });
@@ -382,7 +383,7 @@ function renderDay(msg) {
 
   const pending = t.chores.filter(c => c.assignee === 'butler' && !c.done);
   render(el('div', { class: 'panel day' }, statusBar(),
-    msg ? el('div', { class: 'msg' }, msg) : null,
+    msg ? el('div', { class: 'msg' }, richNodes(msg)) : null,
     el('section', { class: 'current' },
       el('h2', {}, ROOMS[room].name),
       el('p', { class: 'who' }, here.length ? ['ここにいる人：', ...here.map(badge)] : '誰もいない。'),
@@ -486,7 +487,7 @@ function endDay() {
   render(el('div', { class: 'panel' }, statusBar(),
     el('h2', {}, '本日の業務報告'),
     el('ul', { class: 'report' }, lines.map(l => el('li', {}, l))),
-    el('p', { class: 'hint' }, notes.join('／')),
+    el('p', { class: 'hint' }, richNodes(fxNote(notes))),
     el('button', { class: 'primary', onclick: () => hasNight(s) ? night() : nextDay() }, '次へ')));
 }
 
@@ -646,7 +647,14 @@ function noteTab() {
     el('h4', {}, '手がかり'),
     got.length ? el('ul', { class: 'clues' }, got.map(([, c]) => el('li', {}, c.text))) : el('p', {}, 'まだ何もない。'),
     el('h4', {}, '好感度'), affList(),
+    lookLine(),
   ];
+}
+// 屋敷の小物を、いくつ調べたか（3Dの屋敷で遊んでいるときだけ）
+function lookLine() {
+  if (!day3d || !day3d.lookStats) return null;
+  const { seen, total } = day3d.lookStats();
+  return total ? el('p', { class: 'hint' }, `屋敷で調べた物：${seen}／${total}`) : null;
 }
 
 function peopleTab(back) {

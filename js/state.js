@@ -33,6 +33,8 @@ export function clearSave() {
 }
 
 export const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
+// 効果のお知らせを〔〕で包む。画面では js/richtext.js が色付きにする
+export const fxNote = notes => notes.length ? `〔${notes.join('／')}〕` : '';
 
 export const WEEKS_PER_CHAPTER = 2;
 export function dayIndex(s) { return (s.chapter * WEEKS_PER_CHAPTER + s.week) * 5 + s.day; }
