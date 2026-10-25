@@ -19,17 +19,73 @@ export function newState() {
   };
 }
 
-export function save(s) {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) { /* 保存できない環境でも続行 */ }
-}
-export function load() {
+// ---- セーブ：5つの枠に、それぞれ別のプレイを自動で保存する ----
+export const SLOTS = 5;
+const slotKey = n => `oyashiki-save-v2-${n}`;
+let slot = 1;                       // いま遊んでいる枠
+export const currentSlot = () => slot;
+export function useSlot(n) { slot = n; }
+// 以前の1つだけのセーブは、枠1に移す
+function migrate() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const old = localStorage.getItem(SAVE_KEY);
+    if (old == null) return;
+    if (localStorage.getItem(slotKey(1)) == null) localStorage.setItem(slotKey(1), old);
+    localStorage.removeItem(SAVE_KEY);
+  } catch (e) { /* noop */ }
+}
+export function save(s, n = slot) {
+  s.savedAt = Date.now();
+  try { localStorage.setItem(slotKey(n), JSON.stringify(s)); } catch (e) { /* 保存できない環境でも続行 */ }
+}
+export function load(n = slot) {
+  migrate();
+  try {
+    const raw = localStorage.getItem(slotKey(n));
     return raw ? JSON.parse(raw) : null;
   } catch (e) { return null; }
 }
-export function clearSave() {
-  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* noop */ }
+export function clearSave(n = slot) {
+  try { localStorage.removeItem(slotKey(n)); } catch (e) { /* noop */ }
+}
+export const listSlots = () => Array.from({ length: SLOTS }, (_, i) => ({ n: i + 1, data: load(i + 1) }));
+export function copySlot(from, to) {
+  const d = load(from);
+  if (!d) return false;
+  try { localStorage.setItem(slotKey(to), JSON.stringify(d)); return true; } catch (e) { return false; }
+}
+// クリアした結末を、枠のセーブ（最後に保存した日の朝）に書き足す。セーブ自体は消さない
+export function markCleared(s, id, n = slot) {
+  const d = load(n) || s;
+  const add = list => [...new Set([...(list || []), id])];
+  d.cleared = add(d.cleared);
+  s.cleared = add(s.cleared);
+  try { localStorage.setItem(slotKey(n), JSON.stringify(d)); } catch (e) { /* noop */ }
+}
+// 書き出し・読み込み：セーブを1行の文字列にする（「OYASHIKI1:」＋JSON を base64 にしたもの）
+const PREFIX = 'OYASHIKI1:';
+export function exportSave(n) {
+  const d = load(n);
+  if (!d) return null;
+  const bytes = new TextEncoder().encode(JSON.stringify(d));
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return PREFIX + btoa(bin);
+}
+// 文字列を読んでセーブに戻す。おかしな文字列なら null
+export function parseSave(text) {
+  try {
+    const t = String(text || '').replace(/\s+/g, '');
+    if (!t.startsWith(PREFIX)) return null;
+    const bin = atob(t.slice(PREFIX.length));
+    const d = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
+    const ok = d && typeof d === 'object' && Number.isInteger(d.chapter) && Number.isInteger(d.week)
+      && Number.isInteger(d.day) && typeof d.phase === 'string' && d.aff && d.flags && d.counters;
+    return ok ? d : null;
+  } catch (e) { return null; }
+}
+export function importSave(d, n) {
+  try { localStorage.setItem(slotKey(n), JSON.stringify(d)); return true; } catch (e) { return false; }
 }
 
 export const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));

@@ -1,6 +1,6 @@
 // ゲーム進行と画面描画
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY, BASEMENT_HINTS } from './data.js';
-import { newState, save, load, clearSave, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
+import { newState, save, load, clearSave, listSlots, copySlot, markCleared, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
@@ -67,14 +67,14 @@ export function title() {
   if (day3d) day3d.leave();
   document.querySelectorAll('.viewer, .modal-back').forEach(e => e.remove());
   app().classList.remove('overlay');
-  const saved = load();
+  const any = listSlots().some(x => x.data);
   render(el('div', { class: 'title' },
     el('p', { class: 'sub' }, 'お屋敷の宝を盗み出す物語'),
     el('h1', {}, 'OYASHIKI'),
     el('p', { class: 'sub2' }, '執事と月下の絵'),
     el('div', { class: 'menu' },
-      saved && saved.phase !== 'ending' ? el('button', { onclick: () => resume(saved) }, 'つづきから') : null,
-      el('button', { onclick: startNew }, 'はじめから'),
+      any ? el('button', { onclick: () => slotScreen('continue') }, 'つづきから') : null,
+      el('button', { onclick: () => slotScreen('new') }, 'はじめから'),
       el('button', { class: 'ghost', onclick: titleSettings }, '設定')),
     el('p', { class: 'note' }, versionLabel())));
   // 新しい版で初めて起動したときに、一度だけ知らせる
@@ -148,13 +148,107 @@ function titleSettings() {
     updateBox(),
     el('h4', {}, 'キャラクターの表示'),
     ...vrmChoice(titleSettings),
+    el('h4', {}, 'セーブの書き出し・読み込み'),
+    ...saveIO(),
     el('button', { class: 'primary', onclick: title }, 'タイトルに戻る')));
 }
 
-function startNew() {
+function startNew(n) {
+  useSlot(n);
   loadPortrait();
   s = newState();
   playScript(PROLOGUE, () => chapterIntro());
+}
+
+// ---- セーブ枠 ----
+const PROGRESS = [['hidden_room', '隠し部屋発見'], ['shizuku_reunion', '雫と再会'], ['b_found', '地下発見'], ['found_painting', '絵を発見']];
+const ENDING_NO = id => (ENDINGS[id]?.title.match(/ENDING \d/) || [id])[0];
+const playedAt = t => {
+  if (!t) return '';
+  const d = new Date(t), p = v => String(v).padStart(2, '0');
+  return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+function slotSummary(n, d) {
+  if (!d) return [el('b', {}, `枠${n}`), el('p', { class: 'hint' }, '（空き）')];
+  const prog = PROGRESS.filter(([f]) => d.flags[f]).map(([, t]) => t);
+  return [
+    el('b', {}, `枠${n}　${dateLabel(d)}`),
+    d.cleared?.length ? el('span', { class: 'cleared' }, `クリア済み（${d.cleared.map(ENDING_NO).join('・')}）`) : null,
+    el('p', {}, `${CHAPTER_TITLES[d.chapter] || ''}`),
+    el('p', {}, `心象 ${Math.round(d.trust)}　疑惑 ${Math.round(d.susp)}${prog.length ? '　' + prog.join('・') : ''}`),
+    d.savedAt ? el('p', { class: 'hint' }, `最終プレイ ${playedAt(d.savedAt)}`) : null,
+  ];
+}
+// mode：'continue'（つづきから）／'new'（はじめから）
+function slotScreen(mode) {
+  const again = () => slotScreen(mode);
+  const slots = listSlots();
+  const start = (n, d) => {
+    if (mode === 'continue') { useSlot(n); return resume(d); }
+    if (d && !confirm(`枠${n}のセーブを上書きして、はじめから遊びますか？`)) return;
+    startNew(n);
+  };
+  const copyTo = from => {
+    const back = modal(el('h3', {}, `枠${from}を、どの枠にコピーしますか？`),
+      el('div', { class: 'slot-list' }, slots.filter(x => x.n !== from).map(({ n, data }) =>
+        el('button', { class: 'ghost', onclick: () => {
+          if (data && !confirm(`枠${n}のセーブを上書きしますか？`)) return;
+          back.remove(); copySlot(from, n); again();
+        } }, `枠${n}　${data ? dateLabel(data) : '（空き）'}`))),
+      el('div', { class: 'row' }, el('button', { onclick: () => back.remove() }, 'やめる')));
+  };
+  const del = n => {
+    if (!confirm(`枠${n}のセーブを消しますか？（元に戻せません）`)) return;
+    clearSave(n); again();
+  };
+  render(el('div', { class: 'panel slots' },
+    el('h2', {}, mode === 'continue' ? 'つづきから' : 'はじめから'),
+    el('p', { class: 'hint' }, mode === 'continue'
+      ? '遊ぶ枠を選ぶ。セーブは毎朝、その枠に自動で保存される。'
+      : '新しく遊ぶ枠を選ぶ。使っている枠を選ぶと上書きになる。'),
+    slots.map(({ n, data }) => el('div', { class: `slot ${data ? '' : 'empty'}` },
+      el('div', { class: 'slot-info' }, slotSummary(n, data)),
+      el('div', { class: 'slot-acts' },
+        mode === 'new' || data ? el('button', { class: 'primary', onclick: () => start(n, data) }, mode === 'continue' ? '遊ぶ' : (data ? '上書き' : 'ここで始める')) : null,
+        data ? el('button', { class: 'ghost', onclick: () => copyTo(n) }, 'コピー') : null,
+        data ? el('button', { class: 'ghost', onclick: () => del(n) }, '削除') : null))),
+    el('button', { class: 'primary', onclick: title }, 'タイトルに戻る')));
+}
+// 設定画面の「書き出し・読み込み」
+function saveIO() {
+  const out = el('textarea', { class: 'save-text', rows: 3, readonly: true, placeholder: '書き出した文字列がここに出る' });
+  const pick = el('select', {}, Array.from({ length: SLOTS }, (_, i) => el('option', { value: i + 1 }, `枠${i + 1}`)));
+  const status = el('p', { class: 'hint' });
+  const doExport = () => {
+    const str = exportSave(+pick.value);
+    out.value = str || '';
+    status.textContent = str ? `枠${pick.value}を書き出した。この文字列を控えておけば、別の端末でも読み込める。` : `枠${pick.value}は空いている。`;
+  };
+  const copy = async () => {
+    if (!out.value) return;
+    try { await navigator.clipboard.writeText(out.value); status.textContent = 'コピーした。'; }
+    catch (e) { out.select(); status.textContent = '文字列を選んだ。長押しでコピーしてほしい。'; }
+  };
+  const inp = el('textarea', { class: 'save-text', rows: 3, placeholder: '読み込む文字列を貼り付ける' });
+  const doImport = () => {
+    const d = parseSave(inp.value), n = +pick.value;
+    if (!d) { status.textContent = '読み込めなかった。文字列が欠けていないか確かめてほしい。'; return; }
+    if (load(n) && !confirm(`枠${n}のセーブを上書きしますか？`)) return;
+    status.textContent = importSave(d, n) ? `枠${n}に読み込んだ（${dateLabel(d)}）。` : '保存できなかった。';
+    if (status.textContent.startsWith('枠')) inp.value = '';
+  };
+  return [
+    el('div', { class: 'save-io' },
+      el('label', {}, '枠 ', pick),
+      el('div', { class: 'choice2' },
+        el('button', { class: 'ghost', onclick: doExport }, '書き出す'),
+        el('button', { class: 'ghost', onclick: copy }, 'コピー')),
+      out,
+      inp,
+      el('button', { class: 'ghost', onclick: doImport }, 'この枠に読み込む'),
+      status),
+    el('p', { class: 'hint' }, 'セーブを文字列にして控えたり、別の端末に移したりできる。'),
+  ];
 }
 
 function resume(saved) {
@@ -674,13 +768,14 @@ function ending(id) {
   const e = ENDINGS[id];
   s.phase = 'ending';
   playScript(e.lines, () => {
-    if (e.good) clearSave();
-    const retry = !e.good ? load() : null;
+    // クリアしてもセーブは消さない（枠に「クリア済み」と記す。消すのはプレイヤーが手で）
+    if (e.good) markCleared(s, id);
+    const retry = load();
     render(el('div', { class: 'card end' },
       el('h2', {}, e.title),
       el('p', {}, e.good ? 'CLEAR' : ''),
       el('div', { class: 'menu' },
-        retry ? el('button', { onclick: () => resume(retry) }, '直前のセーブからやり直す') : null,
+        retry ? el('button', { onclick: () => resume(retry) }, e.good ? '最後のセーブから、別の結末を探す' : '直前のセーブからやり直す') : null,
         el('button', { onclick: title }, 'タイトルへ'))));
   });
 }

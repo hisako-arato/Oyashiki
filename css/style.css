@@ -199,3 +199,18 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .fx-note { color: var(--gold); border: 1px solid var(--gold); }
 .toast.fx-toast { background: rgba(28, 20, 32, .95); border: 1px solid var(--gold); color: var(--text); }
 .toast.fx-toast .fxs { margin-top: 0; }
+
+/* セーブ枠 */
+.slots .slot { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid #4a3f50; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.slots .slot.empty { opacity: .75; }
+.slot-info { flex: 1 1 200px; min-width: 0; }
+.slot-info b { color: var(--gold); }
+.slot-info p { margin: 2px 0; font-size: .85rem; }
+.slot-info .cleared { display: inline-block; margin-left: 6px; font-size: .75rem; color: #1a1408; background: var(--gold); border-radius: 4px; padding: 1px 6px; }
+.slot-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.slot-acts button { width: auto; padding: 6px 14px; font-size: .85rem; }
+.slot-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.save-io { display: flex; flex-direction: column; gap: 8px; }
+.save-io select { margin-left: 4px; padding: 4px 8px; }
+.save-text { width: 100%; box-sizing: border-box; font-family: monospace; font-size: .75rem; word-break: break-all; background: #15110e; color: inherit; border: 1px solid #4a3f33; border-radius: 6px; padding: 6px; }
