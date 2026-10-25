@@ -826,7 +826,6 @@ function execution() {
 }
 
 async function runRoute(id) {
-  if (id === 'persuade' || id === 'deal') return ending(id);
   // 3Dの屋敷では、夜の屋敷を歩いて絵を盗み出す（執事は決行の服に着替える。先に読み込んでおく）
   if (castMissing()) return preloadCast(() => runRoute(id));
   app().replaceChildren();

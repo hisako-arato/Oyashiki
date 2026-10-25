@@ -755,6 +755,7 @@ function nightThings() {
   const N = st.night;
   if (!N) return [];
   const list = [], at = (x, z) => () => [x, z];
+  if (N.morning) return morningThings(N, list, at);
   if (cur.id === 'f1') list.push({ name: '資料室への扉', at: at(5.4, 4), label: '調べる', night: () => say('内側から鍵が掛かっている。夜は、倉庫から屋敷の奥へは入れない。') });
   if (cur.id === 'f1' && !N.ladderTaken) list.push({ name: '庭師の梯子', at: at(1.3, 5), label: '梯子を持つ', night: () => {
     if (N.carry) return say('両手がふさがっている。');
@@ -773,11 +774,11 @@ function nightThings() {
   if (cur.id === 'grounds' && N.ladderUp && N.carry === 'painting') list.push({ name: '梯子', at: at(...below), label: '梯子を登る', night: () => say('絵を抱えたままでは登れない。') });
   if (cur.id === 'f2' && N.ladderUp) list.push({ name: '梯子', at: at(24, 17.4), label: '梯子で降りる', night: () => travel({ area: 'grounds', x: below[0], z: below[1] + 0.6 }) });
   if (cur.id === 'f2' && s.flags.hidden_open && !N.taken) list.push({ name: '月下の庭', at: at(8, 3.2), label: '絵を外す', night: takePainting });
-  if (cur.id === 'f2' && N.route === 'swap' && N.carry === 'painting') list.push({ name: 'クローゼット', at: at(41.3, 14), label: '本物を隠す', night: () => {
+  if (cur.id === 'f2' && N.route === 'swap' && N.carry === 'painting' && !N.morning) list.push({ name: 'クローゼット', at: at(41.3, 14), label: '本物を隠す', night: () => {
     N.carry = null;
     caption('すり替え完了', `深夜 ${nightClock()}`);
-    afterMsg = () => endNight('swap');
-    say('お嬢様の寝息を確かめ、クローゼットの奥に本物をそっと隠した。……あとは、何食わぬ顔で朝を迎えるだけだ。');
+    afterMsg = startCarry;
+    say('お嬢様の寝息を確かめ、クローゼットの奥に本物をそっと隠した。', '……あとは朝、運び屋が偽物を運び出す騒ぎにまぎれて、本物を持ち出すだけだ。');
   } });
   if (cur.id === 'grounds' && N.route === 'night' && N.carry === 'painting') list.push({ name: '正門', at: at(38, 56.6), label: '屋敷を去る', night: () => {
     caption('脱出', `深夜 ${nightClock()}`);
@@ -785,6 +786,43 @@ function nightThings() {
     say('門の鍵を外し、夜の街へ出た。腕の中の額縁が、月明かりを受けて鈍く光った。');
   } });
   return list;
+}
+// 25日の朝：クローゼットから本物を取り出し、洗濯かごに隠して、使用人棟の自室まで運ぶ
+function morningThings(N, list, at) {
+  if (cur.id === 'f2' && !N.carry) list.push({ name: 'クローゼット', at: at(41.3, 14), label: '本物を取り出す', night: () => {
+    N.carry = 'painting';
+    say(s.flags.d_close ? ['お嬢様', '「……持っていって。私は、何も見てない」'] : 'お嬢様は朝食に下りている。部屋には誰もいない。',
+      '洗濯かごの底に本物を寝かせ、上からシーツをかぶせた。……見られても、ただの洗濯物に見えるはずだ。旦那様と警備員を除けば。');
+  } });
+  if (cur.id === 'cottage' && N.carry === 'painting') list.push({ name: '執事の部屋のベッド', at: at(2.4, 12.5), label: '本物を隠す', night: () => {
+    N.carry = null;
+    caption('持ち出し完了', `朝 ${7 + Math.floor(N.min / 60)}:${String(Math.floor(N.min) % 60).padStart(2, '0')}`);
+    afterMsg = () => endNight('swap');
+    say('ベッドの下のトランクに、本物を収めて鍵を掛けた。', '窓の外で、偽物を積んだトラックが正門を出ていく。……誰も、何も気づいていない。');
+  } });
+  return list;
+}
+// すり替えた夜が明けて、25日の朝。運び屋が偽物を梱包している間に、本物を運び出す
+function startCarry() {
+  const N = st.night;
+  fade('夜が明けた――12月25日の朝', () => {
+    Object.assign(N, { morning: true, nightMin: N.min, min: 0, carry: null, dawn: false, caught: false, ladderUp: false });
+    setLights(false);
+    dressPlayer(false);
+    Object.assign(areas.f1.nightDoor.box, { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
+    areas.f1.nightDoor.g.visible = false;
+    carried.ladder.visible = false; wallLadder.visible = false;
+    for (const p of Object.values(people)) { p.nightRole = null; p.area = null; p.route = null; }
+    // 旦那様は1階の廊下で梱包を見張り、警備員は2階の書斎から木箱を運び出す（裏階段の近くで引き返す）
+    Object.assign(people.father, { area: 'f1', x: 24, z: 6, range: 7, wait: 0, look: 0, nightRole: { i: 0, path: [[24, 6, 2.5], [43, 6, 2], [34, 6, 1]] } });
+    Object.assign(people.guard2, { area: 'f2', x: 14, z: 9.5, range: 7, wait: 0, look: 0, nightRole: { i: 0, path: [[12, 9.5, 2.5], [42.5, 9.5, 1.5], [30, 9.5, 1]] } });
+    enter('cottage', 2.4, 12.5);
+    st.busy = false;
+    say('12月25日、朝7時。正門に、オークション会社のトラックが着いた。',
+      '旦那様は1階の廊下で梱包を見張り、警備員が2階の書斎から木箱を運び出している。',
+      '（運び屋が発つのは10時。それまでに、お嬢様の部屋のクローゼットから本物を取り出し、この部屋まで運ぶ）');
+    setTimeout(() => caption('持ち出し', '12月25日　朝 7:00'), 300);
+  }, 1600);
 }
 function takePainting() {
   const N = st.night;
@@ -810,7 +848,7 @@ const nightClock = () => { const m = Math.floor(st.night.min); return `${1 + Mat
 function nightAct(t) {
   const N = st.night;
   if (t.exit) {
-    if (/玄関/.test(t.name)) return say('玄関は内側から閂が掛けられている。');
+    if (/玄関/.test(t.name) && !N.morning) return say('玄関は内側から閂が掛けられている。');
     if (N.carry === 'ladder' && t.exit.area !== 'grounds' && cur.id === 'grounds') return say('梯子を担いだままでは、屋敷の中を通れない。');
     return travel(t.exit);
   }
@@ -832,6 +870,8 @@ function nightAct(t) {
 }
 function nightGoal() {
   const N = st.night;
+  if (N.morning) return N.carry === 'painting' ? '本物を、使用人棟の執事の部屋まで運ぶ（旦那様と警備員に見られないように）'
+    : 'お嬢様の部屋のクローゼットから、本物を取り出す（運び屋が発つ10時まで）。1階の廊下に旦那様、2階の廊下に木箱を運ぶ警備員';
   if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す' : '絵を抱えて、正門から屋敷を出る';
   if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
   if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
@@ -840,7 +880,7 @@ function nightGoal() {
 function endNight(id) {
   // 盗み出せたときは、手際（かかった時間・ニアミス・カード）を残してエンディングで見せる
   const N = st.night;
-  if (N && (id === 'night' || id === 'swap')) s.heist = { min: Math.round(N.min), near: N.near || 0, card: !!N.card, route: id };
+  if (N && (id === 'night' || id === 'swap')) s.heist = { min: Math.round(N.min + (N.nightMin || 0)), near: N.near || 0, card: !!N.card, route: id };
   running = false;
   root.classList.add('hidden');
   setLights(false);
@@ -851,19 +891,29 @@ function nightTick(dt) {
   const N = st.night;
   if (!st.busy) {
     N.min += dt * 60 / NIGHT_SEC_PER_HOUR;
-    if (N.min >= 240 && !N.dawn) {
+    if (N.morning && N.min >= 180 && !N.dawn) {
+      N.dawn = true;
+      afterMsg = () => endNight('caught25');
+      say('10時。トラックが正門を出ていった。……旦那様が、屋敷じゅうの点検を始めた。');
+    } else if (!N.morning && N.min >= 240 && !N.dawn) {
       N.dawn = true;
       afterMsg = () => endNight('caught');
       say('東の空が白み始めた。屋敷の明かりが一つ、また一つと灯っていく……。');
     }
   }
-  const seers = Object.values(people).filter(p => p.area === cur.id && p.seeing && !isAlly(s, p.id));
+  // 25日の朝は、本物を運んでいるところを旦那様か警備員に見られたときだけ見つかる（ふだんの仕事なら怪しまれない）
+  const seers = Object.values(people).filter(p => p.area === cur.id && p.seeing && !isAlly(s, p.id) && (!N.morning || N.carry === 'painting'));
   seenTime = seers.length ? seenTime + dt : 0;
   if (seenTime > 0.3 && !st.busy && !N.caught) {
     N.caught = true;
     const p = seers[0];
-    afterMsg = () => endNight('caught');
-    say([p.name, /^guard/.test(p.id) ? '「誰だ！ そこで何をしている！」' : '「……誰？ ……執事さん？」'], '懐中電灯の光が、執事の顔を照らした。');
+    if (N.morning) {
+      afterMsg = () => endNight('caught25');
+      say([p.name, p.id === 'father' ? '「……執事。その洗濯かごの中身は何だ」' : '「ちょっと。そのかご、中を見せてもらえますか」'], 'シーツの端から、額縁の角が覗いていた。');
+    } else {
+      afterMsg = () => endNight('caught');
+      say([p.name, /^guard/.test(p.id) ? '「誰だ！ そこで何をしている！」' : '「……誰？ ……執事さん？」'], '懐中電灯の光が、執事の顔を照らした。');
+    }
   }
   // ニアミス：見張りの視界のすぐ外を抜けた（華麗さの採点に使う）
   for (const p of Object.values(people)) {
@@ -1033,8 +1083,8 @@ function drawHud(room) {
   const t = s.today;
   let clock, text;
   if (st.mode === 'night') {
-    const m = Math.floor(st.night.min), h = 1 + Math.floor(m / 60);
-    clock = `12月24日 イブ　深夜 ${h}:${String(m % 60).padStart(2, '0')}`;
+    const m = Math.floor(st.night.min), h = (st.night.morning ? 7 : 1) + Math.floor(m / 60);
+    clock = st.night.morning ? `12月25日　朝 ${h}:${String(m % 60).padStart(2, '0')}` : `12月24日 イブ　深夜 ${h}:${String(m % 60).padStart(2, '0')}`;
     text = '目的：' + nightGoal();
   } else {
     clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}`;
