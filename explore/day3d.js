@@ -635,7 +635,8 @@ function ensureButlerChore() {
   if (mine.length) return;
   const c = s.today.chores.filter(c => c.id !== 'cook' && !CHORES[c.id].butlerOnly && WORK[c.id][0] !== 'grounds').sort((a, b) => CHORES[a.id].hours - CHORES[b.id].hours)[0];
   if (!c) return;
-  c.assignee = 'butler';
+  // メイドに振られていた仕事を付け替えるときは、メイドが済ませる前提で付いた「完了」の印も消す
+  Object.assign(c, { assignee: 'butler', done: false, failed: false, overload: false, progress: 0 });
   buildPlan(s);
 }
 
