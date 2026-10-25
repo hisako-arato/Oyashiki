@@ -12,7 +12,7 @@ import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profil
 import { faceOf } from './faces.js';
 import { richNodes } from './richtext.js';
 import { VERSION, VERSION_DATE } from './version.js';
-import { KINDS, savedCount, saveKind, keepStorage } from './vrmstore.js';
+import { KINDS, VRM_IDS, savedCount, saveKind, keepStorage } from './vrmstore.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -140,12 +140,12 @@ function storeBox() {
     const btn = el('button', { class: 'ghost' }, `保存する（${k.size}）`);
     const show = n => {
       if (n == null) { status.textContent = 'この端末では保存できない'; btn.disabled = true; return; }
-      status.textContent = `${n}/10人 保存済み`;
-      btn.disabled = n >= 10; btn.textContent = n >= 10 ? '保存済み' : `保存する（${k.size}）`;
+      status.textContent = n >= VRM_IDS.length ? '保存済み' : `${Math.floor(n / VRM_IDS.length * 100)}% 保存済み`;
+      btn.disabled = n >= VRM_IDS.length; btn.textContent = n >= VRM_IDS.length ? '保存済み' : `保存する（${k.size}）`;
     };
     btn.onclick = async () => {
       btn.disabled = true; keepStorage();
-      try { await saveKind(kind, n => { status.textContent = `保存しています… ${n}/10人`; }); }
+      try { await saveKind(kind, (n, all) => { status.textContent = `保存しています… ${Math.floor(n / all * 100)}%`; }); }
       catch (e) { status.textContent = '保存できなかった（電波を確かめて、もう一度）'; btn.disabled = false; return; }
       show(await savedCount(kind));
     };
@@ -191,7 +191,7 @@ async function preloadCast(then) {
   keepStorage();
   try {
     const V = await import('../explore/vrm.js');
-    await V.preloadCast((f, i, n) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `キャラクターを読み込んでいます…（${Math.min(i + 1, n)}/${n}人）`; });
+    await V.preloadCast((f, i, n) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `キャラクターを読み込んでいます…（${Math.floor(f * 100)}%）`; });
   } catch (e) {
     console.warn(e);
     return render(el('div', { class: 'panel preload' },
