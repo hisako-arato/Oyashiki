@@ -177,50 +177,54 @@ export const SPOTS = {
   ],
 };
 
-// 会話。上から順に条件を満たす最初のものを使う。once の手がかりは一度だけ
+// 会話。上から順に条件を満たす最初のものを使う。flag の手がかりは一度だけ
+// ask：主人公から振る一言（手がかりの話は、主人公が尋ねて相手が答える形にする）
 export const TALKS = {
   father: [
     { line: '「報告は手短に。……君の仕事ぶりには満足している」' },
   ],
   mother: [
-    { if: s => s.aff.mother >= 50 && ch(s) >= 1 && !s.flags.p_lover, flag: 'p_lover',
+    { if: s => s.aff.mother >= 50 && ch(s) >= 1 && !s.flags.p_lover, flag: 'p_lover', ask: '「旦那様は、今夜もお帰りが遅いのでしょうか」',
       line: '「あの人、また麗子って女のところよ。……ねえ、あなたは私を一人にしないでしょう？」' },
     { if: s => s.aff.mother >= 60, line: '「あなたの淹れる紅茶が一番好き。ねえ、今夜も少し付き合って？」' },
     { line: '「あら執事さん。今日もいい男ね。エステの予約、覚えてくれてる？」' },
   ],
   daughter: [
-    { if: s => s.aff.daughter >= 35 && ch(s) >= 1 && !s.flags.hint_redbook, flag: 'hint_redbook',
+    { if: s => s.aff.daughter >= 35 && ch(s) >= 1 && !s.flags.hint_redbook, flag: 'hint_redbook', ask: '「お嬢様は、旦那様の書斎に入られたことは？」',
       line: '「子どもの頃ね、パパの本棚の赤い本を触ったら、すごく怒られたの。なんでだろう？」' },
     { if: s => s.aff.daughter >= 60, line: '「執事さんといると落ち着くな。……ずっとこの家にいてくれる？」' },
     { line: '「執事さんって何でもできるよね。私、何にもできないや」' },
   ],
   red: [
-    { if: s => s.aff.red >= 25 && !s.flags.c_red, flag: 'c_red',
-      line: '「……夜中、旦那様が書斎で電話してた。『あの絵は年明けに海外で』って。……それだけ」' },
-    { if: s => s.aff.red >= 40 && !s.flags.ladder, flag: 'ladder',
-      line: '「……倉庫に庭師さんの梯子。2階のバルコニーまで届く。危ないから、使っちゃだめって言われてる」' },
-    { if: s => s.aff.red >= 45 && ch(s) >= 1 && !s.flags.b_wine, flag: 'b_wine',
-      line: '「……旦那様、ワインを取りに行くと、いつもなかなか戻ってこない。……セラー、どこにあるのか知らない」' },
-    { if: s => s.aff.red >= 70, line: '「……執事さんが何をしてても、私は見てないことにする」' },
+    { if: s => s.aff.red >= 25 && !s.flags.c_red, flag: 'c_red', ask: '「赤さん、旦那様は夜も遅くまで起きていらっしゃるのかな」',
+      line: '「……うん。わたし、夜中に仕込みしてるから、聞こえる。この前、書斎で電話してた。『あの絵は年明けに海外で』って。……それだけ」' },
+    { if: s => s.aff.red >= 35 && !s.counters.night_red, line: '「……仕事のあと、たまに共用室で熱燗飲んでる。……執事さんも、来る？」' },
+    { if: s => s.aff.red >= 40 && !s.flags.ladder, flag: 'ladder', ask: '「2階のバルコニーの窓、外側が汚れていてね。外から拭けないものかな」',
+      line: '「……倉庫に庭師さんの梯子。バルコニーまで届く。危ないから、使っちゃだめって言われてる」' },
+    { if: s => s.aff.red >= 45 && ch(s) >= 1 && !s.flags.b_wine, flag: 'b_wine', ask: '「今夜のワインは、旦那様がご自分で選ばれるのかな」',
+      line: '「……旦那様、ワインは自分で取りに行く。いつもなかなか戻ってこない。……セラー、どこにあるのか、わたしも知らない」' },
+    { if: s => s.aff.red >= 70, line: '「……執事さんが何をしてても、わたしは見てないことにする。……あの人には、悪い意味で借りがあるから」' },
     { line: '「……（ぼーっとしている）……あ、お昼もうできてます」' },
   ],
   blue: [
-    { if: s => s.flags.found_painting && !s.flags.forgery_start && s.aff.blue >= 60, forgery: true,
+    { if: s => s.flags.found_painting && !s.flags.forgery_start && s.aff.blue >= 60, forgery: true, ask: '「青さん、絵の模写を頼めないかな。見たままを、そっくりに」',
       line: '「え、絵の模写ですか？ 任せてください！ 見たままを描くの、得意なんです！」' },
     { if: s => s.flags.forgery_start && !s.flags.forgery_ready, line: '「模写、順調ですよ！ 筆が乗ってきました！」' },
+    { if: s => s.aff.blue >= 35 && !s.counters.night_blue, line: '「今夜、共用室で一緒に飲みませんか？ 甘いの、冷やしてあるんです！」' },
     { if: s => s.aff.blue >= 70, line: '「執事さんの似顔絵、また描いちゃいました！ ほら、ちょっと笑ってる顔です」' },
     { line: '「あわわ、お皿割っちゃいました……でも次は大丈夫です！」' },
   ],
   black: [
-    { if: s => s.aff.black >= 30 && !s.flags.hall_patrol, flag: 'hall_patrol',
+    { if: s => s.aff.black >= 30 && !s.flags.hall_patrol, flag: 'hall_patrol', ask: '「黒さん、夜の見回りは誰の担当に？」',
       line: '「夜は私が大広間を見回るよう、旦那様から言いつかっています。怪しい者は見逃しません」' },
     { if: s => s.aff.black >= 70, line: '「執事さんは信頼しています。……だから、裏切らないでくださいね」' },
     { line: '「掃除は終わりました。次の指示をお願いします」' },
   ],
   white: [
-    { if: s => s.aff.white >= 40 && !s.flags.white_elec, flag: 'white_elec',
+    { if: s => s.aff.white >= 40 && !s.flags.white_elec, flag: 'white_elec', ask: '「白さん、この屋敷の配電盤は古いね。見たことはある？」',
       line: '「この屋敷、警報だけ独立した系統なんですよ。大学で電気工学をやってたので、配線を見れば分かります」' },
-    { if: s => s.aff.white >= 45 && ch(s) >= 1 && s.flags.white_elec && !s.flags.b_circuit, flag: 'b_circuit',
+    { if: s => s.aff.white >= 35 && !s.counters.night_white, line: '「仕事のあと、共用室でハイボールでもどうです？ 一人で飲むのは、非合理なので」' },
+    { if: s => s.aff.white >= 45 && ch(s) >= 1 && s.flags.white_elec && !s.flags.b_circuit, flag: 'b_circuit', ask: '「配電盤のことで、ほかに気づいたことは？」',
       line: '「そういえば配電盤に、どこにもつながっていない系統があるんですよ。屋敷のどこかに、誰も知らない部屋の電灯がある計算になります」' },
     { if: s => s.aff.white >= 70, line: '「執事さんの頼みなら、多少のことは聞きますよ。理由は聞きません」' },
     { line: '「担当分、全部片付けておきました。他に何かあります？」' },

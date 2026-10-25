@@ -538,8 +538,12 @@ function chat(p) {
   const others = Object.values(people).filter(o => o !== p && o.area === cur.id && Math.hypot(o.x - player.x, o.z - player.z) < 8).length;
   const res = DL.talk(s, p.id, others);
   if (!res.repeat) DL.spendMinutes(s, ACT_MIN);
-  if (res.forgery) { st.busy = true; return hooks.askForgery(res.msg, m => say(m)); }
-  say(res.msg);
+  if (res.forgery) {
+    st.busy = true;
+    if (res.ask) { say(res.ask); afterMsg = () => { st.busy = true; hooks.askForgery(res.msg, m => say(m)); }; return; }
+    return hooks.askForgery(res.msg, m => say(m));
+  }
+  say(res.ask, res.msg);
 }
 function work(i) {
   const c = s.today.chores[i], { ok, why } = DL.choreAvailability(s, c);

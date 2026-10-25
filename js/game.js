@@ -6,7 +6,7 @@ import { newState, save, load, clearSave, listSlots, copySlot, markCleared, expo
 import { SPOTS } from './actions.js';
 import * as DL from './daylogic.js';
 import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ARRIVAL } from './story.js';
-import { hasNight, nightOptions, nightScene } from './night.js';
+import { hasNight, nightOptions, nightScene, nightChoices, markNightSeen, REST } from './night.js';
 import { morningEvents, joined } from './sister.js';
 import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profiles.js';
 import { faceOf } from './faces.js';
@@ -387,7 +387,7 @@ function affList() {
   return el('div', { class: 'affs' }, people.map(p => el('div', { class: 'aff' }, badge(p),
     el('div', { class: 'bar' }, el('i', { style: `width:${s.aff[p]}%;background:${PEOPLE[p].color}` })),
     el('b', {}, String(s.aff[p])), isAlly(s, p) ? el('small', { class: 'ally' }, s.flags[`told_${p}`] ? '協力者・打ち明けた' : '協力者') : null)),
-    joined(s) ? el('div', { class: 'aff' }, badge('black'), el('span', { class: 'sister' }, '＝ 妹の雫（いつでも密談できる）')) : null);
+    joined(s) ? el('div', { class: 'aff' }, badge('black'), el('span', { class: 'sister' }, '＝ 妹の雫（夜はいつでも自室に呼べる）')) : null);
 }
 
 // ---- 章の進行 ----
@@ -621,7 +621,8 @@ function openHidden() {
 
 function talk(p) {
   DL.spendHours(s, 1);
-  const { msg, forgery } = DL.talk(s, p, peopleIn(s, s.today.loc).filter(x => x !== p).length);
+  const { msg: said, ask, forgery } = DL.talk(s, p, peopleIn(s, s.today.loc).filter(x => x !== p).length);
+  const msg = ask ? `${ask}　${said}` : said;
   if (forgery) return askForgery(msg, renderDay);
   renderDay(msg);
 }
@@ -698,14 +699,18 @@ function endDay() {
     el('button', { class: 'primary', onclick: () => hasNight(s) ? night() : nextDay() }, '次へ')));
 }
 
-// ---- 夜（22時）：休む／密談／部屋を訪ねる ----
+// ---- 夜（22時）：休む／メイドに声をかける／部屋を訪ねる（選べることが無い夜は、画面を出さずに休む） ----
 function night() {
+  // 休む以外に選べることが無い夜は、夜の画面を出さずに休む
+  if (!nightChoices(s)) { s.phase = 'night'; return playScript(REST, () => checkFatal() || nextDay()); }
+  const opts = nightOptions(s);
+  markNightSeen(s);
   render(el('div', { class: 'panel night' }, statusBar(),
     el('h2', {}, '夜　22時'),
     el('p', { class: 'hint' }, '今夜はどう過ごす？（1つだけ選べる）'),
-    el('div', { class: 'nightopts' }, nightOptions(s).map(o => el('button', { class: o.ok ? '' : 'ghost', disabled: !o.ok,
+    el('div', { class: 'nightopts' }, opts.map(o => el('button', {
       onclick: () => { s.phase = 'night'; playScript(nightScene(s, o.id), () => checkFatal() || nextDay()); } },
-      o.label, !o.ok ? el('small', {}, `（${o.why}）`) : null)))));
+      o.label, o.fresh ? el('small', { class: 'new' }, 'NEW') : null)))));
 }
 
 function nextDay() {

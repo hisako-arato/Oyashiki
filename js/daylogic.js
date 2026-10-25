@@ -76,7 +76,8 @@ export function talk(s, p, others = 0) {
   t.talked[p] = true;
   const notes = applyFx(s, p === 'father' ? { trust: 3 } : { aff: { [p]: 5 } });
   if (tk.flag) { setFlag(s, tk.flag); notes.push('手帳に記録した'); }
-  return { msg: `${PEOPLE[p].name}${tk.line}${fxNote(notes)}`, forgery: !!tk.forgery };
+  // ask：先に主人公が尋ねる一言（初めて話すときだけ）
+  return { msg: `${PEOPLE[p].name}${tk.line}${fxNote(notes)}`, ask: tk.ask ? `執事${tk.ask}` : null, forgery: !!tk.forgery };
 }
 
 export function startForgery(s) {

@@ -2,7 +2,7 @@
 // 新しいメーターは作らず、他のメイドの好感度と疑惑だけで「噂」と「嫉妬」を表す
 //  ・雫と夜に会うと、打ち明けていない他のメイドの好感度が下がる（新人ばかり贔屓している、という陰口）
 //  ・雫と会って間もないうちに、好感度30未満のメイドがいると、朝礼で噂になり疑惑が上がる
-//  ・協力者（好感度70）になったメイドには、夜の密談で雫とのことを打ち明けられる。打ち明けたメイドは噂も妬みもしない
+//  ・協力者（好感度70）になったメイドには、共用室で飲む夜に雫とのことを打ち明けられる。打ち明けたメイドは噂も妬みもしない
 //  ・雫と会わずに他のメイドと2夜続けて会う／他のメイドが協力者になる／打ち明ける と、雫がすねる
 //    すねている間は、朝礼で重い仕事を押し付けられ、次に会った夜は情報をくれない（会えば機嫌が直る）
 import { PEOPLE, CHORES, SISTER } from './data.js';
@@ -27,10 +27,10 @@ export function afterSisterNight(s) {
   st.last = dayIndex(s); st.streak = 0; st.sulk = null;
   return { aff: Object.fromEntries(otherMaids(s).filter(m => !told(s, m)).map(m => [m, -2])) };
 }
-// 他のメイドと夜を過ごしたあと（呼ばれなかったメイドには少し妬まれる）
-export function afterMaidNight(s, who) {
-  if (joined(s) && ++sis(s).streak >= 2) sulk(s, 'streak');
-  return { aff: Object.fromEntries(otherMaids(s).filter(m => m !== who && !told(s, m)).map(m => [m, -1])) };
+// 他のメイドと共用室で飲んだあと。噂にはならないが、雫を呼ばない夜が3回続くと、雫が少しすねる
+export function afterMaidNight(s) {
+  if (joined(s) && ++sis(s).streak >= 3) sulk(s, 'streak');
+  return {};
 }
 export function tell(s, m) {
   setFlag(s, `told_${m}`);

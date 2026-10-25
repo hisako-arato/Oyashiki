@@ -1,4 +1,5 @@
-// 平日の夜（22時）：休む／自室でメイドと密談／お母様・お嬢様の部屋を訪ねる
+// 平日の夜（22時）：休む／仕事のあと共用室でメイドに声をかける（一杯飲みながら話す）／自室に雫を呼ぶ／お母様・お嬢様の部屋を訪ねる
+// 選べるようになるまでは、選択肢そのものを出さない（選べる相手がいない夜は、夜の画面を出さずに休む）
 // 表現は、性的な描写はせず、大人が読めば分かる程度にとどめる（暗転・翌朝の様子で示す）
 import { PEOPLE } from './data.js';
 import { activeMaids, fatherHome, rng, dayIndex, isAlly, WEEKS_PER_CHAPTER } from './state.js';
@@ -8,32 +9,40 @@ const N = 'n', B = 'butler', M = 'mother', D = 'daughter';
 const R = 'red', BL = 'blue', K = 'black', W = 'white', S = 'shizuku';
 
 const visits = (s, who) => s.counters[`night_${who}`] || 0;
-const NEED = { mother: 60, daughter: 60, red: 50, blue: 50, white: 50 };
+const NEED = { mother: 60, daughter: 60, red: 35, blue: 35, white: 35 };
 
 // その夜に夜の時間があるか（決行の前夜＝最後の金曜は無し）
 export function hasNight(s) {
   return !(s.chapter === 3 && s.week === WEEKS_PER_CHAPTER - 1 && s.day === 4);
 }
 
-// 選べる行動の一覧。ok でない物は理由付きで灰色にする
+// 今夜選べる行動の一覧（選べない物は出さない）。fresh：初めて選べるようになった相手
 export function nightOptions(s) {
   // 雫が来た日の夜は、必ず雫を呼び出す
   if (joined(s) && !s.flags.shizuku_reunion) return [{ id: K, label: '黒メイド――雫を、自室に呼び出す', ok: true }];
   const opts = [{ id: 'rest', label: '休む', ok: true }];
-  for (const m of activeMaids(s)) opts.push(m === K
-    ? { id: m, label: '自室に雫（黒メイド）を呼ぶ', ok: true }
-    : { id: m, label: `自室に${PEOPLE[m].name}を呼んで密談する`, ok: s.aff[m] >= NEED[m], why: `好感度${NEED[m]}以上` });
-  opts.push({ id: 'mother', label: 'お母様の部屋（主寝室）を訪ねる', ok: s.aff.mother >= NEED.mother && !fatherHome(s),
-    why: s.aff.mother < NEED.mother ? `好感度${NEED.mother}以上` : '今夜は旦那様が家にいる' });
-  opts.push({ id: 'daughter', label: 'お嬢様の部屋を訪ねる', ok: s.aff.daughter >= NEED.daughter, why: `好感度${NEED.daughter}以上` });
+  for (const m of activeMaids(s)) {
+    if (m === K) opts.push({ id: m, label: '自室に雫（黒メイド）を呼ぶ', ok: true });
+    else if (s.aff[m] >= NEED[m]) opts.push({ id: m, label: `共用室で${PEOPLE[m].name}に声をかける`, ok: true });
+  }
+  if (s.aff.mother >= NEED.mother && !fatherHome(s)) opts.push({ id: 'mother', label: 'お母様の部屋（主寝室）を訪ねる', ok: true });
+  if (s.aff.daughter >= NEED.daughter) opts.push({ id: 'daughter', label: 'お嬢様の部屋を訪ねる', ok: true });
+  for (const o of opts) o.fresh = o.id !== 'rest' && !s.counters[`night_${o.id}`] && !s.counters[`nightseen_${o.id}`];
   return opts;
 }
+// 夜の画面を出したら、新しく選べるようになった相手を覚えておく（「NEW」は一度だけ）
+export function markNightSeen(s) {
+  for (const o of nightOptions(s)) if (o.id !== 'rest') s.counters[`nightseen_${o.id}`] = 1;
+}
+// 休む以外に選べることがあるか（無ければ夜の画面を出さない）
+export const nightChoices = s => nightOptions(s).some(o => o.id !== 'rest');
+export const REST = [[N, '夜は早めに休んだ。明日も、完璧な執事でいなければならない。']];
 
 // 夜の2階を歩けば、夜食を取りに来た赤メイドに見られることがある。雫が来てからは、雫が見回りの順路を変えてくれる
 const patrol = s => joined(s) ? [[N, '（廊下の角で、黒メイドの懐中電灯がふっと逸れた。……雫が、見回りの順路を変えてくれたらしい）']]
   : rng(dayIndex(s) * 97 + 5)() < 0.25 && !isAlly(s, R)
   ? [[R, '「……執事さん？ こんな時間に、2階で何してるの」'], [B, '（「戸締まりの確認だ」とごまかしたが、赤の目は眠そうなまま疑っていた）'], { fx: { susp: 10 } }] : [];
-// メイドを夜に呼ぶと、ほかのメイドに噂される。雫と会うと、打ち明けていないメイドに強く妬まれる
+// 共用室でメイドと飲むだけなら噂にはならない（雫だけは、続くと少しすねる）。雫と会うと、打ち明けていないメイドに妬まれる
 const gossip = who => ({ fx: s => who === K ? afterSisterNight(s) : afterMaidNight(s, who) });
 const count = who => ({ call: s => { s.counters[`night_${who}`] = (s.counters[`night_${who}`] || 0) + 1; } });
 
@@ -49,12 +58,13 @@ const CLASH = [
 ];
 
 export function nightScene(s, id) {
-  if (id === 'rest') return [[N, '夜は早めに休んだ。明日も、完璧な執事でいなければならない。']];
+  if (id === 'rest') return REST;
   if (id === 'mother') return motherScene(s);
   if (id === 'daughter') return daughterScene(s);
   // 来た日の呼び出しは避けられないので、噂や妬みの元にはしない
   if (id === K) return [...sisterScene(s), ...(s.flags.shizuku_reunion ? [gossip(K)] : []), count(K)];
-  return [[N, `夜10時。使用人棟の自室に、${PEOPLE[id].name}をそっと招き入れた。`], ...maidScene(s, id), ...confess(s, id), gossip(id), count(id)];
+  return [[N, `夜10時。仕事を終えた使用人棟の共用室で、${PEOPLE[id].name}に「一杯どう？」と声をかけた。${DRINK[id]}`],
+    ...maidScene(s, id), ...confess(s, id), gossip(id), count(id)];
 }
 
 function motherScene(s) {
@@ -133,26 +143,101 @@ function daughterScene(s) {
     { fx: { aff: { daughter: 3 } } }, count('daughter')];
 }
 
-function maidScene(s, m) {
-  if (m === 'red') {
-    if (!s.flags.n_red_night) return [[R, '「……夜中の1時ごろ、わたし、キッチン裏で明日の仕込みをしてる。裏階段の前」'],
-      [R, '「……執事さんも、夜は静か。何してるのかは、聞かない」'], { fx: { flag: 'n_red_night', aff: { red: 3 } } }];
-    if (s.aff.red >= 70) return [[R, '「……執事さんが何をするつもりでも、わたしは見てないことにする。……約束」'], { fx: { aff: { red: 2 } } }];
-    return [[R, '「……ホットミルク、作ってきた。……飲む？」'], { fx: { aff: { red: 3 } } }];
-  }
-  if (m === 'blue') {
-    if (s.flags.forgery_start && !s.flags.forgery_ready && !s.counters.blue_rush) return [
-      [BL, '「模写の話ですよね！ ……夜も描いていいなら、見張っててくれるなら、もっと早く仕上げます！」'],
+// ---- 共用室でメイドと一杯 ----
+// 「世間話をする」か、主人公から話題を振る。話題は、主人公が調べて分かったことから生まれる（手がかり → 質問 → 答え）
+const DRINK = {
+  red: '赤は黙って頷き、小さな鍋で熱燗をつけ始めた。',
+  blue: '青は「わーい！」と冷蔵庫から甘い缶チューハイを2本持ってきた。',
+  white: '白は「では一杯だけ」と、手際よくハイボールを2杯作った。',
+};
+// 世間話：上から順に1つずつ。全部話したら、最後の話を繰り返す
+const CHATS = {
+  red: [
+    [[B, '「赤さんは、いつも眠そうだね」'],
+      [R, '「……朝4時起き。朝ごはんの仕込み。……それに、夜中の1時ごろも、キッチン裏で明日の仕込みしてる。裏階段の前」'],
+      [R, '「……だから、昼間はぼーっとしてる。……執事さんも、夜は静か。何してるのかは、聞かない」'], { fx: { flag: 'n_red_night', aff: { red: 3 } } }],
+    [[R, '「……お嬢様、にんじんが嫌い。細かく刻んでハンバーグに入れると、気づかない。……内緒」'],
+      { choice: [
+        { t: '「さすがだね」と笑う', fx: { aff: { red: 3 } }, then: [[R, '「……ふふ。6年もいれば、好みは全部わかる」']] },
+        { t: '「お嬢様に教えてあげようか」とからかう', fx: { aff: { red: 1 } }, then: [[R, '「……だめ。執事さんのお皿にも、刻んで入れる」']] },
+      ] }],
+    [[R, '「……お酒、温めると甘くなる。……執事さんも、もう一杯」'],
+      [N, '赤は猪口を両手で包み、湯気の向こうでぼんやりと目を細めた。'],
+      [R, '「……執事さんが来てから、台所が静か。いい意味で。……前は、もっとぴりぴりしてた」'], { fx: { aff: { red: 3 } } }],
+    [[R, '「……ホットミルクのほうがよかった？ ……今度は作る。……おやすみ」'], { fx: { aff: { red: 2 } } }],
+  ],
+  blue: [
+    [[BL, '「えへへ、一本で顔が真っ赤になっちゃいました……！ 執事さんは、お酒強そうですね」'],
+      [BL, '「わたし、美大を受けたんですけど、落ちちゃって。でも描くのは、やめてないんです！」'], { fx: { aff: { blue: 3 } } }],
+    [[BL, '「実家、みかん農家なんです。冬になると箱で届くので、みんなで食べましょうね！」'],
+      [BL, '「……ここのお屋敷、広すぎて、最初の夜は迷子になりかけました。執事さんがいてくれて、よかったです」'], { fx: { aff: { blue: 3 } } }],
+    [[BL, '「ねえ執事さん、なんで執事になったんですか？」'],
+      { choice: [
+        { t: '「ホテルで働いていたんだ。人をもてなすのが好きでね」', fx: { aff: { blue: 3 } }, then: [[BL, '「かっこいい……！ だから、紅茶を淹れる手つきがきれいなんですね」']] },
+        { t: '「……秘密だ」と微笑む', fx: { aff: { blue: 2 } }, then: [[BL, '「えーっ、ずるい！ いつか絶対、聞き出しますからね！」']] },
+      ] }],
+    [[BL, '「執事さんの似顔絵、今度は笑ってる顔を描かせてください！ ……あ、もう一本だけ飲んでいいですか？」'], { fx: { aff: { blue: 2 } } }],
+  ],
+  white: [
+    [[W, '「大学では、電力系統の研究をしてました。……メイドになった理由ですか？ それは、もう少し酔ってからにします」'], { fx: { aff: { white: 3 } } }],
+    [[W, '「恋愛は非合理です。……でも、非合理なものほど面白いんですよね。この屋敷の人たちも」'],
+      { choice: [
+        { t: '「白さんにも、非合理なところがあるのか」と聞く', fx: { aff: { white: 3 } }, then: [[W, '「……ハイボールを2杯作ったのは、非合理でしたね。一人で飲むつもりだったのに」']] },
+        { t: '「この屋敷の人たち？」と聞き返す', fx: { aff: { white: 2 } }, then: [[W, '「ええ。みんな、何かを隠してる顔をしてます。……執事さんも」']] },
+      ] }],
+    [[W, '「夜は工具の手入れの時間なんですよ。……執事さんも、何か直したい物があるんですか？」'], { fx: { aff: { white: 2 } } }],
+  ],
+};
+function chatScene(s, m) {
+  const list = CHATS[m], n = s.counters[`chat_${m}`] || 0;
+  return [...list[Math.min(n, list.length - 1)], { call: s => { s.counters[`chat_${m}`] = n + 1; } }];
+}
+// 主人公から振る話題。if を満たすあいだ選べ、答えを聞いたら消える（done）
+const TOPICS = {
+  red: [
+    { t: '「旦那様は、どんな方だと思う？」', if: s => s.aff.red >= 40, done: s => s.flags.r_past, then: [
+      [R, '「……」（猪口を置いて、しばらく黙っている）'],
+      [R, '「……前にいたメイドさん。旦那様の部屋の掃除のあと、『万年筆がなくなった』って言われて、辞めさせられた」'],
+      [R, '「……その万年筆、次の週に、旦那様の机の引き出しから出てきた。わたしが見つけた。……でも、誰も謝らなかった」'],
+      [R, '「……それから、あの人のことは信じてない。……言わないだけ」'],
+      { fx: { flag: 'r_past', aff: { red: 4 } } },
+      [B, '（赤は、ずっと黙って見てきたのだ。この屋敷と、旦那様を）']] },
+    { t: '「倉庫に、古い額装品の伝票があった。何か知らない？」', if: s => s.flags.c_import && s.flags.r_past, done: s => s.flags.r_parcel, then: [
+      [R, '「……額縁の荷物。年に何度か、夜中に来る。トラックじゃなくて、普通の車」'],
+      [R, '「……旦那様が、自分で勝手口まで出て受け取る。わたしたちには、触らせない。台所の窓から、見えるだけ」'],
+      { fx: { flag: 'r_parcel', aff: { red: 3 } } },
+      [B, '（20年前の一枚だけではない。旦那様は、今も夜中に絵を受け取り続けている……）']] },
+  ],
+  blue: [
+    { t: '「青さんの目で見て、この屋敷の絵はどう？」', if: s => s.aff.blue >= 40, done: s => s.flags.bl_frame, then: [
+      [BL, '「大広間の肖像画、額縁がすごく立派なんです。あれ、美術館で展示に使うような古い型ですよ」'],
+      [BL, '「それに旦那様の書斎の前を通ると、ときどき油絵具とニスの匂いがするんです。……旦那様、絵を描くんでしょうか？」'],
+      { fx: { flag: 'bl_frame', aff: { blue: 3 } } },
+      [B, '（絵を描く人ではない。……絵を手入れする人の匂いだ）']] },
+    { t: '「模写の進み具合はどう？」', if: s => s.flags.forgery_start && !s.flags.forgery_ready, done: s => s.counters.blue_rush, then: [
+      [BL, '「順調です！ ……夜も描いていいなら、見張っててくれるなら、もっと早く仕上げます！」'],
       { call: s => { s.forgeryDay -= 2; s.counters.blue_rush = 1; } }, { fx: { aff: { blue: 3 } } },
-      [B, '（模写の完成が、2日ほど早まりそうだ）']];
-    return [[BL, '「夜にお呼ばれなんて、ドキドキしますね！ ……執事さんの似顔絵、今度は笑ってる顔を描かせてください」'], { fx: { aff: { blue: 3 } } }];
-  }
-  if (m === 'white') {
-    if (!s.flags.white_elec) return [[W, '「警報の系統、図面に起こしてみました。照明とは完全に独立してます。……何に使うかは聞きませんけど」'], { fx: { flag: 'white_elec', aff: { white: 3 } } }];
-    if (s.chapter === 3 && s.aff.white >= 70 && !s.flags.white_ally) return [[W, '「……イブの深夜1時、警報の系統だけ落とせばいいんですね。理由は聞きません」'], { fx: { flag: 'white_ally' } }];
-    return [[W, '「夜は工具の手入れの時間なんですよ。……執事さんも、何か直したい物があるんですか？」'], { fx: { aff: { white: 3 } } }];
-  }
-  return [];
+      [B, '（模写の完成が、2日ほど早まりそうだ）']] },
+  ],
+  white: [
+    { t: '「停電したら、この屋敷の警報はどうなるんだろう」', if: s => !s.flags.white_elec, done: s => s.flags.white_elec, then: [
+      [W, '「いい質問ですね。……実は気になって、配線を図面に起こしてみたんです」'],
+      [W, '「警報の系統は、照明とは完全に独立してます。ブレーカーを落とすなら、あの系統だけ。……何に使うかは聞きませんけど」'],
+      { fx: { flag: 'white_elec', aff: { white: 3 } } }] },
+    { t: '「イブの夜、警報の系統を落としてもらえないか」', if: s => s.chapter === 3 && s.aff.white >= 70 && s.flags.white_elec, done: s => s.flags.white_ally, then: [
+      [W, '「……イブの深夜1時、警報の系統だけ落とせばいいんですね。理由は聞きません」'],
+      [W, '「非合理なお願いですけど。……非合理なものほど、面白いので」'],
+      { fx: { flag: 'white_ally' } }] },
+  ],
+};
+function maidScene(s, m) {
+  const topics = (TOPICS[m] || []).filter(o => o.if(s) && !o.done(s));
+  if (m === 'red' && !s.flags.n_red_night) return chatScene(s, m);   // 最初の夜は、まず世間話から
+  if (!topics.length) return chatScene(s, m);
+  return [{ choice: [
+    { t: '世間話をする', then: chatScene(s, m) },
+    ...topics.map(o => ({ t: o.t, then: [[B, o.t], ...o.then] })),
+  ] }];
 }
 
 // 協力者になったメイドには、雫とのことを打ち明けられる
@@ -180,7 +265,7 @@ function confess(s, m) {
 
 // ---- 雫（黒メイド）との夜 ----
 const SULK_WHY = {
-  streak: [[S, '「……最近、ずっと他の子ばっかり呼んでたでしょ。廊下で足音、聞こえてたんだから」']],
+  streak: [[S, '「……最近、ほかの子と共用室で飲んでばっかり。笑い声、ここまで聞こえてたんだから」']],
   ally: [[S, '「……ねえ。最近あの子と、ずいぶん仲いいよね。作戦の手伝いまでしてもらうんでしょ」']],
   told: [[S, '「……私たちのこと、話したんですか。……ううん、怒ってない。怒ってないけど」'], [S, '「お兄ちゃんの秘密を知ってるのは、私だけがよかったな」']],
 };
