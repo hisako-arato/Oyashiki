@@ -5,7 +5,7 @@
 import { createRequire } from 'module';
 import { writeFileSync } from 'fs';
 const { chromium } = createRequire(import.meta.url)('playwright');
-const IDS = ['butler', 'father', 'mother', 'daughter', 'red', 'blue', 'white', 'black', 'black2', 'guard'];
+const IDS = ['butler', 'butler2', 'father', 'mother', 'mother2', 'daughter', 'daughter2', 'red', 'blue', 'white', 'black', 'black2', 'black3', 'guard'];
 const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const p = await b.newPage();
 await p.goto('http://localhost:8080/tools/face_icons.html');

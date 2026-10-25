@@ -2,12 +2,21 @@
 // 物語パートの会話画面と、3Dの屋敷のメッセージ欄の両方で使う。描画は1つの canvas を使い回す
 // 端末のメモリを節約するため、屋敷と同じレンダラー（engine.js）で描き、屋敷で使っている VRM をそのまま借りる
 // （VRM の複製や、2つ目の3D描画を作らない）。借りるのは描く一瞬だけで、描いたら屋敷の中の元の場所へ戻す
-import { THREE, loadVRM, driveVRM, talkMouth } from './vrm.js';
+import { THREE, loadVRM, disposeVRM, loaded, driveVRM, talkMouth } from './vrm.js';
 import { renderer } from './engine.js';
 
 let canvas = null, ctx = null, scene, camera, rt = null, buf = null, img = null;
 let cur = null, want = null, face = 'neutral', talkLeft = 0, last = 0, lastDraw = 0, looping = false;
 const heads = new Map();
+const ALT = new Set(['butler2', 'mother2', 'daughter2', 'black2', 'black3']);
+let lastAlt = null;
+// 覚えている着替えを手放す（屋敷で着ている物は手放さない）。昼の屋敷に戻るときにも呼ぶ
+export function releaseAlt() {
+  if (!lastAlt) return;
+  const id = lastAlt; lastAlt = null;
+  if (cur && cur.id === id) { cur = null; if (canvas) canvas.classList.remove('ready'); }
+  if (loaded(id)) loadVRM(id, 'lite').then(v => { if (!v.scene.parent) disposeVRM(id, 'lite'); }).catch(() => {});
+}
 
 export function portraitCanvas() {
   if (canvas) return canvas;
@@ -30,6 +39,8 @@ export function showPortrait(id, f, textLen = 0) {
   want = id;
   // 別の人に替わったら、読み込み終わるまで前の人は映さない
   if (cur && cur.id !== id) { cur = null; canvas.classList.remove('ready'); }
+  // 部屋着などの着替え（屋敷に置いていない VRM）は、最後に使った1着だけ覚えておく（別の着替えが要るときに手放す）
+  if (ALT.has(id) && lastAlt !== id) { releaseAlt(); lastAlt = id; }
   loadVRM(id, 'lite').then(vrm => {
     if (want !== id) return;
     if (!cur) cur = { id, vrm, head: headHeight(id, vrm) };

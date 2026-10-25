@@ -7,7 +7,7 @@ const FILES = [
   'js/main.js', 'js/version.js', 'js/lockdown.js', 'js/game.js', 'js/daylogic.js', 'js/night.js', 'js/sister.js', 'js/profiles.js', 'js/faces.js', 'js/state.js', 'js/vrmstore.js', 'js/white.js', 'js/data.js', 'js/actions.js', 'js/story.js',
   'explore/day3d.js', 'explore/engine.js', 'explore/world.js', 'explore/nav.js', 'explore/vrm.js', 'explore/viewer.js', 'explore/portrait.js',
   'vendor/three.module.min.js', 'vendor/GLTFLoader.js', 'vendor/BufferGeometryUtils.js', 'vendor/three-vrm.module.min.js',
-  ...['butler', 'father', 'mother', 'daughter', 'red', 'blue', 'white', 'black', 'black2', 'guard'].map(id => `assets/faces/${id}.webp`),
+  ...['butler', 'butler2', 'father', 'mother', 'mother2', 'daughter', 'daughter2', 'red', 'blue', 'white', 'black', 'black2', 'black3', 'guard'].map(id => `assets/faces/${id}.webp`),
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-512-maskable.png',
 ];
 

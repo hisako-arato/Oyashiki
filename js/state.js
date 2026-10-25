@@ -133,7 +133,8 @@ export function setFlag(s, f, notes) {
 export const maidAvailable = (s, m) => s.chapter >= PEOPLE[m].from;
 export const activeMaids = s => MAIDS.filter(m => maidAvailable(s, m));
 // 今の章で屋敷にいる人（VRM を読み込む人）。巡回員は最終章（イブの夜）だけ
-export const castNeeded = s => ['butler', 'father', 'mother', 'daughter', ...activeMaids(s), ...(s.chapter >= 3 ? ['guard'] : [])];
+// 決行の夜は、執事が決行の服（butler2）に着替える
+export const castNeeded = s => ['butler', 'father', 'mother', 'daughter', ...activeMaids(s), ...(s.chapter >= 3 ? ['guard'] : []), ...(s.phase === 'execution' ? ['butler2'] : [])];
 // 好感度70以上のメイドは協力者。黒メイド（妹の雫）は、屋敷に来た日から味方
 // 白メイドは、寝返った後（white_turned）も味方
 export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.flags.shizuku : s.aff[who] >= ALLY_AFF || (who === 'white' && !!s.flags.white_turned));
@@ -242,6 +243,7 @@ export function dateLabel(s) {
   const month = 11 + Math.floor(s.chapter / 2);
   const week = (s.chapter % 2) * WEEKS_PER_CHAPTER + s.week + 1;
   const days = ['月', '火', '水', '木', '金'];
-  const day = s.phase === 'weekend' ? '土・日' : days[s.day] + '曜';
+  if (s.phase === 'execution' || (s.phase === 'ending' && s.chapter === 3 && s.week === WEEKS_PER_CHAPTER - 1 && s.day >= 5)) return '12月24日 クリスマス・イブ';
+  const day = s.phase === 'weekend' || s.day >= 5 ? '土・日' : days[s.day] + '曜';
   return `${month}月 第${week}週 ${day}`;
 }

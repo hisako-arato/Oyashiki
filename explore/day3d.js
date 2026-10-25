@@ -73,7 +73,7 @@ function nextMsg() {
   const face = who ? faceOf(said, override, who === 'black' && /お兄ちゃん/.test(said) ? 'shizuku' : who) : 'neutral';
   setFace(who, face);
   // 話し手の顔：胸から上の VRM。読み込み終わるまでは、同じ VRM から作った顔アイコンを出しておく
-  const faceId = Array.isArray(l) && l[0] === '雫' && s.counters.night_black ? 'black2' : who;
+  const faceId = Array.isArray(l) && l[0] === '雫' && s.counters.night_black ? 'black2' : who === 'butler' && st.mode === 'night' ? 'butler2' : who;
   msgEl.classList.toggle('with-face', !!who);
   if (who) {
     const icon = document.createElement('img');
@@ -208,6 +208,13 @@ function makePeople() {
 export const TEST = new URLSearchParams(location.search).has('test');
 // 読み込むのは、今の章で屋敷にいる人だけ（state.js の castNeeded）
 let castLoading = null;
+// 決行の夜は、執事を決行の服（butler2）に着替えさせる。昼に戻ったら執事服に戻す
+function dressPlayer(night) {
+  if (TEST) return;
+  const want = night ? 'butler2' : 'butler';
+  if (player.vrmId === want || (!night && !player.vrmId)) return;
+  import('./vrm.js').then(V => V.loadVRM(want).then(v => { V.attachVRM(player, v); player.vrmId = want; })).catch(e => console.warn('VRM', e));
+}
 function syncCast() {
   if (castLoading || TEST) return;
   const chars = { butler: player, ...people };
@@ -1154,6 +1161,8 @@ function prepare(state, h) {
     makePeople();
   }
   syncCast();
+  dressPlayer(false);
+  if (portrait && portrait.releaseAlt) portrait.releaseAlt();
   if (!portrait && !TEST) import('./portrait.js').then(m => { portrait = m; }).catch(() => {});
   for (const p of Object.values(people)) { p.key = undefined; p.route = null; p.nightRole = null; p.range = VIEW_RANGE; }
   syncSecret();
@@ -1203,6 +1212,7 @@ export function startMorning(state, h) {
 export function startNight(state, route, h) {
   prepare(state, h);
   st.mode = 'night';
+  dressPlayer(true);
   st.night = { route, min: 0, carry: null, ladderTaken: false, ladderUp: false, taken: false, alarmOff: !!s.flags.white_ally };
   setLights(true);
   setupNightProps();

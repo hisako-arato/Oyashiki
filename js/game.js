@@ -35,6 +35,19 @@ function el(tag, attrs = {}, ...kids) {
 function render(...nodes) { const a = app(); a.replaceChildren(...nodes); a.scrollTop = 0; window.scrollTo(0, 0); }
 // 顔アイコン（VRM から作った画像）。二人きりの雫は部屋着の顔
 const faceSrc = who => `assets/faces/${who === 'shizuku' ? 'black2' : who}.webp`;
+// 場面に合わせた服装の VRM（会話の顔と顔アイコン）
+//  決行の夜と、その夜に終わる結末：執事は決行の服（butler2）
+//  夜の主寝室・お嬢様の部屋：お母様・お嬢様は部屋着（mother2・daughter2）
+//  二人きりの雫：部屋着（black2。来た日の夜の呼び出しだけはメイド服）。屋敷を出た後の結末では私服（black3）
+const HEIST_ENDS = ['night', 'caught'];
+function outfitOf(who) {
+  if (!s) return who;
+  const heist = s.phase === 'execution' || (s.phase === 'ending' && HEIST_ENDS.includes(s.endingId));
+  if (who === 'butler' && heist) return 'butler2';
+  if ((who === 'mother' || who === 'daughter') && s.phase === 'night') return `${who}2`;
+  if (who === 'shizuku') return s.phase === 'ending' ? 'black3' : s.counters.night_black ? 'black2' : 'black';
+  return who;
+}
 const faceIcon = (who, cls = 'face-icon') => el('img', { class: cls, src: faceSrc(who), alt: '' });
 function badge(who) {
   const p = PEOPLE[who];
@@ -340,15 +353,14 @@ function playScript(steps, done) {
 // 会話の顔：3D が使えて VRM を表示する設定なら、話し手の VRM を胸から上で映す（台詞に合わせて表情を変える）
 let portrait = null;
 // 二人きりのとき（話し手が「雫」）は部屋着。来た日の夜の呼び出しだけは、まだメイド服のまま
-const VRM_OF = { shizuku: () => (s.counters.night_black ? 'black2' : 'black') };
-const CAST_IDS = ['butler', 'father', 'mother', 'daughter', 'red', 'blue', 'white', 'black', 'black2', 'guard'];
+const CAST_IDS = ['butler', 'butler2', 'father', 'mother', 'mother2', 'daughter', 'daughter2', 'red', 'blue', 'white', 'black', 'black2', 'black3', 'guard'];
 const vrmOn = () => can3D() && !TEST;
 function loadPortrait() {
   if (portrait || !vrmOn()) return;
   portrait = import('../explore/portrait.js').then(m => (portrait = m)).catch(e => { console.warn(e); portrait = null; });
 }
 function portraitFor(who, text, face) {
-  const id = VRM_OF[who] ? VRM_OF[who]() : who;
+  const id = outfitOf(who);
   if (!portrait || portrait instanceof Promise || !vrmOn() || !CAST_IDS.includes(id)) return null;
   portrait.showPortrait(id, faceOf(text, face, who), /^（/.test(text) ? 0 : text.length);   // 心の声（…）では口を動かさない
   return portrait.portraitCanvas();
@@ -365,7 +377,7 @@ function stage(who, content, text = '', face) {
     el('div', { class: `scene ${vrm ? 'has-vrm' : ''}` },
       night && stagePlace ? el('div', { class: 'place-tag' }, stagePlace) : null,
       // 胸から上の VRM が映るまでは、同じ VRM から作った顔アイコンを出しておく
-      p ? el('img', { class: 'portrait', src: faceSrc(VRM_OF[who] ? VRM_OF[who]() : who), alt: '' }) : null, vrm),
+      p ? el('img', { class: 'portrait', src: faceSrc(outfitOf(who)), alt: '' }) : null, vrm),
     el('div', { class: 'textbox' }, p ? el('div', { class: 'speaker', style: `--c:${p.color}` }, p.name) : null, content));
 }
 
@@ -786,6 +798,7 @@ function afterWeekend() {
 
 // ---- 決行 ----
 function execution() {
+  s.phase = 'execution';
   const avail = ROUTES.filter(r => r.ok(s));
   const intro = [
     ['n', '12月24日、クリスマス・イブの深夜。パーティーの客も帰り、屋敷は寝静まった。'],
@@ -802,7 +815,8 @@ function execution() {
 
 async function runRoute(id) {
   if (id === 'persuade' || id === 'deal') return ending(id);
-  // 3Dの屋敷では、夜の屋敷を歩いて絵を盗み出す
+  // 3Dの屋敷では、夜の屋敷を歩いて絵を盗み出す（執事は決行の服に着替える。先に読み込んでおく）
+  if (castMissing()) return preloadCast(() => runRoute(id));
   app().replaceChildren();
   if (await load3D()) return day3d.startNight(s, id, { ending, notebook: openNotebook, toast });
   let alarmOff = false;
@@ -868,7 +882,7 @@ async function runRoute(id) {
 // ---- エンディング ----
 function ending(id) {
   const e = ENDINGS[id];
-  s.phase = 'ending';
+  s.phase = 'ending'; s.endingId = id;
   playScript(e.lines, () => {
     // クリアしてもセーブは消さない（枠に「クリア済み」と記す。消すのはプレイヤーが手で）
     if (e.good) markCleared(s, id);
@@ -963,6 +977,13 @@ function settingsTab(back) {
   ];
 }
 
+// 人物照会で選べる服装：[VRM, 名前, 見られる条件]（物語で見るまでは出さない）
+const OUTFITS = {
+  butler: [['butler', '執事服'], ['butler2', '決行の夜', s => s.chapter >= 3]],
+  black: [['black', 'メイド服'], ['black2', '部屋着', s => s.flags.shizuku_reunion], ['black3', '私服', s => s.flags.shizuku_reunion]],
+  mother: [['mother', 'ふだん'], ['mother2', '部屋着', s => s.flags.m_close]],
+  daughter: [['daughter', 'ふだん'], ['daughter2', '部屋着', s => s.flags.d_close]],
+};
 // 人物照会：VRM を回したりズームしたりして眺める
 // model：表示する VRM（雫は、再会のあとは「部屋着」black2 にも着替えられる）
 async function openPerson(id, model = id) {
@@ -986,10 +1007,11 @@ async function openPerson(id, model = id) {
     el('div', { class: 'vpanel' }, outfitRow(), turnRow, faceBtns, poseBtns, info));
   document.body.append(root);
   function outfitRow() {
-    if (id !== 'black' || !s.flags.shizuku_reunion) return null;
+    const list = (OUTFITS[id] || []).filter(([, , ok]) => !ok || ok(s));
+    if (list.length < 2) return null;
     const pick = m => { if (m === model) return; viewer && viewer.close(); root.remove(); openPerson(id, m); };
     return el('div', { class: 'vbtns' }, el('span', { class: 'hint' }, '服装'),
-      ...[['black', 'メイド服'], ['black2', '部屋着']].map(([m, label]) => el('button', { class: m === model ? 'on' : 'ghost', onclick: () => pick(m) }, label)));
+      ...list.map(([m, label]) => el('button', { class: m === model ? 'on' : 'ghost', onclick: () => pick(m) }, label)));
   }
   if (!can3D()) { canvas.remove(); status.textContent = 'この端末では3D表示が使えない。'; return; }
   if (day3d) day3d.suspend();

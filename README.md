@@ -134,17 +134,21 @@ GitHub Pages などの静的ホスティングにそのまま置ける。
 |---|---|
 | `assets/vrm/*.vrm` | 元のファイル（VRoid Studio で作成。ゲームでは読み込まない） |
 | `assets/vrm/black2.vrm` | 雫の部屋着。二人きりの会話の顔（来た日の夜を除く）と、人物照会の「服装：部屋着」で使う |
+| `assets/vrm/black3.vrm` | 雫の私服。屋敷を出た後の結末の会話の顔と、人物照会の「服装：私服」で使う |
+| `assets/vrm/butler2.vrm` | 執事の決行の服。イブの夜の屋敷（3D）と、その夜の会話の顔・その夜に終わる結末で使う |
+| `assets/vrm/mother2.vrm` | お母様の部屋着。主寝室の夜の会話の顔と、人物照会（深い仲になった後）で使う |
+| `assets/vrm/daughter2.vrm` | お嬢様の部屋着。お嬢様の部屋の夜の会話の顔と、人物照会（深い仲になった後）で使う |
 | `assets/vrm/view/` | 人物照会用（テクスチャ1024px、表情に使わない顔のモーフを除去）。約6〜8MB |
 | `assets/vrm/lite/` | 屋敷の中用（テクスチャ512px、モーフの法線も除去）。約4MB |
 
 元のファイルを差し替えたら、次のコマンドで作り直す（要 Python と Pillow）。
 ```
-for id in butler father mother daughter red blue white black black2 guard; do
+for id in butler butler2 father mother mother2 daughter daughter2 red blue white black black2 black3 guard; do
   python3 tools/vrm_lite.py assets/vrm/$id.vrm assets/vrm/view/$id.vrm --tex 1024
   python3 tools/vrm_lite.py assets/vrm/$id.vrm assets/vrm/lite/$id.vrm --tex 512 --no-morph-normals
 done
 ```
-VRM は、一度読み込むとオフライン用に端末へ保存する。設定の「キャラクターを端末に保存」で、屋敷・会話用（約42MB）と人物照会用（約70MB）を先に落としておける。
+VRM は、一度読み込むとオフライン用に端末へ保存する。設定の「キャラクターを端末に保存」で、屋敷・会話用（約58MB）と人物照会用（約97MB）を先に落としておける。
 
 顔アイコンは人物照会用の VRM から撮って作る。VRM を入れ替えたり服を変えたりしたら作り直す：
 
