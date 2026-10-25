@@ -4,6 +4,7 @@
 import { PEOPLE } from './data.js';
 import { activeMaids, fatherHome, rng, dayIndex, isAlly, WEEKS_PER_CHAPTER } from './state.js';
 import { joined, told, sulking, sis, afterSisterNight, afterMaidNight, tell } from './sister.js';
+import { whiteSaw } from './white.js';
 
 const N = 'n', B = 'butler', M = 'mother', D = 'daughter';
 const R = 'red', BL = 'blue', K = 'black', W = 'white', S = 'shizuku';
@@ -62,7 +63,8 @@ export function nightScene(s, id) {
   if (id === 'mother') return motherScene(s);
   if (id === 'daughter') return daughterScene(s);
   // 来た日の呼び出しは避けられないので、噂や妬みの元にはしない
-  if (id === K) return [...sisterScene(s), ...(s.flags.shizuku_reunion ? [gossip(K)] : []), count(K)];
+  // 白がまだ報告役なら、新人を夜に呼んだことも報告の種になる（白に打ち明けていれば数えない）
+  if (id === K) return [...sisterScene(s), ...(s.flags.shizuku_reunion ? [gossip(K), { call: s => { if (!told(s, W)) whiteSaw(s, 3); } }] : []), count(K)];
   return [[N, `夜10時。仕事を終えた使用人棟の共用室で、${PEOPLE[id].name}に「一杯どう？」と声をかけた。${DRINK[id]}`],
     ...maidScene(s, id), ...confess(s, id), gossip(id), count(id)];
 }
@@ -224,7 +226,22 @@ const TOPICS = {
       [W, '「いい質問ですね。……実は気になって、配線を図面に起こしてみたんです」'],
       [W, '「警報の系統は、照明とは完全に独立してます。ブレーカーを落とすなら、あの系統だけ。……何に使うかは聞きませんけど」'],
       { fx: { flag: 'white_elec', aff: { white: 3 } } }] },
-    { t: '「イブの夜、警報の系統を落としてもらえないか」', if: s => s.chapter === 3 && s.aff.white >= 70 && s.flags.white_elec, done: s => s.flags.white_ally, then: [
+    { t: '「白さんは、なぜ屋敷付きに？」', if: s => s.aff.white >= 50 && s.flags.b_circuit, done: s => s.flags.w_past, then: [
+      [W, '「……ハイボール、もう一杯いいですか。この話は、素面では非合理なので」'],
+      [W, '「会社の帳簿に、屋敷の改修費として、どこにも記録のない電気工事があったんです。温度と湿度を一定に保つ、収蔵庫みたいな設備」'],
+      [W, '「上司に『どこの工事ですか』と聞いたら、2週間後にここです。屋敷付き設備担当、兼メイド。……左遷みたいなものですね」'],
+      [W, '「それ以来、理由は聞かないことにしてるんです。聞くと、飛ばされるので」'],
+      { fx: { flag: 'w_past', aff: { white: 4 } } },
+      [B, '（記録のない収蔵庫の設備……。この屋敷のどこかに、それがある）']] },
+    { t: '「地下で、温度と湿度を管理する部屋を見つけた」', if: s => s.flags.w_past && s.flags.b_vault, done: s => s.flags.white_turned, then: [
+      [W, '「……地下に？」（グラスを置く手が、止まった）'],
+      [B, '「資料室の床の下だ。布を掛けた絵が、十数枚あった。空調と除湿の機械が、ずっと動いていた」'],
+      [W, '「会社で見た、帳簿に載らない工事……ここだったんですね」'],
+      [W, '「私を飛ばしたのは、これを隠すため。……理由、聞かなくても分かってしまいました」'],
+      [W, '「執事さん。今週から、旦那様への報告は私が書きます。……嘘の報告を、合理的に」'],
+      { fx: { flag: 'white_turned', aff: { white: 10 } } },
+      [B, '（白が、こちら側に付いた）']] },
+    { t: '「イブの夜、警報の系統を落としてもらえないか」', if: s => s.chapter === 3 && (s.aff.white >= 70 || s.flags.white_turned) && s.flags.white_elec, done: s => s.flags.white_ally, then: [
       [W, '「……イブの深夜1時、警報の系統だけ落とせばいいんですね。理由は聞きません」'],
       [W, '「非合理なお願いですけど。……非合理なものほど、面白いので」'],
       { fx: { flag: 'white_ally' } }] },
@@ -279,6 +296,7 @@ function sisterScene(s) {
     [N, '毅然とした仮面が崩れ、雫は勢いよく執事の胸に飛び込んできた。'],
     [S, '「ずっと会いたかった。半年以上も連絡ひとつくれないで……。ひとりで危ないことしないでよ」'],
     [S, '「お兄ちゃんが執事に応募したとき、私もこっそり出してたの。なかなか採用されなくて、やっと呼ばれたんだから」'],
+    [S, '「11月に別の人が入ったって聞いて、枠を取られたと思って焦ったんだよ。……募集は12月からの一人だけだったのに」'],
     [S, '「お母さんの絵……二人で取り戻すって、決めたでしょ。お兄ちゃんだけに背負わせたくなかった」'],
     { choice: [
       { t: '「……無茶をする。だが、来てくれて助かった」と頭を撫でる', then: [[S, '「えへへ……。昔みたい」']] },

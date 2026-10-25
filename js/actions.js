@@ -1,5 +1,5 @@
 // 執事パートで行える調査・会話の内容
-import { setFlag, fatherHome } from './state.js';
+import { setFlag, fatherHome, dayIndex } from './state.js';
 import { BASEMENT_HINTS } from './data.js';
 
 const ch = s => s.chapter;
@@ -181,6 +181,9 @@ export const SPOTS = {
 // ask：主人公から振る一言（手がかりの話は、主人公が尋ねて相手が答える形にする）
 export const TALKS = {
   father: [
+    // 白の報告で疑惑が上がった翌週
+    { if: s => s.counters.w_warn != null && dayIndex(s) - s.counters.w_warn <= 5,
+      line: '「最近、仕事の合間に屋敷をうろついているそうだな。……執事の仕事は、屋敷の中を嗅ぎ回ることではないぞ」' },
     { line: '「報告は手短に。……君の仕事ぶりには満足している」' },
   ],
   mother: [
@@ -225,7 +228,7 @@ export const TALKS = {
       line: '「この屋敷、警報だけ独立した系統なんですよ。大学で電気工学をやってたので、配線を見れば分かります」' },
     { if: s => s.aff.white >= 35 && !s.counters.night_white, line: '「仕事のあと、共用室でハイボールでもどうです？ 一人で飲むのは、非合理なので」' },
     { if: s => s.aff.white >= 45 && ch(s) >= 1 && s.flags.white_elec && !s.flags.b_circuit, flag: 'b_circuit', ask: '「配電盤のことで、ほかに気づいたことは？」',
-      line: '「そういえば配電盤に、どこにもつながっていない系統があるんですよ。屋敷のどこかに、誰も知らない部屋の電灯がある計算になります」' },
+      line: '「そういえば配電盤に、どこにもつながっていない系統があるんですよ。温度と湿度を一定に保つ設備の電源みたいです。……美術館の収蔵庫みたいな。屋敷のどこかに、誰も知らない部屋がある計算になります」' },
     { if: s => s.aff.white >= 70, line: '「執事さんの頼みなら、多少のことは聞きますよ。理由は聞きません」' },
     { line: '「担当分、全部片付けておきました。他に何かあります？」' },
   ],

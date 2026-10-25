@@ -4,6 +4,7 @@ import { PEOPLE, CHORES, ROOMS, PASSCODE, END_HOUR, SISTER } from './data.js';
 import { applyFx, fxNote, setFlag, dayIndex, whereIs, isAlly, peopleIn, fatherHome } from './state.js';
 import { pickTalk } from './actions.js';
 import { joined, sisterTalk, told } from './sister.js';
+import { whiteSaw } from './white.js';
 
 export const FORGERY_DAYS = 5;
 
@@ -45,13 +46,15 @@ export function doChore(s, i) {
   return msg;
 }
 
-// 調査。seen は見ていた人の一覧。{ msg, code, clue } を返す
-export function investigate(s, spot, seen) {
+// 調査。seen は見ていた人の一覧、room は調べた部屋。{ msg, code, clue } を返す
+// 白メイドに見られると、週末にお父様へ報告される（書斎・私室なら重い）
+export function investigate(s, spot, seen, room) {
   const res = spot.run(s);
   let msg = res.text;
   if (seen.length) {
     const amount = Math.min(25, seen.length * (seen.includes('father') ? 20 : 10));
     msg += `　……${seen.map(p => PEOPLE[p].name).join('、')}に見られた！` + fxNote(applyFx(s, { susp: amount }));
+    if (seen.includes('white')) msg += whiteSaw(s, room === 'study' || (ROOMS[room] && ROOMS[room].private) ? 10 : 5);
   }
   return { msg, code: !!res.code, clue: !!res.clue };
 }
@@ -141,7 +144,7 @@ export function caughtEmerging(s, room) {
   const who = watchersAt(s, room)[0];
   if (!who) return null;
   const name = PEOPLE[who].name;
-  const fx = n => fxNote(applyFx(s, { susp: n }));
+  const fx = n => fxNote(applyFx(s, { susp: n })) + (who === 'white' ? whiteSaw(s, 10) : '');
   if (room === 'archive') return {
     line: `床の扉から顔を出した瞬間、${name}と目が合った。${name}「……執事さん？ 今、床の下から……」`,
     options: [

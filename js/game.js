@@ -6,6 +6,7 @@ import { newState, save, load, clearSave, listSlots, copySlot, markCleared, expo
 import { SPOTS } from './actions.js';
 import * as DL from './daylogic.js';
 import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ARRIVAL } from './story.js';
+import { WHITE_ARRIVAL, whiteReport, strictDue, strictScene, whiteActive, whiteCovers } from './white.js';
 import { hasNight, nightOptions, nightScene, nightChoices, markNightSeen, REST } from './night.js';
 import { morningEvents, joined } from './sister.js';
 import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profiles.js';
@@ -399,8 +400,15 @@ function chapterIntro() {
 }
 
 async function startWeekday() {
+  // 第2章の初日は、お父様が白メイドを連れてくる（それより後から遊び始めたセーブでは、場面を飛ばして済ませる）
+  if (s.chapter >= 1 && !s.flags.white_arrived) {
+    if (s.chapter === 1 && s.week === 0 && s.day === 0) return playScript(WHITE_ARRIVAL, startWeekday);
+    setFlag(s, 'white_arrived'); setFlag(s, 'white_spy');
+  }
   // 第3章の初日は、新しいメイド（妹の雫）がやって来る
   if (s.chapter >= 2 && !s.flags.shizuku) return playScript(ARRIVAL, startWeekday);
+  // 最終章の初日：白の報告が積み重なっていれば、お父様がイブの夜の巡回を厳しくする
+  if (strictDue(s)) { const sc = strictScene(s); if (sc.length) return playScript(sc, startWeekday); }
   s.phase = 'meeting';
   if (!s.today || s.today.dayIndex !== dayIndex(s)) {
     s.today = { dayIndex: dayIndex(s), chores: generateChores(s), hour: START_HOUR, min: 0, loc: 'servants', talked: {}, log: [], plan: {}, escort: null };
@@ -586,7 +594,7 @@ function move(id) {
 function investigate(sp) {
   const seen = DL.witnessesIn(s, s.today.loc);
   DL.spendHours(s, 1);
-  const res = DL.investigate(s, sp, seen);
+  const res = DL.investigate(s, sp, seen, s.today.loc);
   if (res.code) return askCode(res.msg, renderDay);
   if (res.clue) toast('手帳に記録した');
   checkFatal() || renderDay(res.msg);
@@ -731,7 +739,7 @@ function startWeekend() {
   s.phase = 'weekend';
   save(s);
   if (s.chapter === 3 && s.week === WEEKS_PER_CHAPTER - 1) return execution();
-  playScript(WEEKENDS[s.chapter][s.week], afterWeekend);
+  playScript([...whiteReport(s), ...WEEKENDS[s.chapter][s.week]], afterWeekend);
 }
 
 function afterWeekend() {
@@ -861,6 +869,7 @@ function noteTab() {
     s.flags.red_book && s.flags.key_hidden && !s.flags.found_painting && '人のいない時に、書斎から隠し部屋へ入る（12月以降）',
     s.chapter >= 3 && s.flags.ladder && !s.flags.balcony_open && '昼のうちに、バルコニーのガラス戸の鍵を外しておく',
     s.flags.found_painting && !s.flags.white_ally && '絵の警報をどうにかする方法が要る',
+    whiteActive(s) && !whiteCovers(s) && '白メイドに見られたことは、週末に旦那様へ報告される（仲良くなれば、伏せてくれるかもしれない）',
     s.chapter >= 2 && BASEMENT_HINTS.filter(f => s.flags[f]).length >= 2 && !s.flags.b_hatch && '地下があるらしい。資料室の床を調べる',
     s.flags.b_hatch && !s.flags.b_key && '床の扉の鍵を手に入れる（旦那様が出かける日の、食料庫あたり？）',
     s.flags.b_hatch && !s.flags.b_light && '地下を照らす明かりが要る（倉庫の工具棚）',

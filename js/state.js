@@ -133,7 +133,8 @@ export function setFlag(s, f, notes) {
 export const maidAvailable = (s, m) => s.chapter >= PEOPLE[m].from;
 export const activeMaids = s => MAIDS.filter(m => maidAvailable(s, m));
 // 好感度70以上のメイドは協力者。黒メイド（妹の雫）は、屋敷に来た日から味方
-export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.flags.shizuku : s.aff[who] >= ALLY_AFF);
+// 白メイドは、寝返った後（white_turned）も味方
+export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.flags.shizuku : s.aff[who] >= ALLY_AFF || (who === 'white' && !!s.flags.white_turned));
 
 // ---- 1日の予定 ----
 

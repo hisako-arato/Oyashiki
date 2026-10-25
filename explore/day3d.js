@@ -9,6 +9,7 @@ import { richNodes } from '../js/richtext.js';
 import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
+import { whiteSaw } from '../js/white.js';
 
 const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か（昼）
 const NIGHT_SEC_PER_HOUR = 75; // 決行の夜
@@ -561,7 +562,7 @@ function search([key, id], extraMsg) {
   if (!sp) return;
   const seen = watchers();
   DL.spendMinutes(s, ACT_MIN);
-  const res = DL.investigate(s, sp, seen);
+  const res = DL.investigate(s, sp, seen, key);
   if (res.clue) hooks.toast('手帳に記録した');
   if (res.code) { st.busy = true; return hooks.askCode(res.msg, m => { say(m); }); }
   say(extraMsg, res.msg);
@@ -1077,7 +1078,12 @@ function tick(now) {
   for (const p of Object.values(people)) p.coneMat.color.set(isAlly(s, p.id) ? '#8ad0a0' : (night || inPrivate) && p.seeing ? '#ff5a4a' : night ? '#fff2b0' : '#ffe08a');
   if (night) nightTick(dt);
   else {
-    if (!st.busy && watchers().length && inPrivate) s.susp = clamp(s.susp + 8 * dt);
+    if (!st.busy && watchers().length && inPrivate) {
+      s.susp = clamp(s.susp + 8 * dt);
+      // 白に私室にいるところを見られたら、その部屋につき一度だけ報告の種になる
+      if (st.wSaw !== key && watchers().includes('white')) { st.wSaw = key; const n = whiteSaw(s, 10); if (n) hooks.toast(n); }
+    }
+    if (!inPrivate) st.wSaw = null;
     tutorCheck(key);
     if (fatal()) return;
   }
@@ -1189,8 +1195,10 @@ export function startNight(state, route, h) {
   // 夜の見張り：黒メイド（雫）は大広間と玄関ホールを見回るが、兄を見逃す。赤メイドはキッチン裏で仕込み
   // 2階の廊下は警備会社の巡回員が往復し、西の端（物置の前）で立ち止まって窓の外を眺める
   const black = people.black, red = people.red, guard = people.guard;
-  Object.assign(guard, { area: 'f2', x: 30, z: 9.5, range: 7, wait: 0, look: 0,
-    nightRole: { i: 0, path: [[3.2, 9.5, 6], [40.5, 9.5, 1.5]] } });
+  // 白の報告でお父様が巡回を厳しくさせたとき（guard_strict）は、西の端で立ち止まる時間が短く、よく見ている
+  const strict = !!s.flags.guard_strict;
+  Object.assign(guard, { area: 'f2', x: 30, z: 9.5, range: strict ? 8 : 7, wait: 0, look: 0,
+    nightRole: { i: 0, path: [[3.2, 9.5, strict ? 2.5 : 6], [40.5, 9.5, 1.5]] } });
   Object.assign(black, { area: 'f1', x: 24, z: 10.5, range: 7.5, wait: 0, look: 0,
     nightRole: { i: 0, path: [[24, 10.5, 2], [23, 6.5], [20.5, 4.5, 2.5], [27.5, 4.5, 2], [27.5, 10.5], [24, 15, 2.5], [24, 10.5]] } });
   Object.assign(red, { area: 'f1', x: 44.6, z: 4.6, range: 5.5, look: 0, nightRole: { yaw: 0 } });
