@@ -39,7 +39,7 @@ const msgEl = $('msg3d');
 let msgQueue = [], afterMsg = null, actLock = 0;
 function say(...lines) { msgQueue = lines.filter(Boolean); nextMsg(); }
 // 台詞の話し手（表示名 → 人物）。会話の顔を映し、屋敷の中の VRM の表情も変える
-const SPEAKER = { '執事': 'butler', '雫': 'black', ...Object.fromEntries(Object.entries(LOOKS).map(([id, l]) => [l.name, id])) };
+const SPEAKER = { ...Object.fromEntries(Object.entries(LOOKS).map(([id, l]) => [l.name, id])), '執事': 'butler', '雫': 'black', '巡回員': 'guard' };
 let portrait = null, faced = null;
 function speakerOf(l) {
   if (Array.isArray(l)) return [SPEAKER[l[0]], l[1], l[2]];
@@ -108,6 +108,7 @@ function enter(id, x, z) {
   cur = a;
   a.group.visible = true;
   player.x = x; player.z = z;
+  if (st.mode === 'night') shareGuard();
   const info = AREA_INFO[id];
   // 屋内にいるときも、窓や低くした壁の向こうに庭が見えるよう、敷地を一緒に表示する
   const g = getArea('grounds');
@@ -340,6 +341,8 @@ function wantedKey(p) {
 }
 function updatePerson(p, dt) {
   let moving = false;
+  // 夜だけの人（外を回る巡回員）は、昼は屋敷にいない
+  if (LOOKS[p.id].nightOnly && st.mode !== 'night') { p.area = null; p.g.visible = false; p.cone.visible = false; p.seeing = false; return; }
   if (st.mode === 'night') moving = nightPerson(p, dt);
   else if (st.tut && p.id === 'blue') moving = tutorGuide(p, dt);
   else {
@@ -772,10 +775,12 @@ function nightThings() {
   if (cur.id === 'f2' && s.flags.hidden_open && !N.taken) list.push({ name: '月下の庭', at: at(8, 3.2), label: '絵を外す', night: takePainting });
   if (cur.id === 'f2' && N.route === 'swap' && N.carry === 'painting') list.push({ name: 'クローゼット', at: at(41.3, 14), label: '本物を隠す', night: () => {
     N.carry = null;
+    caption('すり替え完了', `深夜 ${nightClock()}`);
     afterMsg = () => endNight('swap');
     say('お嬢様の寝息を確かめ、クローゼットの奥に本物をそっと隠した。……あとは、何食わぬ顔で朝を迎えるだけだ。');
   } });
   if (cur.id === 'grounds' && N.route === 'night' && N.carry === 'painting') list.push({ name: '正門', at: at(38, 56.6), label: '屋敷を去る', night: () => {
+    caption('脱出', `深夜 ${nightClock()}`);
     afterMsg = () => endNight('night');
     say('門の鍵を外し、夜の街へ出た。腕の中の額縁が、月明かりを受けて鈍く光った。');
   } });
@@ -787,9 +792,21 @@ function takePainting() {
   if (!N.alarmOff) { afterMsg = () => endNight('caught'); return say('額縁に手をかけた瞬間、甲高い警報が屋敷中に鳴り響いた！'); }
   N.taken = true; N.carry = 'painting';
   areas.f2.secret.objs[0].visible = false;
+  caption('奪取', `深夜 ${nightClock()}　「月下の庭」`);
   if (N.route === 'swap') return say('青の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。', '本物をお嬢様の部屋のクローゼットに隠そう。');
-  say('「月下の庭」を額ごと外し、布で包んだ。……あとは、誰にも見つからずに正門から出るだけだ。');
+  // 空になった額縁に、カードを残すか
+  st.busy = true;
+  hooks.askChoice('月明かりの下、額縁が静かに外れた。……空になった壁に、何か残していくか？', [
+    { t: '一枚のカードを残す――「月は、返していただきました」', run: () => '', card: true },
+    { t: '何も残さず、影のように去る', run: () => '' },
+  ], (msg, o) => {
+    st.busy = false;
+    N.card = !!o.card;
+    say(o.card ? '胸ポケットから白いカードを取り出し、空の額縁の前にそっと立て掛けた。' : '壁に残ったのは、額縁の形に褪せなかった壁紙だけだ。',
+      '「月下の庭」を布で包んだ。……あとは、誰にも見つからずに正門から出るだけだ。');
+  });
 }
+const nightClock = () => { const m = Math.floor(st.night.min); return `${1 + Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
 function nightAct(t) {
   const N = st.night;
   if (t.exit) {
@@ -821,6 +838,9 @@ function nightGoal() {
   return '2階の書斎へ。夜は倉庫から奥への扉に鍵。勝手口の先には赤メイド、大広間は雫、2階の廊下には巡回員';
 }
 function endNight(id) {
+  // 盗み出せたときは、手際（かかった時間・ニアミス・カード）を残してエンディングで見せる
+  const N = st.night;
+  if (N && (id === 'night' || id === 'swap')) s.heist = { min: Math.round(N.min), near: N.near || 0, card: !!N.card, route: id };
   running = false;
   root.classList.add('hidden');
   setLights(false);
@@ -843,8 +863,36 @@ function nightTick(dt) {
     N.caught = true;
     const p = seers[0];
     afterMsg = () => endNight('caught');
-    say([p.name, p.id === 'guard' ? '「誰だ！ そこで何をしている！」' : '「……誰？ ……執事さん？」'], '懐中電灯の光が、執事の顔を照らした。');
+    say([p.name, /^guard/.test(p.id) ? '「誰だ！ そこで何をしている！」' : '「……誰？ ……執事さん？」'], '懐中電灯の光が、執事の顔を照らした。');
   }
+  // ニアミス：見張りの視界のすぐ外を抜けた（華麗さの採点に使う）
+  for (const p of Object.values(people)) {
+    if (p.area !== cur.id || p.seeing || isAlly(s, p.id) || !p.nightRole) continue;
+    const dx = player.x - p.x, dz = player.z - p.z, d = Math.hypot(dx, dz);
+    let diff = Math.atan2(dx, dz) - p.g.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    if (d < p.range + 1.2 && Math.abs(diff) < VIEW_FOV / 2 + 0.35 && performance.now() - (p.nearAt || 0) > 2500) {
+      p.nearAt = performance.now(); N.near = (N.near || 0) + 1;
+    }
+  }
+}
+// 見せ場の大きな文字（潜入・奪取・脱出）
+function caption(text, sub = '') {
+  let c = document.getElementById('caption3d');
+  if (!c) { c = document.createElement('div'); c.id = 'caption3d'; root.append(c); }
+  c.innerHTML = '';
+  const b = document.createElement('b'); b.textContent = text; c.append(b);
+  if (sub) { const sm = document.createElement('small'); sm.textContent = sub; c.append(sm); }
+  c.classList.remove('on'); void c.offsetWidth; c.classList.add('on');
+}
+// 外の巡回員は、2階の巡回員と同じ VRM を使う（同時に同じエリアにはいないので、いるほうに付け替える）
+function shareGuard() {
+  const a = people.guard, b = people.guard2, vrm = a.vrm || b.vrm, drive = a.drive || b.drive;
+  if (!vrm) return;
+  const here = [a, b].find(p => p.area === cur.id);
+  if (!here || here.vrm === vrm) return;
+  const other = here === a ? b : a;
+  other.vrm = null; other.drive = null;
+  here.g.add(vrm.scene); here.vrm = vrm; here.drive = drive;
 }
 
 // ---- 入力 ----
@@ -966,7 +1014,7 @@ function drawMinimap(here) {
   }
   for (const p of Object.values(people)) {
     if (p.area !== cur.id) continue;
-    mm.fillStyle = PEOPLE[p.id].color; mm.beginPath(); mm.arc(px(p.x), pz(p.z), 4, 0, 7); mm.fill();
+    mm.fillStyle = (PEOPLE[p.id] || PEOPLE.guard).color; mm.beginPath(); mm.arc(px(p.x), pz(p.z), 4, 0, 7); mm.fill();
   }
   for (const t of [...choreThings(), ...tutorTargets()]) {
     const [x, z] = t.at();
@@ -1223,9 +1271,13 @@ export function startNight(state, route, h) {
   // 2階の廊下は警備会社の巡回員が往復し、西の端（物置の前）で立ち止まって窓の外を眺める
   const black = people.black, red = people.red, guard = people.guard;
   // 白の報告でお父様が巡回を厳しくさせたとき（guard_strict）は、西の端で立ち止まる時間が短く、よく見ている
+  // 2階の巡回員は、西の端で立ち止まって窓の外を眺める（雫の情報）。ときどき途中で引き返す
+  // 外の巡回員は、屋敷の前庭から正門の前までを回る（梯子を掛ける所と、正門を見張る）
   const strict = !!s.flags.guard_strict;
   Object.assign(guard, { area: 'f2', x: 30, z: 9.5, range: strict ? 8 : 7, wait: 0, look: 0,
-    nightRole: { i: 0, path: [[3.2, 9.5, strict ? 2.5 : 6], [40.5, 9.5, 1.5]] } });
+    nightRole: { i: 0, path: [[3.2, 9.5, strict ? 2.5 : 6], [24, 9.5, 1.2], [14, 9.5], [40.5, 9.5, 1.5], [30, 9.5, 1.2]] } });
+  Object.assign(people.guard2, { area: 'grounds', x: 24, z: 39, range: 7.5, wait: 0, look: 0,
+    nightRole: { i: 0, path: [[24, 39, 2], [38, 39.6], [38, 39, 2.5], [52, 39, 2.5], [52, 52], [42, 53, 2], [24, 52]] } });
   Object.assign(black, { area: 'f1', x: 24, z: 10.5, range: 7.5, wait: 0, look: 0,
     nightRole: { i: 0, path: [[24, 10.5, 2], [23, 6.5], [20.5, 4.5, 2.5], [27.5, 4.5, 2], [27.5, 10.5], [24, 15, 2.5], [24, 10.5]] } });
   Object.assign(red, { area: 'f1', x: 44.6, z: 4.6, range: 5.5, look: 0, nightRole: { yaw: 0 } });
@@ -1233,6 +1285,7 @@ export function startNight(state, route, h) {
   // イブの夜にお嬢様・お母様の部屋へ招かれていれば、2階から始められる
   const eve = s.flags.eve_daughter ? ['f2', 36, 14, 'お嬢様の部屋'] : s.flags.eve_mother ? ['f2', 12, 14, '主寝室'] : null;
   if (eve) enter(eve[0], eve[1], eve[2]); else enter('cottage', 2.4, 12.5);
+  setTimeout(() => caption('潜入', '12月24日　深夜 1:00'), 400);
   player.g.rotation.set(0, Math.PI / 2, 0);
   say('12月24日、クリスマス・イブの深夜1時。パーティーの客も帰り、屋敷は寝静まった。',
     eve && ['執事', `（${eve[3]}の寝息を確かめ、そっとベッドを抜け出した。ここは2階だ。書斎は近い）`],

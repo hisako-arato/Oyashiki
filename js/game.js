@@ -7,7 +7,7 @@ import { SPOTS } from './actions.js';
 import * as DL from './daylogic.js';
 import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ARRIVAL } from './story.js';
 import { WHITE_ARRIVAL, whiteReport, strictDue, strictScene, whiteActive, whiteCovers } from './white.js';
-import { hasNight, nightOptions, nightScene, nightChoices, markNightSeen, REST } from './night.js';
+import { hasNight, nightOptions, nightScene, nightChoices, markNightSeen, REST, rallyDue, rallyScene } from './night.js';
 import { morningEvents, joined } from './sister.js';
 import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profiles.js';
 import { faceOf } from './faces.js';
@@ -336,6 +336,7 @@ function playScript(steps, done) {
     if (st.fx) { const notes = applyFx(s, typeof st.fx === 'function' ? st.fx(s) : st.fx); if (notes.length) toast(fxNote(notes)); return next(); }
     if (st.call) { st.call(s); return next(); }
     if (st.place !== undefined) { stagePlace = st.place; return next(); }
+    if (st.cast !== undefined) { stageCast = st.cast; return next(); }
     if (st.dark) return blackout(next);
     if (st.if) { queue.unshift(...((st.if(s) ? st.then : st.else) || [])); return next(); }
     if (st.report) return showReport(next);
@@ -367,7 +368,8 @@ function portraitFor(who, text, face) {
 }
 
 // 夜の場面では、左上に場所と時刻の札を出し、背景をランプの灯りにする
-let stagePlace = null;
+// みんなで集まる場面では、その場にいる人の顔アイコンを下に並べ、話している人を光らせる
+let stagePlace = null, stageCast = null;
 function stage(who, content, text = '', face) {
   const p = PEOPLE[who];
   const vrm = p ? portraitFor(who, text, face) : null;
@@ -376,6 +378,7 @@ function stage(who, content, text = '', face) {
     s && s.phase !== 'prologue' ? statusBar() : null,
     el('div', { class: `scene ${vrm ? 'has-vrm' : ''}` },
       night && stagePlace ? el('div', { class: 'place-tag' }, stagePlace) : null,
+      stageCast ? el('div', { class: 'cast-row' }, stageCast.map(c => el('img', { class: `face-icon ${c === who ? 'speaking' : ''}`, src: faceSrc(outfitOf(c)), alt: '' }))) : null,
       // 胸から上の VRM が映るまでは、同じ VRM から作った顔アイコンを出しておく
       p ? el('img', { class: 'portrait', src: faceSrc(outfitOf(who)), alt: '' }) : null, vrm),
     el('div', { class: 'textbox' }, p ? el('div', { class: 'speaker', style: `--c:${p.color}` }, p.name) : null, content));
@@ -761,7 +764,7 @@ function night() {
     el('h2', {}, '夜　22時'),
     el('p', { class: 'hint' }, '今夜はどう過ごす？（1つだけ選べる）'),
     el('div', { class: 'nightopts' }, opts.map(o => el('button', {
-      onclick: () => { s.phase = 'night'; stagePlace = null; playScript(nightScene(s, o.id), () => { stagePlace = null; checkFatal() || nextDay(); }); } },
+      onclick: () => { s.phase = 'night'; stagePlace = stageCast = null; playScript(nightScene(s, o.id), () => { stagePlace = stageCast = null; checkFatal() || nextDay(); }); } },
       o.label, o.fresh ? el('small', { class: 'new' }, 'NEW') : null,
       o.info ? el('small', { class: 'info' }, '◆ 聞ける話がありそうだ') : null))),
     el('p', { class: 'hint' }, '◆ は、物語の手がかりを聞き出せそうな相手。印の無い相手とは、他愛もない夜になる。')));
@@ -808,6 +811,8 @@ function execution() {
   s.phase = 'execution';
   const avail = ROUTES.filter(r => r.ok(s));
   const intro = [
+    // 四人全員が協力者なら、決行の前に決起会
+    ...(rallyDue(s) ? rallyScene(s) : []),
     ['n', '12月24日、クリスマス・イブの深夜。パーティーの客も帰り、屋敷は寝静まった。'],
     ['butler', '（今夜しかない。明日の朝には、絵は梱包されて運び出される）'],
   ];
@@ -825,7 +830,7 @@ async function runRoute(id) {
   // 3Dの屋敷では、夜の屋敷を歩いて絵を盗み出す（執事は決行の服に着替える。先に読み込んでおく）
   if (castMissing()) return preloadCast(() => runRoute(id));
   app().replaceChildren();
-  if (await load3D()) return day3d.startNight(s, id, { ending, notebook: openNotebook, toast });
+  if (await load3D()) return day3d.startNight(s, id, { ending, notebook: openNotebook, toast, askChoice });
   let alarmOff = false;
   const fail = text => playScript([['n', text]], () => ending('caught'));
   const toPainting = () => playScript([
@@ -894,9 +899,14 @@ function ending(id) {
     // クリアしてもセーブは消さない（枠に「クリア済み」と記す。消すのはプレイヤーが手で）
     if (e.good) markCleared(s, id);
     const retry = load();
+    // 盗み出せた夜の手際（かかった時間・ニアミス）
+    const h = e.good && s.heist && s.heist.route === id ? s.heist : null;
+    const rank = h && (h.near === 0 && h.min <= 90 ? '月下の怪盗' : h.near <= 2 ? '影の執事' : '危うい綱渡り');
     render(el('div', { class: 'card end' },
       el('h2', {}, e.title),
       el('p', {}, e.good ? 'CLEAR' : ''),
+      h ? el('div', { class: 'heist' }, el('b', {}, `「${rank}」`),
+        el('small', {}, `所要時間 ${Math.floor(h.min / 60)}時間${h.min % 60}分　／　ニアミス ${h.near}回${h.card ? '　／　カードを残した' : ''}`)) : null,
       el('div', { class: 'menu' },
         retry ? el('button', { onclick: () => resume(retry) }, e.good ? '最後のセーブから、別の結末を探す' : '直前のセーブからやり直す') : null,
         el('button', { onclick: title }, 'タイトルへ'))));

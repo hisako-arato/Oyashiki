@@ -534,7 +534,8 @@ export const LOOKS = {
   white: { name: '白メイド' },
   mother: { name: 'お母様' },
   daughter: { name: 'お嬢様' },
-  guard: { name: '巡回員' },   // 決行の夜だけ現れる警備会社の巡回員
+  guard: { name: '巡回員' },   // 決行の夜だけ現れる警備会社の巡回員（2階の廊下）
+  guard2: { name: '巡回員', nightOnly: true },   // もう一人の巡回員（屋敷の外を回る）。VRM は guard と同じ物を、いるエリアに合わせて付け替える
 };
 
 // ---- 調べられる場所・出入口 ----

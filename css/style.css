@@ -246,3 +246,10 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .blackout { position: fixed; inset: 0; z-index: 60; background: #000; opacity: 0; transition: opacity .7s ease; pointer-events: none; }
 .blackout.on { opacity: 1; }
 .goals li.done { color: var(--muted); }
+/* みんなで集まる場面：その場にいる人の顔 */
+.cast-row { position: absolute; left: 0; right: 0; bottom: 8px; z-index: 2; display: flex; justify-content: center; gap: 10px; pointer-events: none; }
+.cast-row .face-icon { width: 52px; height: 52px; border: 2px solid transparent; opacity: .55; transition: opacity .2s, transform .2s; }
+.cast-row .face-icon.speaking { opacity: 1; border-color: var(--gold); transform: translateY(-4px); }
+.card.end .heist { margin: 4px 0 16px; text-align: center; }
+.card.end .heist b { display: block; color: var(--gold); font-size: 1.3rem; letter-spacing: .2em; }
+.card.end .heist small { color: var(--muted); }
