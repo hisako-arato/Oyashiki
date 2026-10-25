@@ -6,7 +6,7 @@ import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, ROOMS, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
 import { richNodes } from '../js/richtext.js';
-import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned } from '../js/state.js';
+import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
@@ -203,17 +203,20 @@ function makePeople() {
     people[id] = { id, name: LOOKS[id].name, ...ch, cone, coneGeo: geo, coneMat: mat, x: 0, z: 0, area: null, key: undefined, target: null, wait: 0, look: 0, seeing: false, range: VIEW_RANGE };
   }
 }
-// 人物に VRM を入れる。ゲームの開始前に全員を読み込んであるので（explore/vrm.js の preloadCast）、すぐに入る
+// 人物に VRM を入れる。ゲームの開始前と章の初日に読み込んであるので（explore/vrm.js の preloadCast）、すぐに入る
 // ?test（動作確認用）のときは読み込まない（人物は見えないまま動く）
 export const TEST = new URLSearchParams(location.search).has('test');
+// 読み込むのは、今の章で屋敷にいる人だけ（state.js の castNeeded）
 let castLoading = null;
 function syncCast() {
   if (castLoading || TEST) return;
   const chars = { butler: player, ...people };
+  const ids = castNeeded(s).filter(id => chars[id] && !chars[id].vrm);
+  if (!ids.length) return;
   castLoading = (async () => {
     const V = await import('./vrm.js');
-    for (const id of V.CAST) if (chars[id]) V.attachVRM(chars[id], await V.loadVRM(id));
-  })().catch(e => { console.warn('VRM', e); castLoading = null; });
+    for (const id of ids) V.attachVRM(chars[id], await V.loadVRM(id));
+  })().catch(e => console.warn('VRM', e)).finally(() => { castLoading = null; });
 }
 // 見た目を変えずに負担を減らす：画面の外にいる人は動きの計算と描画を止め、遠くの人は計算を2フレームに1回にする
 const frustum = new THREE.Frustum(), projView = new THREE.Matrix4(), bodySphere = new THREE.Sphere(new THREE.Vector3(), 1.4);

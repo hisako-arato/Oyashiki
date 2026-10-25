@@ -132,6 +132,8 @@ export function setFlag(s, f, notes) {
 
 export const maidAvailable = (s, m) => s.chapter >= PEOPLE[m].from;
 export const activeMaids = s => MAIDS.filter(m => maidAvailable(s, m));
+// 今の章で屋敷にいる人（VRM を読み込む人）。巡回員は最終章（イブの夜）だけ
+export const castNeeded = s => ['butler', 'father', 'mother', 'daughter', ...activeMaids(s), ...(s.chapter >= 3 ? ['guard'] : [])];
 // 好感度70以上のメイドは協力者。黒メイド（妹の雫）は、屋敷に来た日から味方
 // 白メイドは、寝返った後（white_turned）も味方
 export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.flags.shizuku : s.aff[who] >= ALLY_AFF || (who === 'white' && !!s.flags.white_turned));

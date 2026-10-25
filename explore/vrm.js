@@ -70,8 +70,10 @@ function pose(vrm, walk, amt, t = 0, extra = {}) {
 }
 
 // 毎フレーム呼ぶ。moving：歩いているか
+// 会話の顔（portrait.js）は同じ VRM を借りて描くので、屋敷で動かした時刻を覚えておき、二重に動かさないようにする
 export function driveVRM(vrm, moving, dt, extra = {}) {
   const m = vrm.motion;
+  if (!extra.portrait) m.lastDrive = performance.now();
   m.t += dt;
   m.walk = moving ? m.walk + dt * 10 : 0;
   m.amt = smooth(m.amt || 0, moving ? 1 : 0, dt * 8);
@@ -98,6 +100,14 @@ export function driveVRM(vrm, moving, dt, extra = {}) {
   vrm.update(dt);
 }
 
+// 口だけ動かす（屋敷で動いている人を会話の顔に映すとき）。talk：0〜1
+export function talkMouth(vrm, talk) {
+  const em = vrm.expressionManager;
+  if (!em) return;
+  em.setValue('aa', talk * (0.25 + 0.5 * Math.abs(Math.sin(vrm.motion.t * 13))));
+  em.update();
+}
+
 // 屋敷の人物（engine.makeChar の入れ物）に VRM を入れる
 export function attachVRM(ch, vrm) {
   if (ch.vrm) ch.g.remove(ch.vrm.scene);
@@ -106,11 +116,13 @@ export function attachVRM(ch, vrm) {
   ch.drive = (moving, dt) => driveVRM(vrm, moving, dt);
 }
 
-// ゲームを始める前に、屋敷の全員を読み込んでおく（人物が後から現れたり、顔が空のまま話したりしないように）
-// 二人きりの雫の部屋着（black2）は会話の顔だけで使うので、ファイルを端末に落とすだけにする
+// ゲームを始める前に、今の章で屋敷にいる人を読み込んでおく（人物が後から現れたり、顔が空のまま話したりしないように）
+// 端末のメモリを節約するため、まだ来ていないメイドや、最終章だけの巡回員は、要るときまで読み込まない
+// 二人きりの雫の部屋着（black2）は会話の顔だけで使うので、ファイルを端末に落とすだけにする（会話で初めて使うときに読み込む）
 // onProgress(0〜1, 読み込み済みの人数, 全員の人数)
-export async function preloadCast(onProgress) {
-  const ids = [...CAST, 'black2'], n = ids.length;
+export const loaded = (id, kind = 'lite') => cache.has(`${kind}/${id}`);
+export async function preloadCast(onProgress, want = CAST) {
+  const ids = [...want, ...(want.includes('black') ? ['black2'] : [])], n = ids.length;
   for (let i = 0; i < n; i++) {
     const tell = f => onProgress && onProgress((i + f) / n, i, n);
     tell(0);

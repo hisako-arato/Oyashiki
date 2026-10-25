@@ -14,6 +14,7 @@ const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0);
 // canvas に id の人物を表示する。戻り値の close() で後片付けする
 export function openViewer(canvas, id, { onProgress, onReady, onError, onAngle } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); onError && onError(new Error('context lost')); });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;

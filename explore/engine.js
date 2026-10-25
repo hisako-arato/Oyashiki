@@ -8,6 +8,20 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+// 端末のメモリが足りなくなって3D描画が止まったときは、白い画面のままにせず、読み込み直せるようにする
+// （セーブはその日の朝。読み込み直すと「つづきから」で、その日の朝から遊べる）
+canvas.addEventListener('webglcontextlost', e => {
+  e.preventDefault();
+  if (document.getElementById('gl-lost')) return;
+  const box = document.createElement('div');
+  box.id = 'gl-lost'; box.className = 'modal-back';
+  box.innerHTML = '<div class="modal"><p>3Dの表示が止まりました（端末のメモリが足りなくなった可能性があります）。</p>'
+    + '<p class="hint">読み込み直すと、タイトルの「つづきから」で、その日の朝から続けられます。ほかのアプリやタブを閉じると、止まりにくくなります。</p>'
+    + '<div class="row"><button class="primary">読み込み直す</button></div></div>';
+  box.querySelector('button').onclick = () => location.reload();
+  document.body.append(box);
+});
+
 export const scene = new THREE.Scene();
 export const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
 export const CAM_OFFSET = new THREE.Vector3(12, 14, 12);

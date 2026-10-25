@@ -1,6 +1,6 @@
 // ゲーム進行と画面描画
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY, BASEMENT_HINTS } from './data.js';
-import { newState, save, load, clearSave, listSlots, copySlot, markCleared, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
+import { castNeeded, newState, save, load, clearSave, listSlots, copySlot, markCleared, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
@@ -181,25 +181,27 @@ function titleSettings() {
 
 function startNew(n) {
   useSlot(n);
+  s = newState();
   preloadCast(() => {
     loadPortrait();
-    s = newState();
     playScript(PROLOGUE, () => chapterIntro());
   });
 }
 
-// ゲームを始める前に、全員の VRM を読み込む（初回はダウンロード。2回目からは端末の保存分を使う）
+// ゲームを始める前と章の初日に、今の章で屋敷にいる人の VRM を読み込む（初回はダウンロード。2回目からは端末の保存分を使う）
+let vrmMod = null;
+const castMissing = () => vrmMod && castNeeded(s).some(id => !vrmMod.loaded(id));
 async function preloadCast(then) {
   if (TEST || !can3D()) return then();
   const bar = el('i', { style: 'width:0%' }), label = el('p', {}, 'キャラクターを読み込んでいます…');
   render(el('div', { class: 'panel preload' },
     el('h2', {}, '準備しています'), label,
     el('div', { class: 'meter' }, el('div', { class: 'bar' }, bar)),
-    el('p', { class: 'hint' }, '初めてのときは、全員のモデル（約42MB）をダウンロードする。2回目からは端末に保存した分を使う。')));
+    el('p', { class: 'hint' }, '初めてのときは、キャラクターのモデルをダウンロードする。2回目からは端末に保存した分を使う。')));
   keepStorage();
   try {
-    const V = await import('../explore/vrm.js');
-    await V.preloadCast((f, i, n) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `キャラクターを読み込んでいます…（${Math.floor(f * 100)}%）`; });
+    vrmMod = vrmMod || await import('../explore/vrm.js');
+    await vrmMod.preloadCast((f, i, n) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `キャラクターを読み込んでいます…（${Math.floor(f * 100)}%）`; }, castNeeded(s));
   } catch (e) {
     console.warn(e);
     return render(el('div', { class: 'panel preload' },
@@ -303,9 +305,9 @@ function saveIO() {
 }
 
 function resume(saved) {
+  s = saved;
   preloadCast(() => {
     loadPortrait();
-    s = saved;
     if (s.phase === 'weekend') startWeekend();
     else startWeekday();
   });
@@ -400,6 +402,8 @@ function chapterIntro() {
 }
 
 async function startWeekday() {
+  // 章が進んで新しい人が来たら、先に読み込む
+  if (castMissing()) return preloadCast(startWeekday);
   // 第2章の初日は、お父様が白メイドを連れてくる（それより後から遊び始めたセーブでは、場面を飛ばして済ませる）
   if (s.chapter >= 1 && !s.flags.white_arrived) {
     if (s.chapter === 1 && s.week === 0 && s.day === 0) return playScript(WHITE_ARRIVAL, startWeekday);
@@ -487,9 +491,18 @@ function autoAssign(s) {
 let day3d = null;
 const QS = new URLSearchParams(location.search);
 const TEST = QS.has('test');
+// 確かめるのは一度だけ（確かめるたびに3D描画の枠を作ると、端末のメモリを食う）
+let webgl = null;
 function hasWebGL() {
   if (QS.has('2d')) return true;
-  try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
+  if (webgl === null) {
+    try {
+      const c = document.createElement('canvas'), gl = c.getContext('webgl2') || c.getContext('webgl');
+      webgl = !!gl;
+      if (gl) { const x = gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); }   // 確かめ終わったら手放す
+    } catch (e) { webgl = false; }
+  }
+  return webgl;
 }
 function can3D() { return !QS.has('2d') && hasWebGL(); }
 async function load3D() {
