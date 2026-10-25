@@ -134,46 +134,12 @@ export function plane(parent, w, d, material, x, y, z) {
 }
 
 // ---- 人物 ----
-export function makeChar(parent, { outfit, hair, maid, dress, longHair, apron = maid }) {
+// 人物の入れ物。中身の VRM は explore/vrm.js の attachVRM で入れる
+export function makeChar(parent) {
   const g = new THREE.Group();
-  const body = new THREE.Group();
-  g.add(body);
-  const legs = [];
-  for (const x of [-0.1, 0.1]) {
-    const leg = new THREE.Group();
-    leg.position.set(x, 0.55, 0);
-    mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.55, 6), dress && !maid ? M.skin : M.black, 0, -0.27, 0, leg);
-    body.add(leg); legs.push(leg);
-  }
-  const om = mat(outfit);
-  if (maid || dress) {
-    mesh(new THREE.ConeGeometry(dress ? 0.4 : 0.36, dress ? 0.75 : 0.6, 8), om, 0, dress ? 0.66 : 0.72, 0, body);
-    if (apron) box(body, 0.36, 0.5, 0.04, M.white, 0, 0.45, 0.19);
-    mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.42, 8), om, 0, 1.14, 0, body);
-  } else {
-    mesh(new THREE.CylinderGeometry(0.19, 0.17, 0.6, 8), om, 0, 0.98, 0, body);
-    box(body, 0.14, 0.3, 0.04, M.white, 0, 0.85, 0.17);
-    box(body, 0.14, 0.05, 0.05, M.black, 0, 1.24, 0.19);
-  }
-  for (const x of [-0.24, 0.24]) {
-    const arm = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6), om, x, 1.05, 0, body);
-    arm.rotation.z = x > 0 ? 0.15 : -0.15;
-  }
-  ball(body, 0.25, M.skin, 0, 1.55, 0, 1);
-  const hm = mat(hair);
-  const cap = mesh(new THREE.SphereGeometry(0.27, 10, 6, 0, Math.PI * 2, 0, Math.PI / 1.9), hm, 0, 1.58, -0.02, body);
-  cap.rotation.x = -0.25;
-  if (longHair) box(body, 0.46, 0.55, 0.12, hm, 0, 1.05, -0.18);
-  if (maid) box(body, 0.42, 0.06, 0.1, M.white, 0, 1.78, 0.02);
-  for (const x of [-0.08, 0.08]) box(body, 0.04, 0.06, 0.02, M.black, x, 1.53, 0.24);
   parent.add(g);
-  return { g, body, legs, walk: 0 };
+  return { g };
 }
 export function animate(ch, moving, dt) {
-  if (ch.drive) return ch.drive(moving, dt);   // VRM に差し替え済み（explore/vrm.js）
-  ch.walk = moving ? ch.walk + dt * 10 : 0;
-  const s = Math.sin(ch.walk);
-  ch.legs[0].rotation.x = s * 0.6;
-  ch.legs[1].rotation.x = -s * 0.6;
-  ch.body.position.y = moving ? Math.abs(s) * 0.05 : 0;
+  if (ch.drive) ch.drive(moving, dt);   // VRM の動き（explore/vrm.js）
 }

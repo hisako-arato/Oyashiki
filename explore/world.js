@@ -527,14 +527,14 @@ function block({ name, x1, x2, z1, z2, h, color = '#e8dcc0', roof = '#7a4a3a', w
 
 // ---- 人物 ----
 export const LOOKS = {
-  father: { outfit: '#3a3028', hair: '#6a6a6a', name: 'お父様' },
-  red: { outfit: '#c8362d', hair: '#7a2a1a', maid: true, name: '赤メイド' },
-  blue: { outfit: '#2f6fd0', hair: '#e8c070', maid: true, name: '青メイド' },
-  black: { outfit: '#222230', hair: '#141414', maid: true, longHair: true, name: '黒メイド' },
-  white: { outfit: '#c8ccd2', hair: '#c0c0c8', maid: true, name: '白メイド' },
-  mother: { outfit: '#8a2a4a', hair: '#5a3020', dress: true, longHair: true, name: 'お母様' },
-  daughter: { outfit: '#f0d070', hair: '#3a2418', dress: true, longHair: true, name: 'お嬢様' },
-  guard: { outfit: '#41608f', hair: '#2a2a2a', name: '巡回員' },   // 決行の夜だけ現れる警備会社の巡回員
+  father: { name: 'お父様' },
+  red: { name: '赤メイド' },
+  blue: { name: '青メイド' },
+  black: { name: '黒メイド' },
+  white: { name: '白メイド' },
+  mother: { name: 'お母様' },
+  daughter: { name: 'お嬢様' },
+  guard: { name: '巡回員' },   // 決行の夜だけ現れる警備会社の巡回員
 };
 
 // ---- 調べられる場所・出入口 ----

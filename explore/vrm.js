@@ -98,19 +98,31 @@ export function driveVRM(vrm, moving, dt, extra = {}) {
   vrm.update(dt);
 }
 
-// 屋敷の簡易モデル（engine.makeChar）を VRM に差し替える
+// 屋敷の人物（engine.makeChar の入れ物）に VRM を入れる
 export function attachVRM(ch, vrm) {
   if (ch.vrm) ch.g.remove(ch.vrm.scene);
   ch.vrm = vrm;
-  ch.body.visible = false;
   ch.g.add(vrm.scene);
   ch.drive = (moving, dt) => driveVRM(vrm, moving, dt);
 }
-export function detachVRM(ch) {
-  if (!ch.vrm) return;
-  ch.g.remove(ch.vrm.scene);
-  ch.vrm = null; ch.drive = null;
-  ch.body.visible = true;
+
+// ゲームを始める前に、屋敷の全員を読み込んでおく（人物が後から現れたり、顔が空のまま話したりしないように）
+// 二人きりの雫の部屋着（black2）は会話の顔だけで使うので、ファイルを端末に落とすだけにする
+// onProgress(0〜1, 読み込み済みの人数, 全員の人数)
+export async function preloadCast(onProgress) {
+  const ids = [...CAST, 'black2'], n = ids.length;
+  for (let i = 0; i < n; i++) {
+    const tell = f => onProgress && onProgress((i + f) / n, i, n);
+    tell(0);
+    if (ids[i] === 'black2') await fetchOnly(new URL('../assets/vrm/lite/black2.vrm', import.meta.url).href);
+    else await loadVRM(ids[i], 'lite', tell);
+  }
+  onProgress && onProgress(1, n, n);
+}
+async function fetchOnly(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: ${r.status}`);
+  await r.arrayBuffer();
 }
 
 export { THREE };

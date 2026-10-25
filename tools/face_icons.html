@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- 顔アイコンを作る撮影用のページ（tools/face_icons.mjs から開く） -->
+<canvas id="c" width="256" height="256"></canvas>
+<script type="module">
+import { THREE, loadVRM, driveVRM } from '../explore/vrm.js';
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight('#fff4e6', '#6a5a50', 1.7));
+const key = new THREE.DirectionalLight('#ffffff', 1.8);
+key.position.set(0.8, 1.6, 2.4); scene.add(key);
+const camera = new THREE.PerspectiveCamera(15, 1, 0.05, 20);
+// id の顔を撮って WebP の data URL を返す
+window.shoot = async id => {
+  const vrm = await loadVRM(id, 'view');
+  scene.add(vrm.scene);
+  for (let i = 0; i < 30; i++) driveVRM(vrm, false, 1 / 30, { face: {} });
+  vrm.expressionManager.setValue('blink', 0);
+  vrm.update(0);
+  const head = vrm.humanoid.getNormalizedBoneNode('head').getWorldPosition(new THREE.Vector3());
+  // 頭の骨はあごの辺り。髪の上からあごの下までを収める
+  camera.position.set(0, head.y + 0.08, 1.25);
+  camera.lookAt(0, head.y + 0.075, 0);
+  renderer.render(scene, camera);
+  const url = canvas.toDataURL('image/webp', 0.9);
+  scene.remove(vrm.scene);
+  return url;
+};
+window.ready = true;
+</script>

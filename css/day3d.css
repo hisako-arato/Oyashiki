@@ -53,4 +53,6 @@
 #day3d .msg3d.with-face { padding-left: 116px; min-height: 96px; }
 #day3d .msg3d .vportrait { position: absolute; left: 0; bottom: 0; width: 112px; height: 150px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 #day3d .msg3d .vportrait.ready { opacity: 1; }
+#day3d .msg3d .face-fallback { position: absolute; left: 8px; bottom: 8px; width: 96px; height: 96px; border-radius: 50%; object-fit: cover; transition: opacity .2s; pointer-events: none; }
+#day3d .msg3d:has(.vportrait.ready) .face-fallback { opacity: 0; }
 @media (hover: none) { #day3d .help { display: none; } }   /* スマホでは最初の操作案内で伝える */

@@ -12,6 +12,7 @@ import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profil
 import { faceOf } from './faces.js';
 import { richNodes } from './richtext.js';
 import { VERSION, VERSION_DATE } from './version.js';
+import { KINDS, savedCount, saveKind, keepStorage } from './vrmstore.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -31,9 +32,12 @@ function el(tag, attrs = {}, ...kids) {
   return e;
 }
 function render(...nodes) { const a = app(); a.replaceChildren(...nodes); a.scrollTop = 0; window.scrollTo(0, 0); }
+// 顔アイコン（VRM から作った画像）。二人きりの雫は部屋着の顔
+const faceSrc = who => `assets/faces/${who === 'shizuku' ? 'black2' : who}.webp`;
+const faceIcon = (who, cls = 'face-icon') => el('img', { class: cls, src: faceSrc(who), alt: '' });
 function badge(who) {
   const p = PEOPLE[who];
-  return el('span', { class: 'badge', style: `--c:${p.color}` }, p.name);
+  return el('span', { class: 'badge', style: `--c:${p.color}` }, faceIcon(who), p.name);
 }
 function meter(label, value, cls) {
   return el('div', { class: `meter ${cls}` }, el('span', {}, label),
@@ -68,6 +72,13 @@ export function title() {
   document.querySelectorAll('.viewer, .modal-back').forEach(e => e.remove());
   app().classList.remove('overlay');
   const any = listSlots().some(x => x.data);
+  // 3D表示（WebGL）が使えない端末は非対応
+  if (!hasWebGL()) return render(el('div', { class: 'title' },
+    el('p', { class: 'sub' }, 'お屋敷の宝を盗み出す物語'),
+    el('h1', {}, 'OYASHIKI'),
+    el('p', { class: 'sub2' }, '執事と月下の絵'),
+    el('p', { class: 'notice' }, 'この端末（ブラウザ）は3D表示（WebGL）に対応していないため、遊べません。新しいブラウザか、別の端末でお試しください。'),
+    el('p', { class: 'note' }, versionLabel())));
   render(el('div', { class: 'title' },
     el('p', { class: 'sub' }, 'お屋敷の宝を盗み出す物語'),
     el('h1', {}, 'OYASHIKI'),
@@ -122,21 +133,28 @@ function updateBox() {
   return el('div', { class: 'update' }, status, btn,
     el('p', { class: 'hint' }, '更新しても、セーブデータとキャラクターのモデルはそのまま残る。'));
 }
-// キャラクター表示の切り替え（トップ画面とゲーム中の両方で使う）
-function vrmChoice(after) {
-  let vrmOn = true;
-  try { vrmOn = localStorage.getItem('oyashiki-vrm') !== 'off'; } catch (e) { /* noop */ }
-  const setVRM = on => {
-    try { localStorage.setItem('oyashiki-vrm', on ? 'on' : 'off'); } catch (e) { /* noop */ }
-    if (day3d) day3d.refreshCast();
-    if (on) loadPortrait();
-    after();
-  };
+// キャラクターを端末に保存（便利機能：先に落としておけば、ゲームの開始時の読み込みが速くなる）
+function storeBox() {
+  const rows = Object.entries(KINDS).map(([kind, k]) => {
+    const status = el('span', { class: 'hint' }, '確認しています…');
+    const btn = el('button', { class: 'ghost' }, `保存する（${k.size}）`);
+    const show = n => {
+      if (n == null) { status.textContent = 'この端末では保存できない'; btn.disabled = true; return; }
+      status.textContent = `${n}/10人 保存済み`;
+      btn.disabled = n >= 10; btn.textContent = n >= 10 ? '保存済み' : `保存する（${k.size}）`;
+    };
+    btn.onclick = async () => {
+      btn.disabled = true; keepStorage();
+      try { await saveKind(kind, n => { status.textContent = `保存しています… ${n}/10人`; }); }
+      catch (e) { status.textContent = '保存できなかった（電波を確かめて、もう一度）'; btn.disabled = false; return; }
+      show(await savedCount(kind));
+    };
+    savedCount(kind).then(show);
+    return el('div', { class: 'store-row' }, el('b', {}, k.label), status, btn);
+  });
   return [
-    el('div', { class: 'choice2' },
-      el('button', { class: vrmOn ? 'on' : 'ghost', onclick: () => setVRM(true) }, '3Dモデル（VRM）'),
-      el('button', { class: vrmOn ? 'ghost' : 'on', onclick: () => setVRM(false) }, '簡易モデル（軽い）')),
-    el('p', { class: 'hint' }, '動きが重いときは「簡易モデル」にすると軽くなる（会話の顔も簡易表示になる）。人物照会の3D表示は、どちらでも使える。'),
+    el('div', { class: 'store' }, rows),
+    el('p', { class: 'hint' }, 'Wi-Fi のときに保存しておくと、ゲームの開始が速くなり、電波の弱い所でも遊べる。屋敷・会話用は、保存していなくてもゲームの開始時に読み込む。'),
   ];
 }
 // トップ画面の設定
@@ -146,8 +164,8 @@ function titleSettings() {
     el('h4', {}, 'バージョン'),
     el('p', {}, versionLabel()),
     updateBox(),
-    el('h4', {}, 'キャラクターの表示'),
-    ...vrmChoice(titleSettings),
+    el('h4', {}, 'キャラクターを端末に保存'),
+    ...storeBox(),
     el('h4', {}, 'セーブの書き出し・読み込み'),
     ...saveIO(),
     el('button', { class: 'primary', onclick: title }, 'タイトルに戻る')));
@@ -155,9 +173,34 @@ function titleSettings() {
 
 function startNew(n) {
   useSlot(n);
-  loadPortrait();
-  s = newState();
-  playScript(PROLOGUE, () => chapterIntro());
+  preloadCast(() => {
+    loadPortrait();
+    s = newState();
+    playScript(PROLOGUE, () => chapterIntro());
+  });
+}
+
+// ゲームを始める前に、全員の VRM を読み込む（初回はダウンロード。2回目からは端末の保存分を使う）
+async function preloadCast(then) {
+  if (TEST || !can3D()) return then();
+  const bar = el('i', { style: 'width:0%' }), label = el('p', {}, 'キャラクターを読み込んでいます…');
+  render(el('div', { class: 'panel preload' },
+    el('h2', {}, '準備しています'), label,
+    el('div', { class: 'meter' }, el('div', { class: 'bar' }, bar)),
+    el('p', { class: 'hint' }, '初めてのときは、全員のモデル（約42MB）をダウンロードする。2回目からは端末に保存した分を使う。')));
+  keepStorage();
+  try {
+    const V = await import('../explore/vrm.js');
+    await V.preloadCast((f, i, n) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `キャラクターを読み込んでいます…（${Math.min(i + 1, n)}/${n}人）`; });
+  } catch (e) {
+    console.warn(e);
+    return render(el('div', { class: 'panel preload' },
+      el('h2', {}, '読み込めなかった'),
+      el('p', {}, 'キャラクターのモデルを読み込めなかった。電波の良い所で、もう一度試してほしい。'),
+      el('button', { class: 'primary', onclick: () => preloadCast(then) }, 'もう一度読み込む'),
+      el('button', { class: 'ghost', onclick: title }, 'タイトルに戻る')));
+  }
+  then();
 }
 
 // ---- セーブ枠 ----
@@ -252,10 +295,12 @@ function saveIO() {
 }
 
 function resume(saved) {
-  loadPortrait();
-  s = saved;
-  if (s.phase === 'weekend') startWeekend();
-  else startWeekday();
+  preloadCast(() => {
+    loadPortrait();
+    s = saved;
+    if (s.phase === 'weekend') startWeekend();
+    else startWeekday();
+  });
 }
 
 // ---- シナリオ再生 ----
@@ -285,10 +330,7 @@ let portrait = null;
 // 二人きりのとき（話し手が「雫」）は部屋着。来た日の夜の呼び出しだけは、まだメイド服のまま
 const VRM_OF = { shizuku: () => (s.counters.night_black ? 'black2' : 'black') };
 const CAST_IDS = ['butler', 'father', 'mother', 'daughter', 'red', 'blue', 'white', 'black', 'black2', 'guard'];
-function vrmOn() {
-  if (!can3D() || new URLSearchParams(location.search).has('lowpoly')) return false;
-  try { return localStorage.getItem('oyashiki-vrm') !== 'off'; } catch (e) { return true; }
-}
+const vrmOn = () => can3D() && !TEST;
 function loadPortrait() {
   if (portrait || !vrmOn()) return;
   portrait = import('../explore/portrait.js').then(m => (portrait = m)).catch(e => { console.warn(e); portrait = null; });
@@ -306,7 +348,8 @@ function stage(who, content, text = '', face) {
   return el('div', { class: 'stage' },
     s && s.phase !== 'prologue' ? statusBar() : null,
     el('div', { class: `scene ${vrm ? 'has-vrm' : ''}` },
-      p ? el('div', { class: 'portrait', style: `--c:${p.color}` }, p.name.slice(0, 1)) : null, vrm),
+      // 胸から上の VRM が映るまでは、同じ VRM から作った顔アイコンを出しておく
+      p ? el('img', { class: 'portrait', src: faceSrc(VRM_OF[who] ? VRM_OF[who]() : who), alt: '' }) : null, vrm),
     el('div', { class: 'textbox' }, p ? el('div', { class: 'speaker', style: `--c:${p.color}` }, p.name) : null, content));
 }
 
@@ -424,12 +467,16 @@ function autoAssign(s) {
   }
 }
 
-// 執事パートは3Dの屋敷で遊ぶ。3D描画が使えない端末や ?2d を付けたときはボタン式の画面
+// 執事パートは3Dの屋敷で遊ぶ（3D表示が使えない端末は非対応）
+// 動作確認用の切り替え：?2d はボタン式の画面で遊ぶ、?test はキャラクターのモデルを読み込まない（人物は見えない）
 let day3d = null;
-function can3D() {
-  if (new URLSearchParams(location.search).has('2d')) return false;
+const QS = new URLSearchParams(location.search);
+const TEST = QS.has('test');
+function hasWebGL() {
+  if (QS.has('2d')) return true;
   try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
 }
+function can3D() { return !QS.has('2d') && hasWebGL(); }
 async function load3D() {
   if (!can3D()) return false;
   const loading = document.getElementById('loading3d');
@@ -828,12 +875,12 @@ function lookLine() {
 
 function peopleTab(back) {
   return [
-    el('p', { class: 'hint' }, can3D() ? 'タップすると、その人物を3Dで眺められる。' : '人物の情報（この端末では3D表示は使えない）。'),
+    el('p', { class: 'hint' }, 'タップすると、その人物を3Dで眺められる。'),
     el('div', { class: 'people' }, PROFILES.map(p => {
       if (!p.shown(s)) return el('button', { class: 'person ghost', disabled: true }, el('b', {}, '？？？'), el('small', {}, 'まだ会っていない'));
       const pr = profileOf(p, s);
       return el('button', { class: 'person', style: `--c:${PEOPLE[p.id].color}`, onclick: () => { back.remove(); openPerson(p.id); } },
-        el('b', {}, pr.name), el('small', {}, pr.age || '　'));
+        faceIcon(p.id), el('div', {}, el('b', {}, pr.name), el('small', {}, pr.age || '　')));
     })),
   ];
 }
@@ -847,8 +894,8 @@ function storyTab() {
 
 function settingsTab(back) {
   return [
-    el('h4', {}, 'キャラクターの表示'),
-    ...vrmChoice(() => { back.remove(); openNotebook('settings'); }),
+    el('h4', {}, 'キャラクターを端末に保存'),
+    ...storeBox(),
     el('h4', {}, 'バージョン'),
     el('p', {}, versionLabel()),
     el('p', { class: 'hint' }, '更新はタイトル画面の「設定」から行う。'),

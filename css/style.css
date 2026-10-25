@@ -72,8 +72,7 @@ select, input { font: inherit; background: var(--panel2); color: var(--text); bo
   background: linear-gradient(#2b1f30, #1c1420);
 }
 .portrait {
-  width: 120px; height: 160px; border-radius: 60px 60px 8px 8px; background: var(--c); border: 2px solid var(--gold);
-  display: flex; align-items: center; justify-content: center; font-size: 3rem; color: #fff; text-shadow: 0 2px 6px #000;
+  width: 150px; height: 150px; margin-bottom: 16px; border-radius: 50%; object-fit: cover; background: var(--panel2); border: 2px solid var(--gold);
 }
 .textbox { margin: 0 12px 16px; padding: 16px; background: rgba(42, 31, 46, .97); border: 1px solid var(--gold); border-radius: 8px; min-height: 140px; }
 .speaker { display: inline-block; padding: 0 10px; margin-bottom: 6px; border-left: 4px solid var(--c); font-weight: bold; }
@@ -99,7 +98,9 @@ select, input { font: inherit; background: var(--panel2); color: var(--text); bo
 .loads { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .load { font-size: .85rem; background: var(--panel); padding: 2px 8px; border-radius: 4px; }
 .load.over { outline: 1px solid var(--bad); color: var(--bad); }
-.badge { display: inline-block; border-left: 4px solid var(--c); padding: 0 6px; margin-right: 4px; background: var(--panel2); border-radius: 2px; font-size: .85rem; }
+.badge { display: inline-flex; align-items: center; gap: 4px; border-left: 4px solid var(--c); padding: 0 6px 0 2px; margin-right: 4px; background: var(--panel2); border-radius: 2px; font-size: .85rem; vertical-align: middle; }
+/* 顔アイコン（assets/faces：VRM から tools/face_icons.mjs で作る） */
+.face-icon { width: 1.6em; height: 1.6em; border-radius: 50%; object-fit: cover; background: #1a1420; flex: none; }
 
 .msg { background: var(--panel2); border-left: 4px solid var(--gold); padding: 10px 12px; margin-top: 12px; font-size: .95rem; }
 .current { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px 12px; margin-top: 12px; }
@@ -151,7 +152,9 @@ select, input { font: inherit; background: var(--panel2); color: var(--text); bo
 .tabs button { flex: 1; padding: 8px 2px; font-size: .85rem; white-space: nowrap; }
 button.on { background: var(--gold); color: var(--bg); border-color: var(--gold); font-weight: bold; }
 .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
-.person { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; border-left: 6px solid var(--c, var(--line)); background: var(--panel2); color: var(--text); }
+.person { display: flex; align-items: center; gap: 8px; text-align: left; border-left: 6px solid var(--c, var(--line)); background: var(--panel2); color: var(--text); }
+.person .face-icon { width: 44px; height: 44px; }
+.person > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .person small { color: var(--muted); }
 .story h4 { color: var(--gold); }
 .story p { margin: 4px 0 12px; line-height: 1.7; }
@@ -214,3 +217,15 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .save-io { display: flex; flex-direction: column; gap: 8px; }
 .save-io select { margin-left: 4px; padding: 4px 8px; }
 .save-text { width: 100%; box-sizing: border-box; font-family: monospace; font-size: .75rem; word-break: break-all; background: #15110e; color: inherit; border: 1px solid #4a3f33; border-radius: 6px; padding: 6px; }
+
+/* キャラクターを端末に保存・開始前の読み込み */
+.store { display: flex; flex-direction: column; gap: 8px; }
+.store-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; background: var(--panel); border: 1px solid #4a3f50; border-radius: 8px; padding: 8px 12px; }
+.store-row b { grid-column: 1; }
+.store-row .hint { grid-column: 1; margin: 0; }
+.store-row button { grid-column: 2; grid-row: 1 / span 2; width: auto; padding: 8px 12px; font-size: .85rem; }
+.preload { padding-top: 20vh; text-align: center; }
+.preload .meter { display: block; margin: 16px 24px; }
+.preload .meter .bar { width: 100%; }
+.preload .meter .bar i { background: var(--gold); transition: width .2s; }
+.preload button { display: block; width: calc(100% - 32px); margin-top: 10px; }

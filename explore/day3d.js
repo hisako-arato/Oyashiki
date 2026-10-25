@@ -28,7 +28,7 @@ const root = $('day3d');
 // ---- 状態（その日だけ） ----
 // mode：morning（朝礼前）／day（仕事中）／night（決行の夜）
 const st = { busy: false, lastKey: null, shelfAnim: 0, mode: 'day', tut: null, night: null };
-const player = { ...makeChar(scene, { outfit: '#22223a', hair: '#2a2a2a' }), x: 0, z: 0, r: 0.3 };
+const player = { ...makeChar(scene), x: 0, z: 0, r: 0.3 };
 const lantern = new THREE.PointLight('#ffcf8a', 0, 9, 1.6);
 lantern.position.set(0.3, 1.3, 0.2);
 player.g.add(lantern);
@@ -71,8 +71,15 @@ function nextMsg() {
   const said = text.replace(/〔[^〕]*〕/g, '');
   const face = who ? faceOf(said, override, who === 'black' && /お兄ちゃん/.test(said) ? 'shizuku' : who) : 'neutral';
   setFace(who, face);
-  msgEl.classList.toggle('with-face', !!(who && portrait && useVRM()));
-  if (who && portrait && useVRM()) { portrait.showPortrait(Array.isArray(l) && l[0] === '雫' && s.counters.night_black ? 'black2' : who, face, /^（/.test(said) ? 0 : said.length); msgEl.prepend(portrait.portraitCanvas()); }
+  // 話し手の顔：胸から上の VRM。読み込み終わるまでは、同じ VRM から作った顔アイコンを出しておく
+  const faceId = Array.isArray(l) && l[0] === '雫' && s.counters.night_black ? 'black2' : who;
+  msgEl.classList.toggle('with-face', !!who);
+  if (who) {
+    const icon = document.createElement('img');
+    icon.className = 'face-fallback'; icon.alt = ''; icon.src = `assets/faces/${faceId}.webp`;
+    msgEl.prepend(icon);
+    if (portrait && !TEST) { portrait.showPortrait(faceId, face, /^（/.test(said) ? 0 : said.length); msgEl.prepend(portrait.portraitCanvas()); }
+  }
   msgEl.classList.remove('hidden');
 }
 msgEl.addEventListener('click', nextMsg);
@@ -183,8 +190,8 @@ function rayDist(x, z, dx, dz, max) {
 const people = {};
 const coneMat = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
 function makePeople() {
-  for (const id of Object.keys(LOOKS)) {
-    const ch = makeChar(scene, LOOKS[id]);
+  for (const [slot, id] of Object.keys(LOOKS).entries()) {
+    const ch = { ...makeChar(scene), slot };
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((CONE_RAYS + 2) * 3), 3));
     geo.setIndex(Array.from({ length: CONE_RAYS }, (_, i) => [0, i + 1, i + 2]).flat());
@@ -195,32 +202,36 @@ function makePeople() {
     people[id] = { id, name: LOOKS[id].name, ...ch, cone, coneGeo: geo, coneMat: mat, x: 0, z: 0, area: null, key: undefined, target: null, wait: 0, look: 0, seeing: false, range: VIEW_RANGE };
   }
 }
-// 人物を VRM に差し替える。読み込みが終わった人から順に入れ替わる（それまでは簡易モデル）
-// 設定で「簡易モデル」を選んだときや ?lowpoly のときは使わない
-export const useVRM = () => {
-  if (new URLSearchParams(location.search).has('lowpoly')) return false;
-  try { return localStorage.getItem('oyashiki-vrm') !== 'off'; } catch (e) { return true; }
-};
+// 人物に VRM を入れる。ゲームの開始前に全員を読み込んであるので（explore/vrm.js の preloadCast）、すぐに入る
+// ?test（動作確認用）のときは読み込まない（人物は見えないまま動く）
+export const TEST = new URLSearchParams(location.search).has('test');
 let castLoading = null;
-async function syncCast() {
+function syncCast() {
+  if (castLoading || TEST) return;
   const chars = { butler: player, ...people };
-  if (!useVRM()) {
-    if (castLoading) { const V = await import('./vrm.js'); for (const ch of Object.values(chars)) V.detachVRM(ch); }
-    return;
-  }
-  if (castLoading) {   // 一度読み込んだ後に設定で戻したとき
-    const V = await import('./vrm.js');
-    for (const [id, ch] of Object.entries(chars)) if (!ch.vrm) V.loadVRM(id).then(v => V.attachVRM(ch, v)).catch(() => {});
-    return;
-  }
   castLoading = (async () => {
     const V = await import('./vrm.js');
-    // 主人公から順に、1人ずつ読み込む（同時に読み込むとスマホのメモリが足りなくなる）
-    for (const id of V.CAST) {
-      if (!chars[id]) continue;
-      try { V.attachVRM(chars[id], await V.loadVRM(id)); } catch (e) { console.warn('VRM', id, e); }
-    }
-  })().catch(e => console.warn('VRM', e));
+    for (const id of V.CAST) if (chars[id]) V.attachVRM(chars[id], await V.loadVRM(id));
+  })().catch(e => { console.warn('VRM', e); castLoading = null; });
+}
+// 見た目を変えずに負担を減らす：画面の外にいる人は動きの計算と描画を止め、遠くの人は計算を2フレームに1回にする
+const frustum = new THREE.Frustum(), projView = new THREE.Matrix4(), bodySphere = new THREE.Sphere(new THREE.Vector3(), 1.4);
+let frameNo = 0;
+function updateFrustum() {
+  frameNo++;
+  camera.updateMatrixWorld();
+  frustum.setFromProjectionMatrix(projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+}
+function driveSeen(ch, moving, dt) {
+  bodySphere.center.set(ch.x, 0.9, ch.z);
+  const seen = frustum.intersectsSphere(bodySphere);
+  if (ch.vrm) ch.vrm.scene.visible = seen;
+  ch.lag = (ch.lag || 0) + dt;
+  if (!seen) { ch.lag = Math.min(ch.lag, 0.1); return; }
+  const far = Math.hypot(ch.x - player.x, ch.z - player.z) > 9;
+  if (far && (frameNo + (ch.slot || 0)) % 2) return;
+  animate(ch, moving, Math.min(ch.lag, 0.1));
+  ch.lag = 0;
 }
 function freePoint(a, r) {
   for (let i = 0; i < 40; i++) {
@@ -328,8 +339,8 @@ function updatePerson(p, dt) {
   const here = p.area === cur.id;
   p.g.visible = here; p.cone.visible = here;
   if (!here) { p.seeing = false; return; }
-  animate(p, moving && !st.busy, dt);
   p.g.position.set(p.x, 0, p.z);
+  driveSeen(p, moving && !st.busy, dt);
   sight(p);
 }
 // 今こちらを見ている人（協力者は数えない）
@@ -1024,6 +1035,7 @@ function tick(now) {
     }
   }
 
+  updateFrustum();
   for (const p of Object.values(people)) updatePerson(p, dt);
   bobMarkers(dt);
   st.placeNow = false;
@@ -1085,7 +1097,7 @@ function prepare(state, h) {
     makePeople();
   }
   syncCast();
-  if (!portrait && useVRM()) import('./portrait.js').then(m => { portrait = m; }).catch(() => {});
+  if (!portrait && !TEST) import('./portrait.js').then(m => { portrait = m; }).catch(() => {});
   for (const p of Object.values(people)) { p.key = undefined; p.route = null; p.nightRole = null; p.range = VIEW_RANGE; }
   syncSecret();
   syncDeco();
@@ -1182,7 +1194,6 @@ export function leave() {
 let suspended = false;
 export function suspend() { if (!running) return; running = false; suspended = true; }
 export function resume() { if (suspended) { suspended = false; run(); } }
-export function refreshCast() { if (areas.grounds) syncCast(); }
 
 // テスト用
 window.__day3d = { get state() { return s; }, st, player, people, areas, enter, act, planRoute, ROOM_OF, GATE, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r) };
