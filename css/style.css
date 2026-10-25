@@ -135,10 +135,14 @@ select, input { font: inherit; background: var(--panel2); color: var(--text); bo
 .clues { padding-left: 1.2em; font-size: .9rem; }
 .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
 .code { font-size: 1.6rem; letter-spacing: .4em; width: 8em; text-align: center; display: block; margin: 8px auto; }
+/* お知らせは上の方（ステータスの下）に出す。下のメッセージ欄・会話の文と重ならないように */
+#toasts { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 112px); transform: translateX(-50%); z-index: 30;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; width: max-content; max-width: 90vw; pointer-events: none; }
 .toast {
-  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 30;
   background: var(--gold); color: var(--bg); padding: 8px 16px; border-radius: 20px; font-size: .9rem; max-width: 90vw;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .5); animation: toast-in .2s ease-out;
 }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } }
 .tutorial { background: #3a3020; border-left: 4px solid var(--gold); padding: 8px 12px; font-size: .9rem; }
 .notice { background: #2a2238; border-left: 4px solid #a07ad0; padding: 8px 12px; font-size: .9rem; }
 .aff .sister { grid-column: 2 / -1; font-size: .85rem; opacity: .85; }

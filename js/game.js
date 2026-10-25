@@ -59,9 +59,16 @@ function modal(...content) {
   document.body.append(back);
   return back;
 }
+// お知らせ（「手帳に記録した」や〔好感度 +5〕など）は画面の上の方に出す。下のメッセージ欄と重ならないように
+// 続けて出たときは縦に並べる
 function toast(text) {
+  let box = document.getElementById('toasts');
+  if (!box) { box = el('div', { id: 'toasts' }); document.body.append(box); }
+  // 3Dの屋敷では、左上の状況表示（目標の文で縦に伸びる）のすぐ下に出す
+  const hud = document.querySelector('#day3d:not(.hidden) .hud');
+  box.style.top = hud ? `${Math.max(112, hud.getBoundingClientRect().bottom + 10)}px` : '';
   const t = el('div', { class: `toast ${/〔/.test(text) ? 'fx-toast' : ''}` }, richNodes(text));
-  document.body.append(t);
+  box.append(t);
   setTimeout(() => t.remove(), 2600);
 }
 
