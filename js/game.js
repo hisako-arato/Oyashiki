@@ -443,7 +443,7 @@ function renderMeeting(done = meetingDone) {
     const sel = el('select', { disabled: !!c.forced, onchange: e => { c.assignee = e.target.value || null; renderMeeting(); } },
       opts.map(([v, label]) => el('option', { value: v || '', selected: c.assignee === v }, label)));
     return el('tr', {}, el('td', {}, def.name, def.optional ? el('small', {}, '（任意）') : null),
-      el('td', {}, ROOMS[def.room] ? ROOMS[def.room].name : '外出'), el('td', {}, sel));
+      el('td', {}, ROOMS[def.room] ? ROOMS[def.room].name : def.with ? `${PEOPLE[def.with].name}に声をかける` : '外出'), el('td', {}, sel));
   });
   const loads = maids.map(m => {
     const l = maidLoad(s, m);
@@ -876,8 +876,11 @@ function noteTab() {
 // 屋敷の小物を、いくつ調べたか（3Dの屋敷で遊んでいるときだけ）
 function lookLine() {
   if (!day3d || !day3d.lookStats) return null;
-  const { seen, total } = day3d.lookStats();
-  return total ? el('p', { class: 'hint' }, `屋敷で調べた物：${seen}／${total}`) : null;
+  const { areas, seen, total } = day3d.lookStats();
+  if (!total) return null;
+  return el('div', {}, el('h4', {}, `屋敷で調べた物（${seen}／${total}）`),
+    el('ul', { class: 'looks' }, areas.map(a => el('li', { class: a.seen === a.total ? 'done' : '' },
+      `${a.seen === a.total ? '★' : '・'}${a.name}　${a.seen}／${a.total}`))));
 }
 
 function peopleTab(back) {

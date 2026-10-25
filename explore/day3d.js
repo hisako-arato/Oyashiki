@@ -350,11 +350,23 @@ const watchers = () => Object.values(people).filter(p => p.area === cur.id && p.
 
 // ---- 仕事の印 ----
 const workMat = new THREE.MeshStandardMaterial({ color: '#7ad08a', emissive: '#4ab06a', emissiveIntensity: 0.6, transparent: true, opacity: 0.6 });
+// 人に付いていく仕事（お母様のお供）：場所が決まっていないので、その人の頭の上に目印を出し、話しかけて始める
+const withPerson = id => CHORES[id].with && CHORES[id].room === 'out' ? CHORES[id].with : null;
+const personGems = [];
 function refreshMarkers() {
   for (const a of Object.values(areas)) { for (const m of a.markers) a.group.remove(m); a.markers = []; }
+  for (const g of personGems.splice(0)) g.parent && g.parent.remove(g);
   if (st.mode !== 'day') return;
   s.today.chores.forEach(c => {
     if (c.assignee !== 'butler' || c.done) return;
+    const who = withPerson(c.id);
+    if (who) {
+      if (!people[who]) return;
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.28), gemMat);
+      gem.position.set(0, 2.25, 0); gem.userData.bob = 0; gem.userData.base = 2.25;
+      people[who].g.add(gem); personGems.push(gem);
+      return;
+    }
     const [area, x, z] = WORK[c.id];
     const a = areas[area], m = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.6, 20), workMat);
     m.rotation.x = -Math.PI / 2; m.position.set(x, 0.03, z);
@@ -366,9 +378,9 @@ function refreshMarkers() {
 }
 const gemMat = new THREE.MeshBasicMaterial({ color: '#5fe08a', transparent: true, opacity: 0.9, depthTest: false });
 function bobMarkers(dt) {
-  for (const m of cur.markers) if (m.userData.bob != null) {
+  for (const m of [...cur.markers, ...personGems]) if (m.userData.bob != null) {
     m.userData.bob += dt * 3;
-    m.position.y = 2.4 + Math.sin(m.userData.bob) * 0.15;
+    m.position.y = (m.userData.base ?? 2.4) + Math.sin(m.userData.bob) * 0.15;
     m.rotation.y += dt * 1.5;
   }
 }
@@ -383,7 +395,7 @@ function choreThings() {
   const list = [];
   if (st.mode !== 'day') return list;
   s.today.chores.forEach((c, i) => {
-    if (c.assignee !== 'butler' || c.done) return;
+    if (c.assignee !== 'butler' || c.done || withPerson(c.id)) return;
     const [area, x, z] = WORK[c.id];
     if (area === cur.id) list.push({ name: CHORES[c.id].name, at: () => [x, z], label: '仕事', chore: i });
   });
@@ -469,8 +481,12 @@ function act() {
     const text = t.say.map(l => typeof l === 'function' ? l(s) : l);
     if (s.flags[lookKey(t)]) return say(...text);
     s.flags[lookKey(t)] = true;
-    const { seen, total } = lookStats(), lines = text;
-    lines[lines.length - 1] += `〔屋敷で調べた物 ${seen} / ${total}〕`;
+    // 数えるのは場所ごと（使用人棟・庭・屋敷 1F・屋敷 2F・地下）。場所をすべて調べたら知らせる
+    const here = lookStats().areas.find(x => x.id === cur.id), lines = text;
+    if (here) {
+      lines[lines.length - 1] += `〔${here.name}で調べた物 ${here.seen} / ${here.total}〕`;
+      if (here.seen === here.total) hooks.toast(`★ ${here.name}の物を、すべて調べた！`);
+    }
     return say(...lines);
   }
   if (t.special) return special(t.special);
@@ -505,6 +521,20 @@ function startMeeting() {
 function talkTo(p) {
   p.g.rotation.y = Math.atan2(player.x - p.x, player.z - p.z);
   p.wait = Math.max(p.wait, 3); p.baseYaw = p.g.rotation.y; p.target = null;
+  // お供の仕事を引き受けている相手なら、お供するか（ふつうに話すか）を選ぶ
+  const i = st.mode === 'day' ? s.today.chores.findIndex(c => c.assignee === 'butler' && !c.done && withPerson(c.id) === p.id) : -1;
+  if (i >= 0) {
+    const c = s.today.chores[i], def = CHORES[c.id];
+    st.busy = true;
+    return hooks.askChoice(ESCORT_ASK[c.id] || `${p.name}のお供をしますか？`, [
+      { t: `お供する（${def.hours - c.progress}時間）`, run: () => '', escort: true },
+      { t: 'ふつうに話す', run: () => '' },
+    ], (msg, o) => { st.busy = false; if (o.escort) work(i); else chat(p); });
+  }
+  chat(p);
+}
+const ESCORT_ASK = { escortM: '「あら執事さん。エステの予約の時間よ。送ってくださる？」' };
+function chat(p) {
   const others = Object.values(people).filter(o => o !== p && o.area === cur.id && Math.hypot(o.x - player.x, o.z - player.z) < 8).length;
   const res = DL.talk(s, p.id, others);
   if (!res.repeat) DL.spendMinutes(s, ACT_MIN);
@@ -933,7 +963,7 @@ function drawHud(room) {
     clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}`;
     if (st.wine) clock += `　旦那様が降りてくる！ あと${Math.ceil(st.wine.left)}秒`;
     else if (cur.id === 'basement' && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) clock += '　（17時ごろ旦那様が降りてくる）';
-    const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${CHORES[c.id].optional ? '（任意）' : ''}`);
+    const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${withPerson(c.id) && !c.done ? `（任意・${PEOPLE[withPerson(c.id)].name}に話しかける）` : CHORES[c.id].optional ? '（任意）' : ''}`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
       : st.tut && TUT[st.tut.step] ? `【青に教える ${st.tut.step + 1}/3】${typeof TUT[st.tut.step].goal === 'function' ? TUT[st.tut.step].goal() : TUT[st.tut.step].goal}`
       : todo.length ? todo.join('　') : '執事の担当なし';
@@ -1176,10 +1206,14 @@ export function startNight(state, route, h) {
 
 // 調べられる小物（ストーリーに関係のない物）の数
 const lookKey = t => `look_${cur.id}_${t.name}`;
+// 屋敷で調べた物の数。場所ごと（areas）と全体。地下は見つけるまで数えない
+const LOOK_AREAS = ['cottage', 'grounds', 'f1', 'f2', 'basement'];
 export function lookStats() {
-  const keys = new Set();
-  for (const [id, a] of Object.entries(areas)) for (const t of a.things) if (t.say) keys.add(`look_${id}_${t.name}`);
-  return { total: keys.size, seen: [...keys].filter(k => s && s.flags[k]).length };
+  const list = LOOK_AREAS.filter(id => areas[id] && (id !== 'basement' || (s && s.flags.b_found))).map(id => {
+    const keys = new Set(areas[id].things.filter(t => t.say).map(t => `look_${id}_${t.name}`));
+    return { id, name: AREA_INFO[id].name, total: keys.size, seen: [...keys].filter(k => s && s.flags[k]).length };
+  });
+  return { areas: list, total: list.reduce((n, a) => n + a.total, 0), seen: list.reduce((n, a) => n + a.seen, 0) };
 }
 
 // 人物照会を開いている間は、屋敷の時間と描画を止める

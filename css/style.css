@@ -233,3 +233,5 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .preload .meter .bar { width: 100%; }
 .preload .meter .bar i { background: var(--gold); transition: width .2s; }
 .preload button { display: block; width: calc(100% - 32px); margin-top: 10px; }
+.looks { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 2px 12px; font-size: .9rem; }
+.looks li.done { color: var(--gold); }
