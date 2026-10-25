@@ -245,3 +245,4 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
   background: rgba(14, 10, 16, .8); color: var(--gold); font-size: .85rem; letter-spacing: .05em; pointer-events: none; }
 .blackout { position: fixed; inset: 0; z-index: 60; background: #000; opacity: 0; transition: opacity .7s ease; pointer-events: none; }
 .blackout.on { opacity: 1; }
+.goals li.done { color: var(--muted); }

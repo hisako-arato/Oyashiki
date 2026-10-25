@@ -554,6 +554,8 @@ export const WORK = {
   cook: ['f1', 36, 1.4], great: ['f1', 24, 9], corridor: ['f2', 30, 9.5], garden: ['grounds', 7, 20], laundry: ['f1', 46, 14.4],
   study: ['f2', 12.5, 5.5], master: ['f2', 9, 14.5], droom: ['f2', 36, 12.5], storage: ['f1', 4.5, 3.5], archive: ['f1', 14.5, 3],
   shopping: ['grounds', 38, 55.5], flowers: ['f1', 24, 13.6], escortM: ['grounds', 38, 55.5], tutorD: ['f2', 35, 16.4],
+  windows: ['f1', 22, 10], silver: ['f1', 34, 1.6], ironing: ['f1', 46.4, 13.4], hallClean: ['f1', 21.5, 14.5],
+  xmasStair: ['f1', 25.5, 8], xmasDoor: ['f1', 26.5, 14], xmasCards: ['f1', 13.2, 3.6], xmasSweets: ['f1', 37.6, 1.8], guestPrep: ['f1', 5.6, 3.0],
   xmasTree: ['f1', 23.2, 8.6], xmasWreath: ['f1', 19.6, 13.6], xmasGarland: ['f2', 37.5, 9.6], xmasLights: ['grounds', 7, 22], xmasTouch: ['f1', 26, 9.8],
 };
 

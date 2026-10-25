@@ -1,6 +1,6 @@
 // ゲーム状態と、状態にまつわる計算
 import { PEOPLE, MAIDS, ALLY_AFF, CHORES, CHORE_POOL, CHORES_PER_CHAPTER, SPEED, XMAS,
-  MAID_CAPACITY, BLUE_FAIL_RATE, SISTER, START_HOUR, END_HOUR } from './data.js';
+  MAID_CAPACITY, BLUE_FAIL_RATE, SISTER, START_HOUR, END_HOUR, XMAS_POOL } from './data.js';
 
 const SAVE_KEY = 'oyashiki-save-v1';
 
@@ -149,6 +149,7 @@ export function motherOutDay(s) { return (s.day + s.week) % 2 === 0; }
 export function generateChores(s) {
   const r = rng(dayIndex(s) * 7919 + 13);
   const pool = CHORE_POOL.filter(id => id !== 'study');
+  if (s.chapter >= 2) pool.push(...XMAS_POOL);   // 12月はパーティーの支度も加わる
   if (!fatherHome(s) && dayIndex(s) >= 3) pool.push('study', 'study'); // 書斎の掃除は旦那様不在日のみ
   const picks = [];
   while (picks.length < CHORES_PER_CHAPTER[s.chapter] && pool.length) {
@@ -156,9 +157,9 @@ export function generateChores(s) {
     if (!picks.includes(id)) picks.push(id);
   }
   const ids = ['cook', ...picks];
-  // イブまでの1週間は、まだ飾っていないクリスマスの飾り付けが毎日2つ入る。飾り終えたら手直しだけ
-  if (s.chapter === 3 && s.week === WEEKS_PER_CHAPTER - 1) {
-    const todo = XMAS.filter(id => !s.flags[`deco_${id}`]).slice(0, 2);
+  // 12月に入ると、まだ飾っていないクリスマスの飾り付けが毎日入る（12月前半は1つ、後半は2つ）。飾り終えたら手直しだけ
+  if (s.chapter >= 2) {
+    const todo = XMAS.filter(id => !s.flags[`deco_${id}`]).slice(0, s.chapter >= 3 ? 2 : 1);
     ids.push(...(todo.length ? todo : ['xmasTouch']));
   }
   if (!motherOutDay(s)) ids.push('escortM');

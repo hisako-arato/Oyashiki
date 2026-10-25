@@ -53,6 +53,7 @@ function checkNewAllies(s) {
 export function morningEvents(s) {
   const t = s.today, notes = [];
   if (!joined(s)) return notes;
+  s.aff[SISTER] = 100;   // 雫の好感度は 100 のまま
   checkNewAllies(s);
   const st = sis(s);
   if (st.last != null && dayIndex(s) - st.last <= RUMOR_DAYS) {

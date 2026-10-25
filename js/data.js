@@ -69,22 +69,34 @@ export const CHORES = {
   archive:  { name: '資料室の整理',       type: 'misc',  hours: 2, room: 'archive' },
   shopping: { name: '買い出し',           type: 'misc',  hours: 3, room: 'out' },
   flowers:  { name: '花の飾り付け',       type: 'art',   hours: 2, room: 'hall' },
+  windows:  { name: '大広間の窓拭き',     type: 'clean', hours: 2, room: 'great' },
+  silver:   { name: '銀器磨き',           type: 'misc',  hours: 2, room: 'kitchen' },
+  ironing:  { name: 'アイロンがけ',       type: 'misc',  hours: 2, room: 'laundry' },
+  hallClean:{ name: '玄関ホールの掃除',   type: 'clean', hours: 2, room: 'hall' },
   escortM:  { name: 'お母様のお供',       type: 'escort', hours: 4, room: 'out', butlerOnly: true, optional: true, with: 'mother' },
   tutorD:   { name: 'お嬢様の勉強の手伝い', type: 'escort', hours: 2, room: 'droom', butlerOnly: true, optional: true, with: 'daughter', after: 13 },
 };
 
-// クリスマスの飾り付け（イブまでの1週間だけ。飾り終えた物は屋敷に残る）
+// 12月：クリスマスの飾り付け（飾り終えた物は屋敷に残る）と、イブのパーティーの支度
 Object.assign(CHORES, {
+  xmasStair:   { name: '大階段の手すり飾り',       type: 'art', hours: 2, room: 'great', xmas: true },
+  xmasDoor:    { name: '玄関扉のクリスマス飾り',   type: 'art', hours: 1, room: 'hall', xmas: true },
+  xmasCards:   { name: 'パーティーの招待状書き',   type: 'art', hours: 3, room: 'archive' },
+  xmasSweets:  { name: 'クリスマス菓子の仕込み',   type: 'cook', hours: 4, room: 'kitchen' },
+  guestPrep:   { name: '客用の食器とリネンの準備', type: 'misc', hours: 4, room: 'storage' },
   xmasTree:    { name: '大広間のツリーの飾り付け', type: 'art', hours: 3, room: 'great', xmas: true },
   xmasWreath:  { name: '玄関ホールのリース飾り',   type: 'art', hours: 2, room: 'hall', xmas: true },
   xmasGarland: { name: '2F廊下のガーランド飾り',   type: 'art', hours: 2, room: 'corridor', xmas: true },
   xmasLights:  { name: '前庭のイルミネーション',   type: 'art', hours: 3, room: 'garden', xmas: true },
   xmasTouch:   { name: 'クリスマス飾りの手直し',   type: 'art', hours: 1, room: 'great' },
 });
-export const XMAS = ['xmasTree', 'xmasWreath', 'xmasGarland', 'xmasLights'];
+export const XMAS = ['xmasTree', 'xmasWreath', 'xmasGarland', 'xmasLights', 'xmasStair', 'xmasDoor'];
+// 12月だけ、ふだんの仕事に加わる支度
+export const XMAS_POOL = ['xmasCards', 'xmasSweets', 'guestPrep'];
 
-export const CHORE_POOL = ['great', 'corridor', 'garden', 'laundry', 'master', 'droom', 'storage', 'archive', 'shopping', 'flowers'];
-export const CHORES_PER_CHAPTER = [3, 4, 5, 6];
+export const CHORE_POOL = ['great', 'corridor', 'garden', 'laundry', 'master', 'droom', 'storage', 'archive', 'shopping', 'flowers', 'windows', 'silver', 'ironing', 'hallClean'];
+// 料理のほかに、毎日これだけの仕事が出る（メイドが手持ち無沙汰にならないように。メイドは1人8時間まで）
+export const CHORES_PER_CHAPTER = [4, 7, 10, 10];
 
 // 手帳に表示する手がかり
 export const CLUES = {
@@ -125,7 +137,7 @@ export const CLUES = {
   white_turned: { ch: 2, text: '【寝返り】地下の保管庫は、白が会社で見た工事だった。白は嘘の報告で執事をかばってくれる。' },
   guard_strict: { ch: 3, text: '【警戒】白の報告で、旦那様がイブの夜の巡回員に「廊下をよく見ろ」と言い聞かせた。西の端で立ち止まる時間は短い。' },
   bl_frame:     { ch: 0, text: '青メイドの目：大広間の肖像画の額は美術館の展示用の型。書斎の前では油絵具とニスの匂いがする。' },
-  shizuku:      { ch: 2, text: '【雫】黒メイドの正体は、妹の雫。人前では他人のふり。夜はいつでも自室に呼べるが、会えば他のメイドに妬まれる。' },
+  shizuku:      { ch: 2, text: '【雫】黒メイドの正体は、妹の雫。人前では他人のふり。夜に会えば、他のメイドに妬まれる。' },
   shizuku_diary:{ ch: 2, text: '【雫の情報】母の日記：「月下の庭」の額縁の裏には、美術館の蔵印が押されている。盗品である何よりの証拠だ。' },
   shizuku_courier:{ ch: 2, text: '【雫の情報】オークション会社の運び屋は、12月25日の朝7時に屋敷へ来る。' },
   guard_known:  { ch: 3, text: 'イブの夜は、警備会社の巡回員が2階の廊下を見回るらしい。' },

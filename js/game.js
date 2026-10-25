@@ -410,13 +410,13 @@ function showReport(next) {
     el('button', { onclick: () => { s.weekStats = { done: 0, missed: 0 }; next(); } }, '次へ')));
 }
 
+// 黒メイド（妹の雫）は、屋敷に来た日から好感度 100 のまま
+const affOf = p => (p === 'black' && joined(s) ? 100 : s.aff[p]);
 function affList() {
-  // 黒メイド（妹の雫）は好感度を持たない
-  const people = [...FAMILY, ...activeMaids(s)].filter(p => !(p === 'black' && joined(s)));
+  const people = [...FAMILY, ...activeMaids(s)];
   return el('div', { class: 'affs' }, people.map(p => el('div', { class: 'aff' }, badge(p),
-    el('div', { class: 'bar' }, el('i', { style: `width:${s.aff[p]}%;background:${PEOPLE[p].color}` })),
-    el('b', {}, String(s.aff[p])), isAlly(s, p) ? el('small', { class: 'ally' }, s.flags[`told_${p}`] ? '協力者・打ち明けた' : '協力者') : null)),
-    joined(s) ? el('div', { class: 'aff' }, badge('black'), el('span', { class: 'sister' }, '＝ 妹の雫（夜はいつでも自室に呼べる）')) : null);
+    el('div', { class: 'bar' }, el('i', { style: `width:${affOf(p)}%;background:${PEOPLE[p].color}` })),
+    el('b', {}, String(affOf(p))), isAlly(s, p) && !(p === 'black' && joined(s)) ? el('small', { class: 'ally' }, s.flags[`told_${p}`] ? '協力者・打ち明けた' : '協力者') : null)));
 }
 
 // ---- 章の進行 ----
@@ -913,30 +913,38 @@ function openNotebook(tab = 'note') {
     el('button', { class: id === tab ? 'on' : 'ghost', onclick: () => { back.remove(); openNotebook(id); } }, label)));
   const back = modal(tabs, body, el('div', { class: 'row' }, el('button', { onclick: () => back.remove() }, '閉じる')));
   back.classList.add('game-menu');
-  body.append(...({ note: noteTab, people: peopleTab, story: storyTab, settings: settingsTab })[tab](back));
+  body.append(...({ note: noteTab, people: peopleTab, story: storyTab, settings: settingsTab })[tab](back).filter(x => x != null && x !== false));
 }
 
 function noteTab() {
   const got = Object.entries(CLUES).filter(([k]) => s.flags[k]);
+  // 目標：[文, 見せるか, 済んだか]。済んだ目標は ✓ を付けて下に並べる
+  const f = s.flags, hints = BASEMENT_HINTS.filter(k => f[k]).length;
+  const way = f.eve_mother || f.eve_daughter || f.b_grate || s.aff.red >= ALLY_AFF || (f.ladder && f.balcony_open);
   const goals = [
-    !s.flags.hidden_room && '屋敷の構造を調べ、絵の隠し場所を突き止める',
-    s.flags.hidden_room && !s.flags.red_book && '書斎の本棚に隠し扉の仕掛けがあるはずだ',
-    s.flags.desk_lock && !s.flags.key_hidden && '机の引き出しのダイヤル錠を開ける番号を探す',
-    s.flags.red_book && s.flags.key_hidden && !s.flags.found_painting && '人のいない時に、書斎から隠し部屋へ入る（12月以降）',
-    s.chapter >= 3 && s.flags.ladder && !s.flags.balcony_open && '昼のうちに、バルコニーのガラス戸の鍵を外しておく',
-    s.flags.found_painting && !s.flags.white_ally && '絵の警報をどうにかする方法が要る',
-    whiteActive(s) && !whiteCovers(s) && '白メイドに見られたことは、週末に旦那様へ報告される（仲良くなれば、伏せてくれるかもしれない）',
-    s.chapter >= 2 && BASEMENT_HINTS.filter(f => s.flags[f]).length >= 2 && !s.flags.b_hatch && '地下があるらしい。資料室の床を調べる',
-    s.flags.b_hatch && !s.flags.b_key && '床の扉の鍵を手に入れる（旦那様が出かける日の、食料庫あたり？）',
-    s.flags.b_hatch && !s.flags.b_light && '地下を照らす明かりが要る（倉庫の工具棚）',
-    s.flags.b_found && !s.flags.b_vault && 'ワイン貯蔵庫の奥を調べる（旦那様が在宅の日は、17時台に降りてくる）',
-    s.flags.b_key_lost && !s.flags.b_key && '地下の鍵を取り上げられた。新しい鍵を手に入れる（雫なら……）',
-    s.flags.b_tunnel && !s.flags.b_grate && '搬入路の鉄格子を外す道具を探す（倉庫の工具棚）',
-    s.chapter >= 3 && !(s.flags.eve_mother || s.flags.eve_daughter || s.flags.b_grate || s.aff.red >= ALLY_AFF || (s.flags.ladder && s.flags.balcony_open))
-      && '決行の夜、屋敷に入る道を考える（夜は倉庫の奥の扉に鍵。勝手口の先には赤メイド）',
-  ].filter(Boolean);
+    ['屋敷の構造を調べ、絵の隠し場所を突き止める', true, f.hidden_room],
+    ['書斎の本棚に隠し扉の仕掛けがあるはずだ', f.hidden_room, f.red_book],
+    ['机の引き出しのダイヤル錠を開ける番号を探す', f.desk_lock, f.key_hidden],
+    ['人のいない時に、書斎から隠し部屋へ入る（12月以降）', f.red_book && f.key_hidden, f.found_painting],
+    ['昼のうちに、バルコニーのガラス戸の鍵を外しておく', s.chapter >= 3 && f.ladder, f.balcony_open],
+    ['絵の警報をどうにかする方法が要る', f.found_painting, f.white_ally],
+    ['白メイドに見られたことは、週末に旦那様へ報告される（仲良くなれば、伏せてくれるかもしれない）', whiteActive(s), whiteCovers(s)],
+    ['地下があるらしい。資料室の床を調べる', s.chapter >= 2 && hints >= 2, f.b_hatch],
+    ['床の扉の鍵を手に入れる（旦那様が出かける日の、食料庫あたり？）', f.b_hatch && !f.b_key_lost, f.b_key],
+    ['地下の鍵を取り上げられた。新しい鍵を手に入れる（雫なら……）', f.b_key_lost, f.b_key],
+    ['地下を照らす明かりが要る（倉庫の工具棚）', f.b_hatch, f.b_light],
+    ['ワイン貯蔵庫の奥を調べる（旦那様が在宅の日は、17時台に降りてくる）', f.b_found, f.b_vault],
+    ['搬入路の鉄格子を外す道具を探す（倉庫の工具棚）', f.b_tunnel, f.b_grate],
+    ['決行の夜、屋敷に入る道を考える（夜は倉庫の奥の扉に鍵。勝手口の先には赤メイド）', s.chapter >= 3, way],
+  ].filter(([, show]) => show);
+  const todo = goals.filter(([, , done]) => !done), done = goals.filter(([, , d]) => d);
+  const goalList = el('div', {}, el('h4', {}, 'いまの目標'),
+    el('ul', { class: 'goals' },
+      todo.map(([g]) => el('li', {}, g)),
+      done.map(([g]) => el('li', { class: 'done' }, '✓ ', g))),
+    !todo.length ? el('p', { class: 'hint' }, s.chapter >= 3 ? '準備は整った。あとは、イブの夜を待つだけだ。' : '今わかっている目標は、すべて済ませた。屋敷を調べて、次の手がかりを探そう。') : null);
   return [
-    goals.length ? el('div', {}, el('h4', {}, 'いまの目標'), el('ul', {}, goals.map(g => el('li', {}, g)))) : null,
+    goalList,
     el('h4', {}, '手がかり'),
     got.length ? el('ul', { class: 'clues' }, got.map(([, c]) => el('li', {}, c.text))) : el('p', {}, 'まだ何もない。'),
     el('h4', {}, '好感度'), affList(),
@@ -997,13 +1005,13 @@ async function openPerson(id, model = id) {
   const pr = profileOf(PROFILES.find(p => p.id === id), s);
   const canvas = el('canvas', { class: 'vcanvas' });
   const status = el('div', { class: 'vstatus' }, '読み込み中…');
-  const aff = s.aff[id] != null && !(id === 'black' && joined(s));
+  const aff = s.aff[id] != null;
   const faceBtns = el('div', { class: 'vbtns' }), poseBtns = el('div', { class: 'vbtns' }), turnRow = el('div', { class: 'vturn' });
   const info = el('div', { class: 'vinfo' },
     el('h3', {}, pr.name, pr.age ? el('small', {}, `　${pr.age}`) : null),
     el('p', {}, pr.text),
-    aff ? el('div', { class: 'aff' }, badge(id), el('div', { class: 'bar' }, el('i', { style: `width:${s.aff[id]}%;background:${PEOPLE[id].color}` })),
-      el('b', {}, String(s.aff[id])), isAlly(s, id) ? el('small', { class: 'ally' }, '協力者') : null) : null,
+    aff ? el('div', { class: 'aff' }, badge(id), el('div', { class: 'bar' }, el('i', { style: `width:${affOf(id)}%;background:${PEOPLE[id].color}` })),
+      el('b', {}, String(affOf(id))), isAlly(s, id) ? el('small', { class: 'ally' }, '協力者') : null) : null,
     pr.notes.length ? el('ul', { class: 'clues' }, pr.notes.map(n => el('li', {}, n))) : null);
   let viewer = null;
   const close = () => { viewer && viewer.close(); root.remove(); if (day3d) day3d.resume(); openNotebook('people'); };
