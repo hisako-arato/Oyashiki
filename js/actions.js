@@ -1,5 +1,5 @@
 // 執事パートで行える調査・会話の内容
-import { setFlag, fatherHome, dayIndex } from './state.js';
+import { setFlag, fatherHome, dayIndex, afterNight } from './state.js';
 import { BASEMENT_HINTS } from './data.js';
 
 const ch = s => s.chapter;
@@ -187,18 +187,21 @@ export const TALKS = {
     { line: '「報告は手短に。……君の仕事ぶりには満足している」' },
   ],
   mother: [
+    { if: s => afterNight(s, 'mother') && s.flags.m_close, line: '「おはよう、執事さん。……よく眠れた？ 私は、あまり」（すれ違いざま、袖を指先でつままれた）' },
     { if: s => s.aff.mother >= 50 && ch(s) >= 1 && !s.flags.p_lover, flag: 'p_lover', ask: '「旦那様は、今夜もお帰りが遅いのでしょうか」',
       line: '「あの人、また麗子って女のところよ。……ねえ、あなたは私を一人にしないでしょう？」' },
     { if: s => s.aff.mother >= 60, line: '「あなたの淹れる紅茶が一番好き。ねえ、今夜も少し付き合って？」' },
     { line: '「あら執事さん。今日もいい男ね。エステの予約、覚えてくれてる？」' },
   ],
   daughter: [
+    { if: s => afterNight(s, 'daughter') && s.flags.d_close, line: '「……おはよ」（目が合った瞬間、ぱっと逸らされた。耳まで赤い）「昨日のこと、誰にも言ってないからね」' },
     { if: s => s.aff.daughter >= 35 && ch(s) >= 1 && !s.flags.hint_redbook, flag: 'hint_redbook', ask: '「お嬢様は、旦那様の書斎に入られたことは？」',
       line: '「子どもの頃ね、パパの本棚の赤い本を触ったら、すごく怒られたの。なんでだろう？」' },
     { if: s => s.aff.daughter >= 60, line: '「執事さんといると落ち着くな。……ずっとこの家にいてくれる？」' },
     { line: '「執事さんって何でもできるよね。私、何にもできないや」' },
   ],
   red: [
+    { if: s => (afterNight(s, 'mother') && s.flags.m_close) || (afterNight(s, 'daughter') && s.flags.d_close), line: '「……今朝の執事さん、甘い匂い」（赤は鍋をかき混ぜながら、こちらを見ずに言った）' },
     { if: s => s.aff.red >= 25 && !s.flags.c_red, flag: 'c_red', ask: '「赤さん、旦那様は夜も遅くまで起きていらっしゃるのかな」',
       line: '「……うん。わたし、夜中に仕込みしてるから、聞こえる。この前、書斎で電話してた。『あの絵は年明けに海外で』って。……それだけ」' },
     { if: s => s.aff.red >= 35 && !s.counters.night_red, line: '「……仕事のあと、たまに共用室で熱燗飲んでる。……執事さんも、来る？」' },

@@ -1,7 +1,7 @@
 // 執事パートの処理（仕事・調査・会話）。画面の描き方に依らない部分
 // ボタン式の画面（game.js）と3Dの屋敷（explore/day3d.js）の両方から使う
 import { PEOPLE, CHORES, ROOMS, PASSCODE, END_HOUR, SISTER } from './data.js';
-import { applyFx, fxNote, setFlag, dayIndex, whereIs, isAlly, peopleIn, fatherHome } from './state.js';
+import { applyFx, fxNote, setFlag, dayIndex, whereIs, isAlly, peopleIn, fatherHome, motherOutDay, rng } from './state.js';
 import { pickTalk } from './actions.js';
 import { joined, sisterTalk, told } from './sister.js';
 import { whiteSaw } from './white.js';
@@ -27,6 +27,48 @@ export function choreAvailability(s, c) {
   return { ok: true, why: '' };
 }
 
+// 今はできない仕事が、今日のうちに何時からできるか（相手が来る・時刻になる）。できなければ null
+export function waitTarget(s, c) {
+  const def = CHORES[c.id], now = s.today.hour;
+  for (let h = now + 1; h < END_HOUR - 1; h++) {
+    if (def.after && h < def.after) continue;
+    const partner = def.with && whereIs(s, def.with, h);
+    if (def.with && (partner === 'out' || (def.room !== 'out' && partner !== def.room))) continue;
+    return h;
+  }
+  return null;
+}
+// h 時ちょうどまで待つ
+export function waitUntil(s, h) {
+  const t = s.today;
+  spendMinutes(s, h * 60 - (t.hour * 60 + (t.min || 0)));
+}
+
+// 深い仲になったあとの、勉強の手伝いとお供（大人の関係を示唆する。描写はしない）
+const STUDY = [
+  '参考書は開いたまま、ページは一度もめくられなかった。',
+  '扉に鍵を掛けたのは、お嬢様のほうだった。2時間後、廊下に出た執事のタイは、少しだけ曲がっていた。',
+  'お嬢様「……勉強なんて、もうする意味ないのにね」　そう笑って、お嬢様はノートを閉じ、執事の膝に頭をのせた。',
+];
+const ESCORT = [
+  'エステのあと、ホテルのラウンジで一杯だけ。……屋敷に戻ったのは、日が暮れてからだった。',
+  'エステの帰り、お母様は運転席の執事の肩に頭を預けたまま、遠回りをして、と囁いた。',
+  'お母様「今日は、あなたの好きな香りにしてもらったの」　帰りの車の中は、ずっとその香りがしていた。',
+];
+function closeNote(s, c) {
+  const n = s.counters[`${c.id}_close`] = (s.counters[`${c.id}_close`] || 0) + 1;
+  if (c.id === 'tutorD') {
+    let msg = ' ' + STUDY[(n - 1) % STUDY.length];
+    // お母様が在宅の日は、隣の主寝室に聞かれたかもしれない（疑惑が少し上がり、母娘の鉢合わせが近づく）
+    if (!motherOutDay(s) && rng(dayIndex(s) * 31 + 7)() < 0.4) {
+      msg += ' ……隣の主寝室で、扉の閉まる音がした。聞かれただろうか。' + fxNote(applyFx(s, { susp: 3 }));
+      if (s.flags.m_close) s.counters.rift_risk = (s.counters.rift_risk || 0) + 1;
+    }
+    return msg;
+  }
+  return ' ' + ESCORT[(n - 1) % ESCORT.length] + ' 屋敷に戻ると、赤メイドが小さく鼻を鳴らした。「……お母様と、同じ香水」';
+}
+
 // 仕事をする。残り時間の分だけ進め、結果の文を返す
 export function doChore(s, i) {
   const t = s.today, c = t.chores[i], def = CHORES[c.id];
@@ -38,6 +80,8 @@ export function doChore(s, i) {
   if (c.progress >= def.hours) {
     c.done = true;
     if (def.xmas) setFlag(s, `deco_${c.id}`);
+    if (c.id === 'escortM' && s.flags.m_close && s.aff.mother >= 65) msg += closeNote(s, c);
+    if (c.id === 'tutorD' && s.flags.d_close && s.aff.daughter >= 65) msg += closeNote(s, c);
     if (c.id === 'escortM') msg += fxNote(applyFx(s, { aff: { mother: 12 } }));
     if (c.id === 'tutorD') msg += fxNote(applyFx(s, { aff: { daughter: 10 } }));
     if (c.id === 'laundry' && s.chapter >= 1 && setFlag(s, 'p_bday'))

@@ -322,6 +322,8 @@ function playScript(steps, done) {
     if (Array.isArray(st)) return showLine(st[0], st[1], next, st[2]);
     if (st.fx) { const notes = applyFx(s, typeof st.fx === 'function' ? st.fx(s) : st.fx); if (notes.length) toast(fxNote(notes)); return next(); }
     if (st.call) { st.call(s); return next(); }
+    if (st.place !== undefined) { stagePlace = st.place; return next(); }
+    if (st.dark) return blackout(next);
     if (st.if) { queue.unshift(...((st.if(s) ? st.then : st.else) || [])); return next(); }
     if (st.report) return showReport(next);
     if (st.choice) return showChoice(st.choice, c => {
@@ -352,15 +354,27 @@ function portraitFor(who, text, face) {
   return portrait.portraitCanvas();
 }
 
+// 夜の場面では、左上に場所と時刻の札を出し、背景をランプの灯りにする
+let stagePlace = null;
 function stage(who, content, text = '', face) {
   const p = PEOPLE[who];
   const vrm = p ? portraitFor(who, text, face) : null;
-  return el('div', { class: 'stage' },
+  const night = s && s.phase === 'night';
+  return el('div', { class: `stage ${night ? 'night' : ''}` },
     s && s.phase !== 'prologue' ? statusBar() : null,
     el('div', { class: `scene ${vrm ? 'has-vrm' : ''}` },
+      night && stagePlace ? el('div', { class: 'place-tag' }, stagePlace) : null,
       // 胸から上の VRM が映るまでは、同じ VRM から作った顔アイコンを出しておく
       p ? el('img', { class: 'portrait', src: faceSrc(VRM_OF[who] ? VRM_OF[who]() : who), alt: '' }) : null, vrm),
     el('div', { class: 'textbox' }, p ? el('div', { class: 'speaker', style: `--c:${p.color}` }, p.name) : null, content));
+}
+
+// 暗転：画面をゆっくり黒くして、少し置いてから戻す
+function blackout(next) {
+  const b = el('div', { class: 'blackout' });
+  document.body.append(b);
+  setTimeout(() => b.classList.add('on'), 20);
+  setTimeout(() => { b.classList.remove('on'); setTimeout(() => b.remove(), 700); next(); }, 1600);
 }
 
 function showLine(who, text, next, face) {
@@ -416,7 +430,7 @@ async function startWeekday() {
   s.phase = 'meeting';
   if (!s.today || s.today.dayIndex !== dayIndex(s)) {
     s.today = { dayIndex: dayIndex(s), chores: generateChores(s), hour: START_HOUR, min: 0, loc: 'servants', talked: {}, log: [], plan: {}, escort: null };
-    s.today.notices = morningEvents(s);
+    s.today.notices = [...morningAfter(s), ...morningEvents(s)];
   }
   if (checkFatal()) return;
   save(s);
@@ -730,8 +744,16 @@ function night() {
     el('h2', {}, '夜　22時'),
     el('p', { class: 'hint' }, '今夜はどう過ごす？（1つだけ選べる）'),
     el('div', { class: 'nightopts' }, opts.map(o => el('button', {
-      onclick: () => { s.phase = 'night'; playScript(nightScene(s, o.id), () => checkFatal() || nextDay()); } },
+      onclick: () => { s.phase = 'night'; stagePlace = null; playScript(nightScene(s, o.id), () => { stagePlace = null; checkFatal() || nextDay(); }); } },
       o.label, o.fresh ? el('small', { class: 'new' }, 'NEW') : null)))));
+}
+
+// 前の夜を主寝室・お嬢様の部屋で過ごした朝の一言
+const BACK_FROM = { mother: '主寝室', daughter: 'お嬢様の部屋' };
+function morningAfter(s) {
+  const who = s.counters.last_night_who;
+  if (!BACK_FROM[who] || s.counters.last_night_day !== dayIndex(s) - 1) return [];
+  return [`（夜明け前、${BACK_FROM[who]}からそっと自室に戻った。……少し、寝不足だ）`];
 }
 
 function nextDay() {

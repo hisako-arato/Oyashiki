@@ -141,6 +141,8 @@ export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.f
 // ---- 1日の予定 ----
 
 export function fatherHome(s) { return s.day === (s.week * 2 + s.chapter) % 5; }
+// 前の夜を who と過ごした翌日か
+export const afterNight = (s, who) => s.counters.last_night_who === who && s.counters.last_night_day === dayIndex(s) - 1;
 export function motherOutDay(s) { return (s.day + s.week) % 2 === 0; }
 
 export function generateChores(s) {
@@ -219,6 +221,8 @@ export function whereIs(s, who, hour) {
   }
   if (who === 'daughter') {
     if (hour < 13) return 'out';
+    // 勉強の手伝いの日は、13時に自室へ戻ってくる
+    if (t.chores && t.chores.some(c => c.id === 'tutorD' && c.assignee === 'butler' && !c.done)) return 'droom';
     return s.day % 2 === 0 ? 'great' : 'droom';
   }
   if (!maidAvailable(s, who)) return null;

@@ -551,7 +551,21 @@ function chat(p) {
 }
 function work(i) {
   const c = s.today.chores[i], { ok, why } = DL.choreAvailability(s, c);
-  if (!ok) return say(`${CHORES[c.id].name}は今はできない（${why}）。`);
+  if (!ok) {
+    // あとでできるようになるなら「その時間まで待つ」を選べる（待っている間も、時間は進む）
+    const h = DL.waitTarget(s, c), t = s.today;
+    if (h == null) return say(`${CHORES[c.id].name}は今はできない（${why}）。`);
+    const mins = Math.ceil(h * 60 - (t.hour * 60 + (t.min || 0))), hh = Math.floor(mins / 60), mm = mins % 60;
+    st.busy = true;
+    return hooks.askChoice(`${CHORES[c.id].name}は今はできない（${why}）。`, [
+      { t: `${h}時まで待つ（あと${hh ? `${hh}時間` : ''}${mm ? `${mm}分` : ''}）`, run: () => '', wait: true },
+      { t: 'あとにする', run: () => '' },
+    ], (msg, o) => {
+      st.busy = false;
+      if (!o.wait) return;
+      fade(`${h}時まで待っています……`, () => { DL.waitUntil(s, h); st.placeNow = true; work(i); }, 900);
+    });
+  }
   fade(`${CHORES[c.id].name}をしています……`, () => {
     const msg = DL.doChore(s, i);
     refreshMarkers();
@@ -971,7 +985,7 @@ function drawHud(room) {
     clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}`;
     if (st.wine) clock += `　旦那様が降りてくる！ あと${Math.ceil(st.wine.left)}秒`;
     else if (cur.id === 'basement' && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) clock += '　（17時ごろ旦那様が降りてくる）';
-    const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${withPerson(c.id) && !c.done ? `（任意・${PEOPLE[withPerson(c.id)].name}に話しかける）` : CHORES[c.id].optional ? '（任意）' : ''}`);
+    const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${withPerson(c.id) && !c.done ? `（任意・${PEOPLE[withPerson(c.id)].name}に話しかける）` : CHORES[c.id].after && !c.done && t.hour < CHORES[c.id].after ? `（任意・${CHORES[c.id].after}時から）` : CHORES[c.id].optional ? '（任意）' : ''}`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
       : st.tut && TUT[st.tut.step] ? `【青に教える ${st.tut.step + 1}/3】${typeof TUT[st.tut.step].goal === 'function' ? TUT[st.tut.step].goal() : TUT[st.tut.step].goal}`
       : todo.length ? todo.join('　') : '執事の担当なし';

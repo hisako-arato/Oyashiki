@@ -236,3 +236,11 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .preload button { display: block; width: calc(100% - 32px); margin-top: 10px; }
 .looks { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 2px 12px; font-size: .9rem; }
 .looks li.done { color: var(--gold); }
+
+/* 夜の場面：ランプの灯りの背景、場所と時刻の札、暗転 */
+.stage.night .scene { background: radial-gradient(ellipse at 50% 85%, #5a3a22 0%, #2a1a1c 45%, #0e0a10 100%); }
+.stage .scene { position: relative; }
+.place-tag { position: absolute; top: 12px; left: 12px; z-index: 2; padding: 4px 12px; border-left: 3px solid var(--gold);
+  background: rgba(14, 10, 16, .8); color: var(--gold); font-size: .85rem; letter-spacing: .05em; pointer-events: none; }
+.blackout { position: fixed; inset: 0; z-index: 60; background: #000; opacity: 0; transition: opacity .7s ease; pointer-events: none; }
+.blackout.on { opacity: 1; }
