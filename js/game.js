@@ -470,7 +470,7 @@ function renderMeeting(done = meetingDone) {
   const info = [
     `お父様：${fatherHome(s) ? `終日在宅（書斎）${s.flags.b_found ? `。17時ごろ、地下へワインを取りに行く${s.chapter >= 3 ? '（保管庫の荷物も確かめる）' : ''}` : ''}` : '出勤'}`,
     `お母様：${motherOutDay(s) ? 'エステで外出' : '在宅（午前 大広間／午後 主寝室）'}`,
-    `お嬢様：午前は大学、午後は${s.day % 2 === 0 ? '大広間' : '自室'}`,
+    `お嬢様：午前は大学、午後は${t.chores.some(c => c.id === 'tutorD' && c.assignee === 'butler') || s.day % 2 ? '自室' : '大広間'}`,
   ];
   const butlerHours = t.chores.filter(c => c.assignee === 'butler').reduce((a, c) => a + CHORES[c.id].hours, 0);
   const rows = t.chores.map((c, i) => {
@@ -496,7 +496,12 @@ function renderMeeting(done = meetingDone) {
     el('div', { class: 'loads' }, loads, el('div', { class: 'load' }, badge('butler'), ` ${butlerHours}/${END_HOUR - START_HOUR}h`)),
     el('button', { class: 'ghost', onclick: () => { autoAssign(s); renderMeeting(); } }, 'おまかせで割り振る'),
     el('p', { class: 'hint' }, 'メイドは担当した部屋で働く。調べたい部屋にメイドを置かないのがコツ。8時間を超えた仕事は終わらない。'),
-    el('button', { class: 'primary', onclick: () => meetingDone() }, '朝礼を終えて仕事を始める')));
+    el('button', { class: 'primary', onclick: () => {
+      // 誰にも割り振っていない仕事があれば、一度だけ引き留める（終わらなかった仕事は心象が下がる）
+      const left = t.chores.filter(c => !c.assignee && !CHORES[c.id].optional);
+      if (left.length && !confirm(`まだ誰にも割り振っていない仕事が${left.length}件あります（${left.map(c => CHORES[c.id].name).join('、')}）。\n割り振らないまま、本当に朝礼を終えますか？`)) return;
+      meetingDone();
+    } }, '朝礼を終えて仕事を始める')));
 }
 
 // 得意な仕事を、余裕のあるメイドから順に割り振る。収まらない分は執事
@@ -757,7 +762,9 @@ function night() {
     el('p', { class: 'hint' }, '今夜はどう過ごす？（1つだけ選べる）'),
     el('div', { class: 'nightopts' }, opts.map(o => el('button', {
       onclick: () => { s.phase = 'night'; stagePlace = null; playScript(nightScene(s, o.id), () => { stagePlace = null; checkFatal() || nextDay(); }); } },
-      o.label, o.fresh ? el('small', { class: 'new' }, 'NEW') : null)))));
+      o.label, o.fresh ? el('small', { class: 'new' }, 'NEW') : null,
+      o.info ? el('small', { class: 'info' }, '◆ 聞ける話がありそうだ') : null))),
+    el('p', { class: 'hint' }, '◆ は、物語の手がかりを聞き出せそうな相手。印の無い相手とは、他愛もない夜になる。')));
 }
 
 // 前の夜を主寝室・お嬢様の部屋で過ごした朝の一言

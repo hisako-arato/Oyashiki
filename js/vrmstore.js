@@ -1,6 +1,6 @@
 // キャラクター（VRM）を端末に保存しておく（設定の「キャラクターを端末に保存」）
-// sw.js と同じキャッシュ oyashiki-vrm-v1 に入れるので、次からはダウンロードせずに読み込める
-const VRM_CACHE = 'oyashiki-vrm-v1';
+// sw.js と同じキャッシュ oyashiki-vrm-v2 に入れるので、次からはダウンロードせずに読み込める
+const VRM_CACHE = 'oyashiki-vrm-v2';
 export const VRM_IDS = ['butler', 'butler2', 'father', 'mother', 'mother2', 'daughter', 'daughter2', 'red', 'blue', 'white', 'black', 'black2', 'black3', 'guard'];
 // lite：屋敷と会話の顔に使う　view：人物照会の高画質版
 export const KINDS = { lite: { label: '屋敷・会話用', size: '約58MB' }, view: { label: '人物照会用（高画質）', size: '約97MB' } };

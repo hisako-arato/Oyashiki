@@ -1,7 +1,8 @@
 // オフラインでも遊べるよう、ゲームのファイルをキャッシュする
 const CACHE = 'oyashiki-1.33';
 // VRM は大きいので、版を上げても消さない別のキャッシュに置き、キャッシュを優先して使う
-const VRM_CACHE = 'oyashiki-vrm-v1';
+// 中身を差し替えた VRM（black2・daughter2）を新しく読み込ませるため v2 にした。v1 は sw.js の activate で消える
+const VRM_CACHE = 'oyashiki-vrm-v2';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css', 'css/day3d.css',
   'js/main.js', 'js/version.js', 'js/lockdown.js', 'js/game.js', 'js/daylogic.js', 'js/night.js', 'js/sister.js', 'js/profiles.js', 'js/faces.js', 'js/state.js', 'js/vrmstore.js', 'js/white.js', 'js/data.js', 'js/actions.js', 'js/story.js',

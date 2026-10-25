@@ -149,6 +149,7 @@ select, input { font: inherit; background: var(--panel2); color: var(--text); bo
 .nightopts { display: flex; flex-direction: column; gap: 8px; }
 .nightopts button { text-align: left; }
 .nightopts small { color: var(--muted); margin-left: 6px; }
+.nightopts small.info { display: block; margin: 2px 0 0; color: var(--gold); font-size: .8rem; }
 .nightopts small.new { color: var(--bg); background: var(--gold); border-radius: 4px; padding: 0 6px; font-weight: bold; font-size: .75rem; }
 .panel.night { background: linear-gradient(#141428, var(--bg) 40%); min-height: 100%; }
 

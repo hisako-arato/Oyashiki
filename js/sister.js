@@ -27,6 +27,11 @@ export function afterSisterNight(s) {
   st.last = dayIndex(s); st.streak = 0; st.sulk = null;
   return { aff: Object.fromEntries(otherMaids(s).filter(m => !told(s, m)).map(m => [m, -2])) };
 }
+// 主寝室・お嬢様の部屋で夜を過ごしたあと。雫を呼ばない夜として数え、3回続くとすねる（理由は「部屋」）
+export function afterRoomNight(s) {
+  if (joined(s) && ++sis(s).streak >= 3) sulk(s, 'room');
+  return {};
+}
 // 他のメイドと共用室で飲んだあと。噂にはならないが、雫を呼ばない夜が3回続くと、雫が少しすねる
 export function afterMaidNight(s) {
   if (joined(s) && ++sis(s).streak >= 3) sulk(s, 'streak');
@@ -75,6 +80,12 @@ export function sisterTalk(s, others) {
     '「仕事中です。私語は慎んでください」（冷たい声。……人目があるうちは、これでいい）',
   ][dayIndex(s) % 2];
   if (sulking(s)) return '「……ふん。他の子と仲良くしてれば？」（二人きりなのに、そっぽを向かれた）';
+  // 前の夜、主寝室やお嬢様の部屋にいたことは、雫にはお見通し
+  const room = ['mother', 'daughter'].find(w => s.counters.last_night_who === w && s.counters.last_night_day === dayIndex(s) - 1);
+  if (room) return `（雫は袖をつまんだまま、じっとこちらを見上げた）「……今朝、${room === 'mother' ? '主寝室' : 'お嬢様の部屋'}のほうから戻ってきたでしょ。見てたんだから。……作戦なのは、分かってるけど」`;
+  // ほかのメイドと仲が良いと、ちくりと言う（2日に1度）
+  const close = ['blue', 'red', 'white'].filter(m => s.aff[m] >= 60);
+  if (close.length && dayIndex(s) % 2) return `（雫は廊下の角でこちらを引き止め、頬をふくらませた）「${PEOPLE[close[dayIndex(s) % close.length]].name}と、ずいぶん楽しそうだったね。……べつに、いいけど。お兄ちゃんのこと一番知ってるの、私だから」`;
   const hint = !s.flags.hidden_room ? '2階の窓の数と部屋の数、合ってないよ。資料室に古い設計図があるんだって'
     : !s.flags.red_book ? '書斎の本棚にね、一冊だけ埃をかぶってない本があるの。掃除のとき気づいちゃった'
     : s.flags.desk_lock && !s.flags.key_hidden ? '麗子さんって人の誕生日、11月3日なんだって。旦那様、番号は何でもそれにしてそう'
