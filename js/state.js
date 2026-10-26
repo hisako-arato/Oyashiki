@@ -215,6 +215,7 @@ export function maidLoad(s, m) {
 // 人物がその時刻にいる場所（'out' は外出中）
 export function whereIs(s, who, hour) {
   const t = s.today;
+  if (!PEOPLE[who]) return null;
   if (t.escort && t.escort.who === who && hour >= t.escort.from && hour < t.escort.to) return t.escort.room;
   if (who === 'father') return fatherHome(s) ? 'study' : 'out';
   if (who === 'mother') {
