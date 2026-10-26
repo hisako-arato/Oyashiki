@@ -12,6 +12,7 @@ import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
 import * as BALL from '../js/ball.js';
 import * as music from '../js/music.js';
+import { recall } from '../js/recall.js';
 import { maskVRM, unmaskVRM, liftMask, updateMasks, styleOf, maskFragment } from './masks.js';
 
 const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か（昼）
@@ -843,6 +844,7 @@ function morningThings(N, list, at) {
   // 雫の知人の仕出し屋が、勝手口の外の小道に白いバンを停めている。空の料理箱に紛れ込ませれば、そのまま屋敷の外へ
   if (cur.id === 'grounds' && N.carry === 'painting' && s.flags.caterer_friend) list.push({ name: '仕出し屋の白いバン', at: at(...VAN), label: '料理箱に紛れ込ませる', night: () => {
     N.carry = null; N.exit = 'van';
+    recall(s, 'caterer');
     caption('持ち出し完了', `朝 ${7 + Math.floor(N.min / 60)}:${String(Math.floor(N.min) % 60).padStart(2, '0')}`);
     afterMsg = () => endNight('swap');
     say(['仕出し屋', '「おはようございます、空き箱の回収です。……一番下の箱、空けておきました」'],
@@ -879,6 +881,7 @@ function startCarry() {
       s.flags.caterer_friend ? '（運び屋が発つのは10時。それまでに、お嬢様の部屋のクローゼットから本物を取り出し、勝手口の外に停まった仕出し屋のバンまで運ぶ）'
         : '（運び屋が発つのは10時。それまでに、お嬢様の部屋のクローゼットから本物を取り出し、この部屋まで運ぶ）');
     setTimeout(() => caption('持ち出し', '12月25日　朝 7:00'), 300);
+    recall(s, 'courier');
   }, 1600);
 }
 function takePainting() {
@@ -887,6 +890,7 @@ function takePainting() {
   if (!N.alarmOff) { afterMsg = () => endNight('caught'); return say('額縁に手をかけた瞬間、甲高い警報が屋敷中に鳴り響いた！'); }
   N.taken = true; N.carry = 'painting';
   areas.f2.secret.objs[0].visible = false;
+  recall(s, 'stamp');
   caption('奪取', `深夜 ${nightClock()}　「月下の庭」`);
   if (N.route === 'swap') return say('青の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。', '本物をお嬢様の部屋のクローゼットに隠そう。');
   // 空になった額縁に、カードを残すか
@@ -1491,11 +1495,13 @@ function eveThings() {
   if (st.mode !== 'day' || !isEve(s) || s.today.hour < EVE_HANG) return [];
   const list = [];
   if (cur.id === 'f1' && !s.flags.swapped) list.push({ name: '月下の庭', at: () => [28, 1.0], label: s.flags.forgery_ready && s.flags.hide_ok ? 'すり替える' : '絵を見る', night: () => {
+    recall(s, 'oil');
     if (!s.flags.forgery_ready || !s.flags.hide_ok) return say('大広間の壁に、「月下の庭」が掛けられていた。旦那様が自ら掛けたらしい。', '（今夜、客の前に出す絵だ。……青の模写と、隠し場所があれば）');
     if (watchers().length) return say('人の目がある。……今は手を出せない。');
     if (!confirm('青の模写とすり替えますか？（本物は、お嬢様の部屋のクローゼットへ運ぶ）')) return;
     setFlag(s, 'swapped');
     st.dayCarry = 'painting';
+    recall(s, 'stamp');
     say('青の模写を額に収め、本物をテーブルクロスで包む。壁の絵は、何ひとつ変わらないように見えた。',
       s.flags.shizuku ? ['執事', '（雫が、旦那様を書斎に引き止めてくれている。……今のうちだ）'] : null,
       '本物を、2階のお嬢様の部屋のクローゼットへ運ぼう。人に見られないように。');
@@ -1566,7 +1572,7 @@ export function startBall(state, h) {
   player.g.rotation.set(0, Math.PI, 0);
   dressBall().catch(e => console.warn('ball', e));
   st.ball.done.open = true;
-  afterMsg = () => { st.ball.phase = 'serve'; };
+  afterMsg = () => { st.ball.phase = 'serve'; for (const k of ['oil', 'dropout', 'ledger', 'masks']) recall(s, k); };
   say(...BALL.openingLines(s));
   run();
 }
@@ -1603,6 +1609,7 @@ function ballTick(dt) {
     Object.assign(people.reiko, { area: 'f1', x: 24, z: 17, wait: 0, look: 0, nightRole: { i: 0, path: [[24, 13], [26.2, 4.2, 9999]] } });
     if (people.reiko.vrm) maskVRM(people.reiko.vrm, styleOf('reiko'));
     if (cur.id !== 'f1') travel({ area: 'f1', x: 24, z: 13.6 });
+    afterMsg = () => recall(s, 'young');
     return say(...BALL.reikoLines(s));
   }
   if (at(BALL.AT.dance) && once('dance')) {
@@ -1708,6 +1715,7 @@ function startBlackout() {
   const B = st.ball;
   if (cur.id !== 'f1') enter('f1', 24, 13.6);
   afterMsg = () => {
+    recall(s, 'storm');
     B.dark = { left: DARK_SEC, stage: 'take', spot: null, back: false, frag: null };
     setDark(true);
     hooks.toast('【暗闇】残り90秒。絵を外して隠し、大広間の真ん中へ戻れ');
@@ -1781,6 +1789,7 @@ function darkThings() {
   if (cur.id === 'f1' && D.stage === 'take') list.push({ name: '月下の庭', at: () => [28, 1.0], label: 'キャンバスを外す', night: () => {
     D.stage = 'carry';
     hallArt.children[1].visible = false;
+    recall(s, 'stamp');
     st.busy = true;
     hooks.askChoice('額縁からキャンバスを外した。……青が作った、仮面の切れ端を落としていくか？', [
       { t: '麗子の深紅の仮面の切れ端を落とす', id: 'reiko', run: () => '' },
@@ -1789,6 +1798,7 @@ function darkThings() {
     ], (msg, o) => {
       st.busy = false;
       D.frag = o.id;
+      if (o.id) recall(s, 'masks');
       if (o.id) { const f = maskFragment(styleOf(o.id)); f.position.set(27.6, 0.02, 1.5); f.userData.frag = true; darkProps.add(f); }
       say(o.id ? '額縁の下に、仮面の切れ端をそっと落とした。' : '何も残さず、額縁の前を離れた。', '（昇降機か、配膳車か、ピアノか。……急げ）');
     });
@@ -1817,7 +1827,12 @@ function ballThings() {
     s.ballStats.served++;
     // 運んだ先で、まだ聞いていない話が一つ聞こえる
     const g = BALL.GOSSIP.find(x => !s.flags[x.id]);
-    if (g) { s.flags[g.id] = true; return say(g.line); }
+    if (g) {
+      s.flags[g.id] = true;
+      const k = { g_dealer: 'dealer', g_company: 'company', g_caterer: 'caterer', g_daughter: 'dropout', g_young: 'young', g_storm: 'storm' }[g.id];
+      if (k) afterMsg = () => recall(s, k);
+      return say(g.line);
+    }
     say(BALL.SERVE_THANKS[s.ballStats.served % BALL.SERVE_THANKS.length]);
   } });
   list.push({ name: '月下の庭', at: () => [28, 1.0], label: '絵を見る', night: () => s.flags.swapped
@@ -1827,7 +1842,11 @@ function ballThings() {
 }
 function ballAct(t) {
   if (t.night) return t.night();
-  if (t.person) return say(...BALL.ballTalk(s, t.person.id, ballMin()));
+  if (t.person) {
+    const id = t.person.id;
+    afterMsg = () => { const k = { red: s.flags.dealer_seen && 'dealer', caterer: 'caterer', guard: 'guard', white: 'company' }[id]; if (k) recall(s, k); };
+    return say(...BALL.ballTalk(s, id, ballMin()));
+  }
   if (t.exit) {
     if (!['f1', 'f2'].includes(t.exit.area)) return say('今は舞踏会の最中だ。屋敷を離れるわけにはいかない。');
     return travel(t.exit);

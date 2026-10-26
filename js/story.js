@@ -1,6 +1,7 @@
 // 物語パートのシナリオ
 // 行：['話者', '本文']（話者 n はナレーション）
 // {choice:[{t, fx, then}]} 選択肢 / {if, then, else} 条件分岐 / {fx} 効果 / {report:true} 週の成果報告
+import { recall } from './recall.js';
 
 const N = 'n', B = 'butler', F = 'father', M = 'mother', D = 'daughter';
 const R = 'red', BL = 'blue', K = 'black', W = 'white', S = 'shizuku';
@@ -360,6 +361,7 @@ export function interrogation(s) {
     [R, '「……わたしは、やってない」'],
     [R, '「前のメイドさんも、やってなかった。……旦那様が、そうしただけ」'],
     [N, '大広間が静まり返った。赤が旦那様に言い返したのは、初めてだった。客たちが、顔を見合わせる。'],
+    { call: s => recall(s, 'framed') },
     { choice: [
       { t: '赤をかばう「赤さんは、ずっとキッチンにおりました」', fx: { aff: { red: 10 } }, then: [[N, '客の誰かが「前のメイドって……」とつぶやいた。旦那様の顔から、血の気が引いていく。'], doubt(-1)] },
       { t: '黙って見守る', then: [[R, '「……大丈夫。わたし、もう、黙らない」'], doubt(0)] },
@@ -409,6 +411,7 @@ export const ENDINGS = {
   blackout: { title: 'ENDING 3　仮面の夜の月', good: true, lines: [
     [N, '明け方。裏の小道に、仕出し屋の白いバンが停まっていた。'],
     [C, '「……確かに、お預かりしました。雫ちゃんに、よろしく」'],
+    { call: s => recall(s, 'caterer') },
     [N, '料理箱の底に収まって、「月下の庭」は静かに屋敷を出ていった。'],
     [B, '（母さん。……少し遠回りしたけど、迎えに来たよ）'],
     [S, '「……行っちゃったね。でも、ちゃんと帰る場所に帰るんだ」'],

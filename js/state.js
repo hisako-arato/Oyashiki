@@ -130,6 +130,8 @@ export function applyFx(s, fx) {
 export function setFlag(s, f, notes) {
   if (s.flags[f]) return false;
   s.flags[f] = true;
+  // 手がかりを得た日（回想カードに出す）
+  (s.clueDay ||= {})[f] = dayOffset(s);
   if (notes) notes.push('手帳に記録した');
   // 組み合わせで成立する手がかり
   if (s.flags.h_window && s.flags.h_blueprint && !s.flags.hidden_room) setFlag(s, 'hidden_room', notes);

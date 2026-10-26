@@ -17,6 +17,7 @@ import { KINDS, countOf, savedCount, saveKind, keepStorage } from './vrmstore.js
 import * as music from './music.js';
 import { PRESETS, WHEN, testState } from './evetest.js';
 import { ball2D, settleBall } from './ball.js';
+import { foreshadowList } from './recall.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -1061,11 +1062,13 @@ function openNotebook(tab = 'note') {
   if (!s) return;
   document.querySelector('.modal-back.game-menu')?.remove();
   const body = el('div', { class: 'menu-body' });
-  const tabs = el('div', { class: 'tabs' }, MENU_TABS.map(([id, label]) =>
+  // クリアした後は「伏線」のページが増える
+  const list = s.cleared && s.cleared.length || isTesting() ? [...MENU_TABS.slice(0, 3), ['foreshadow', '伏線'], MENU_TABS[3]] : MENU_TABS;
+  const tabs = el('div', { class: 'tabs' }, list.map(([id, label]) =>
     el('button', { class: id === tab ? 'on' : 'ghost', onclick: () => { back.remove(); openNotebook(id); } }, label)));
   const back = modal(tabs, body, el('div', { class: 'row' }, el('button', { onclick: () => back.remove() }, '閉じる')));
   back.classList.add('game-menu');
-  body.append(...({ note: noteTab, people: peopleTab, story: storyTab, settings: settingsTab })[tab](back).filter(x => x != null && x !== false));
+  body.append(...({ note: noteTab, people: peopleTab, story: storyTab, foreshadow: foreshadowTab, settings: settingsTab })[tab](back).filter(x => x != null && x !== false));
 }
 
 // 模写の完成を待つ目標。イブに間に合わないときは、そう知らせる
@@ -1156,6 +1159,15 @@ function storyTab() {
   ];
 }
 
+// 伏線のページ（クリア後）：イブの一日で回収した伏線。見逃した物は「？？？」
+function foreshadowTab() {
+  const list = foreshadowList(s), n = list.filter(f => f.found).length;
+  return [
+    el('p', { class: 'hint' }, `回収した伏線 ${n} / ${list.length}（遊び直しても残る）`),
+    el('ul', { class: 'foreshadow' }, list.map(f => el('li', { class: f.found ? '' : 'miss' },
+      f.found ? [el('b', {}, f.title), el('br'), f.pay] : '？？？'))),
+  ];
+}
 function settingsTab(back) {
   return [
     el('h4', {}, '音量'),

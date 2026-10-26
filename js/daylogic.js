@@ -5,6 +5,7 @@ import { applyFx, fxNote, setFlag, dayIndex, whereIs, isAlly, peopleIn, fatherHo
 import { pickTalk } from './actions.js';
 import { joined, sisterTalk, told } from './sister.js';
 import { whiteSaw } from './white.js';
+import { recall } from './recall.js';
 
 export const FORGERY_DAYS = 5;
 
@@ -105,6 +106,7 @@ export function investigate(s, spot, seen, room) {
 
 export function tryCode(s, code) {
   if (code !== PASSCODE) return false;
+  if (!s.flags.key_hidden) recall(s, 'code');   // 番号は、麗子の誕生日だった
   setFlag(s, 'key_hidden');
   s.flags.key_out = true;   // 鍵を持ち出している（使い終わったら引き出しに戻す）
   return true;
