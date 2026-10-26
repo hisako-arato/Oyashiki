@@ -197,8 +197,9 @@ function rayDist(x, z, dx, dz, max) {
 // 本編の予定表どおりの部屋へ、扉・廊下・階段を歩いて移る。着いたら部屋の中を歩き回る
 const people = {};
 const coneMat = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
-// ベッドに寝かせる（お嬢様の部屋のベッド：枕は南。足元から頭まで約1.5m）
-function sleepInBed(p) { Object.assign(p, { sleep: true, area: 'f2', x: 39, z: 16.1, nightRole: null }); }
+// ベッドに寝かせる。お嬢様の部屋のベッドは枕が南（頭は +z）、執事の部屋のベッドは枕が北（頭は -z）。足元から頭まで約1.5m
+const BEDS = { daughter: { area: 'f2', x: 39, z: 16.1, yaw: Math.PI }, butler: { area: 'cottage', x: 1.2, z: 13.3, yaw: 0 } };
+function sleepInBed(p, bed = BEDS.daughter) { Object.assign(p, { sleep: bed, area: bed.area, x: bed.x, z: bed.z, nightRole: null }); }
 function wake(p) {
   if (!p.sleep) return;
   p.sleep = false; p.g.rotation.set(0, 0, 0, 'XYZ');
@@ -365,7 +366,7 @@ function updatePerson(p, dt) {
   if (p.sleep) {
     p.g.visible = p.area === cur.id; p.cone.visible = false; p.seeing = false;
     if (p.blob) p.blob.visible = false;
-    p.g.position.set(p.x, 0.62, p.z); p.g.rotation.set(-Math.PI / 2, Math.PI, 0, 'YXZ');
+    p.g.position.set(p.x, 0.62, p.z); p.g.rotation.set(-Math.PI / 2, p.sleep.yaw, 0, 'YXZ');
     if (p.g.visible) driveSeen(p, false, dt);
     return;
   }
@@ -845,7 +846,7 @@ function nightThings() {
   // 絵を抱えたまま梯子は使えない（額縁が手すりに当たり、キャンバスに傷がつく）
   if (cur.id === 'f2' && N.ladderUp) list.push({ name: '梯子', at: at(24, 17.4), label: '梯子で降りる', night: () => N.carry === 'painting' ? say('片手で絵を抱えて梯子を降りれば、額縁が手すりに当たる。……傷ひとつ、つけるわけにはいかない。')
     : travel({ area: 'grounds', x: below[0], z: below[1] + 0.6 }) });
-  if (cur.id === 'f2' && people.daughter.sleep && !N.tucked && !N.morning) list.push({ name: 'お嬢様', at: at(39, 16.4), label: '布団を掛け直す', night: () => {
+  if (cur.id === 'f2' && people.daughter.sleep === BEDS.daughter && !N.tucked && !N.morning) list.push({ name: 'お嬢様', at: at(39, 16.4), label: '布団を掛け直す', night: () => {
     N.tucked = true; s.flags.tucked = true;
     say('はだけた布団を、そっと肩まで引き上げた。', ['執事', '（……ごめん）']);
   } });
@@ -1299,10 +1300,13 @@ function tick(now) {
     player.g.rotation.y = Math.atan2(dx, dz);
   }
   if (player.blob) player.blob.visible = !st.lying;   // ベッドに寝ている間は、足元の影を出さない
-  if (st.lying) { player.g.position.set(player.x, 0.62, player.z); player.g.rotation.set(-Math.PI / 2, 0, 0); }
+  if (st.lying) { player.g.position.set(player.x, st.lyingY ?? 0.62, player.z); player.g.rotation.set(-Math.PI / 2, 0, 0); }
   else if (st.dance) danceTick(rawDt);
   else { player.g.position.set(player.x, 0, player.z); animate(player, moving, dt); }
-  if (carried.tray) carried.tray.visible = ball && !!st.ball.tray;
+  if (carried.tray) {
+    carried.tray.visible = ball && st.ball.glasses > 0;
+    carried.tray.children.forEach((c, i) => { if (c.userData.glass != null) c.visible = c.userData.glass < (ball ? st.ball.glasses : 0); });
+  }
   if (night) {
     carried.ladder.visible = st.night.carry === 'ladder';
     carried.painting.visible = st.night.carry === 'painting';
@@ -1473,15 +1477,24 @@ export function startNight(state, route, h) {
   Object.assign(red, { area: 'f1', x: 44.6, z: 4.6, range: 5.5, look: 0, nightRole: { yaw: 0 } });
   red.g.rotation.y = 0;
   // イブの夜にお嬢様・お母様の部屋へ招かれていれば、2階から始められる
-  const eve = s.flags.eve_go_daughter ? ['f2', 37.6, 15.6, 'お嬢様の部屋'] : s.flags.eve_mother ? ['f2', 12, 14, '主寝室'] : null;
+  const eve = s.flags.eve_go_daughter ? ['f2', 37.6, 15.6, 'お嬢様の部屋'] : null;
   if (eve) enter(eve[0], eve[1], eve[2]); else enter('cottage', 2.4, 12.5);
   const withD = !!s.flags.eve_go_daughter;
   if (withD) { st.night.min = 30; sleepInBed(people.daughter); }
+  // 雫と踊った夜：雫は執事のベッドで眠っている（大広間の見回りはいない）。執事は床で目を覚ます
+  const withS = !withD && s.flags.dance === 'shizuku';
+  if (withS) {
+    sleepInBed(black, BEDS.butler);
+    Object.assign(player, { x: 2.8, z: 13.4 }); st.lying = true; st.lyingY = 0.06;
+    afterMsg = () => { st.lying = false; st.lyingY = null; player.g.rotation.set(0, Math.PI / 2, 0); };
+  }
   setTimeout(() => caption('潜入', `12月24日　深夜 ${withD ? '1:30' : '1:00'}`), 400);
   player.g.rotation.set(0, Math.PI / 2, 0);
   say(withD ? '12月24日、クリスマス・イブの深夜1時半。仮面舞踏会の客も帰り、絵は隠し部屋に戻され、屋敷は寝静まった。'
       : '12月24日、クリスマス・イブの深夜1時。仮面舞踏会の客も帰り、絵は隠し部屋に戻され、屋敷は寝静まった。',
     withD && '隣で、お嬢様が小さな寝息を立てている。',
+    withS && '床の上で目を覚ました。……背中が痛い。ベッドでは、雫がすやすやと眠っている。',
+    withS && ['執事', '（起こさないでおこう。……行ってくる）'],
     withD && ['お嬢様', '「（寝言）……執事さん……」'],
     eve && ['執事', withD ? '（起こさないように、そっとベッドを抜け出した。ここは2階だ。書斎は近い）' : `（${eve[3]}の寝息を確かめ、そっとベッドを抜け出した。ここは2階だ。書斎は近い）`],
     s.flags.white_ally ? ['執事', '（白は約束どおり、警報の系統を落としてくれたはずだ）'] : ['執事', '（警報はまだ生きている。絵に触れれば鳴るだろう……）'],
@@ -1502,9 +1515,14 @@ let ballGroup = null, ballGuests = [], ballMasters = [];
 function setupBallProps() {
   if (!carried.tray) {
     carried.tray = new THREE.Group(); player.g.add(carried.tray);
-    box(carried.tray, 0.5, 0.03, 0.36, M.metal, 0.05, 1.05, 0.38);
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.metal);
-    dome.position.set(0.05, 1.08, 0.38); carried.tray.add(dome);
+    // 銀のお盆に、シャンパングラス4本（配ると1本ずつ減る）
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.02, 20), M.metal);
+    disc.position.set(0.05, 1.06, 0.36); carried.tray.add(disc);
+    const glassMat = new THREE.MeshStandardMaterial({ color: '#f3e3a0', transparent: true, opacity: 0.75, roughness: 0.15 });
+    [[-0.07, -0.07], [0.07, -0.07], [-0.07, 0.07], [0.07, 0.07]].forEach(([dx, dz], i) => {
+      const gl = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.012, 0.16, 8), glassMat);
+      gl.position.set(0.05 + dx, 1.15, 0.36 + dz); gl.userData.glass = i; carried.tray.add(gl);
+    });
   }
   if (!ballGroup) {
     ballGroup = new THREE.Group(); areas.f1.group.add(ballGroup);
@@ -1608,7 +1626,7 @@ const guestSlots = () => GUEST_SPOTS.map(([x, z, yaw], i) => ({ x, z, yaw, i, g:
 export function startBall(state, h) {
   prepare(state, h);
   st.mode = 'ball';
-  st.ball = { min: 0, done: {}, tray: false, reqs: [], next: 6, daughterBase: null };
+  st.ball = { min: 0, done: {}, glasses: 0, reqs: [], next: 6, daughterBase: null };
   s.flags.ball_seen = true;
   s.ballStats = { served: 0, missed: 0 };
   setLights(false);
@@ -1646,16 +1664,16 @@ function ballTick(dt) {
   // 料理を待つ客：「！」を出し、待たせすぎると帰ってしまう（実時間で数える）
   if (serving) {
     B.next -= dt;
-    if (B.next <= 0 && B.reqs.length < 2 && ballGuests.length) {
+    if (B.next <= 0 && B.reqs.length < 4 && ballGuests.length) {
       const free = ballGuests.filter(g => !B.reqs.some(r => r.g === g));
       const g = free[Math.floor(Math.random() * free.length)];
       if (g) B.reqs.push({ g, left: 32 });
-      B.next = 7 + Math.random() * 5;
+      B.next = 5 + Math.random() * 4;
     }
   }
   for (const r of [...B.reqs]) {
     r.left -= dt;
-    if (r.left <= 0) { B.reqs.splice(B.reqs.indexOf(r), 1); s.ballStats.missed++; hooks.toast('料理を待っていた客が、不満そうに席を離れた（旦那様の目が光る）'); }
+    if (r.left <= 0) { B.reqs.splice(B.reqs.indexOf(r), 1); s.ballStats.missed++; hooks.toast('シャンパンを待っていた客が、不満そうに席を離れた（旦那様の目が光る）'); }
   }
   if (at(BALL.AT.reiko) && once('reiko')) {
     Object.assign(people.reiko, { area: 'f1', x: 24, z: 17, wait: 0, look: 0, nightRole: { i: 0, path: [[24, 13], [26.2, 4.2, 9999]] } });
@@ -1665,7 +1683,7 @@ function ballTick(dt) {
     return say(...BALL.reikoLines(s));
   }
   if (at(BALL.AT.dance) && once('dance')) {
-    B.reqs = []; B.tray = false;
+    B.reqs = []; B.glasses = 0;
     const partner = () => hooks.askChoice('22時。楽団がワルツを奏で始めた。……誰と過ごす？', BALL.danceOptions(s).map(o => ({ ...o, run: () => '' })), (msg, o) => {
       if (o.id !== 'work') afterMsg = () => startDance(o.id);
       say(...BALL.danceIntro(s, o.id));
@@ -1707,7 +1725,7 @@ function ballTick(dt) {
   }
   if (B.dark) return darkTick(dt);
   if (at(BALL.AT.unmask) && once('unmask')) {
-    B.reqs = []; B.tray = false;
+    B.reqs = []; B.glasses = 0;
     if (s.flags.plan_blackout) return startBlackout();
     if (cur.id !== 'f1') travel({ area: 'f1', x: 24, z: 13.6 });
     // 鐘に合わせて、仮面を右手へ下ろす（少しずつずらす）
@@ -1917,16 +1935,17 @@ function ballThings() {
   if (st.mode !== 'ball' || cur.id !== 'f1') return [];
   const B = st.ball, list = [];
   if (B.dark) return darkThings();
-  list.push({ name: '料理のワゴン', at: () => WAGON, label: B.tray ? '料理を持っている' : '料理を受け取る', night: () => {
-    if (B.tray) return say('もう料理を持っている。「！」の客へ運ぼう。');
-    if (!B.reqs.length) return say('今は、料理を待っている客はいないようだ。');
-    B.tray = true;
-    say(['仕出し屋', '「はい、上がりました！ 熱いうちにどうぞ」']);
+  list.push({ name: 'シャンパンのワゴン', at: () => WAGON, label: B.glasses ? `グラス残り${B.glasses}本` : 'グラスを4本受け取る', night: () => {
+    if (B.glasses) return say(`お盆には、まだシャンパンが${B.glasses}本残っている。「！」の客へ配ろう。`);
+    B.glasses = 4;
+    music.sfx('clink');
+    say(['仕出し屋', '「シャンパン、4本どうぞ！ ……こぼさないように」']);
   } });
-  for (const r of B.reqs) list.push({ name: '客', at: () => [r.g.x, r.g.z], label: B.tray ? '料理を出す' : '料理を待っている', night: () => {
-    if (!B.tray) return say('客「……料理はまだかね？」', '（キッチンのワゴンで、料理を受け取ってこよう）');
-    B.tray = false;
+  for (const r of B.reqs) list.push({ name: '客', at: () => [r.g.x, r.g.z], label: B.glasses ? 'シャンパンを渡す' : 'グラスを待っている', night: () => {
+    if (!B.glasses) return say('客「……グラスが空なのだがね」', '（キッチンのワゴンで、シャンパンを受け取ってこよう）');
+    B.glasses--;
     B.reqs.splice(B.reqs.indexOf(r), 1);
+    if (!B.glasses) afterMsg = () => hooks.toast('お盆が空になった。キッチンのワゴンで、次の4本を受け取ろう');
     s.ballStats.served++;
     music.sfx('clink');
     // 運んだ先で、まだ聞いていない話が一つ聞こえる
@@ -1934,7 +1953,7 @@ function ballThings() {
     if (g) {
       s.flags[g.id] = true;
       const k = { g_dealer: 'dealer', g_company: 'company', g_caterer: 'caterer', g_daughter: 'dropout', g_young: 'young', g_storm: 'storm' }[g.id];
-      if (k) afterMsg = () => recall(s, k);
+      if (k) { const prev = afterMsg; afterMsg = () => { if (prev) prev(); recall(s, k); }; }
       return say(g.line);
     }
     say(BALL.SERVE_THANKS[s.ballStats.served % BALL.SERVE_THANKS.length]);
@@ -1973,18 +1992,18 @@ function ballLabels(labels) {
     if (D.stage === 'hidden') labels.push({ x: HOME[0], y: 0.6, z: HOME[1], text: '元の場所', cls: 'work' });
     return;
   }
-  for (const r of st.ball.reqs) labels.push({ x: r.g.x, y: 2.2, z: r.g.z, text: '！料理', cls: 'alert' });
-  if (st.ball.reqs.length && !st.ball.tray) labels.push({ x: WAGON[0], y: 1.2, z: WAGON[1], text: 'ワゴン', cls: 'work' });
+  for (const r of st.ball.reqs) labels.push({ x: r.g.x, y: 2.2, z: r.g.z, text: '！シャンパン', cls: 'alert' });
+  if (st.ball.reqs.length && !st.ball.glasses) labels.push({ x: WAGON[0], y: 1.2, z: WAGON[1], text: 'ワゴン', cls: 'work' });
 }
 function ballGoal() {
   const B = st.ball, m = B.min, st2 = s.ballStats;
   if (B.dark && !B.dark.over) return `【暗闇　残り${Math.max(0, Math.ceil(B.dark.left))}秒】${{ take: '壁の「月下の庭」からキャンバスを外す', carry: '昇降機・配膳車・ピアノのどれかに隠す（懐中電灯に照らされるな）', hidden: '大広間の真ん中へ戻る' }[B.dark.stage]}`;
-  const score = `（運んだ料理 ${st2.served}皿${st2.missed ? `・待たせた客 ${st2.missed}人` : ''}）`;
+  const score = `（配ったシャンパン ${st2.served}杯${st2.missed ? `・待たせた客 ${st2.missed}人` : ''}）`;
   if (m < BALL.AT.serve) return '開宴。旦那様の乾杯を見届けよう';
   if (m >= BALL.AT.lastCall) return '0時の鐘を待つ';
   if (B.search) return '雫を探す（屋敷のどこかにいる）';
   if (m >= BALL.AT.dance && m < BALL.AT.serve2) return 'ワルツの時間';
-  return `${B.tray ? '料理を「！」の客へ運ぶ' : B.reqs.length ? 'キッチンのワゴンで料理を受け取る' : '客の様子を見て回る（話しかけてもよい）'}${score}`;
+  return `${B.glasses ? `シャンパンを「！」の客へ配る（お盆に${B.glasses}本）` : B.reqs.length ? 'キッチンのワゴンで、シャンパンを4本受け取る' : '客の様子を見て回る（話しかけてもよい）'}${score}`;
 }
 // 閉宴：仮面と客を片付け、お嬢様の服を戻し、舞踏会だけの VRM を手放してから本編へ戻す
 async function endBall() {

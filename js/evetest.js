@@ -29,9 +29,9 @@ function applyRel(s, rel) {
   for (const [who, pre] of [['daughter', 'd'], ['mother', 'm']]) {
     const lv = rel[who] || 'normal';
     s.aff[who] = AFF[lv];
-    for (const f of [`${pre}_secret`, `${pre}_close`, `eve_${who}`]) delete s.flags[f];
+    for (const f of [`${pre}_secret`, `${pre}_close`, 'eve_daughter']) if (f !== 'eve_daughter' || who === 'daughter') delete s.flags[f];
     if (lv !== 'normal') setFlag(s, `${pre}_secret`);
-    if (lv === 'deep') { setFlag(s, `${pre}_close`); setFlag(s, `eve_${who}`); }
+    if (lv === 'deep') { setFlag(s, `${pre}_close`); if (who === 'daughter') setFlag(s, 'eve_daughter'); }
   }
 }
 

@@ -160,11 +160,9 @@ function motherScene(s) {
       [N, 'お母様はグラスを揺らしながら、ソファの隣を目で示した。'],
       { choice: [accept, decline] }, count('mother')];
   }
-  // イブの夜の約束
-  if (s.chapter === 3 && s.aff.mother >= 75 && !s.flags.eve_mother) return [...intro,
-    [M, '「イブの夜……パーティーが終わったら、ここへ来て。あの人はどうせ、麗子のところで朝を迎えるわ」'],
-    { fx: { flag: 'eve_mother', aff: { mother: 3 } } },
-    [B, '（イブの夜、2階の主寝室にいられる。屋敷の外を回らずに、書斎へ行ける）'],
+  // 最終章：年が明けても、ここにいる？（お母様にとって執事は若い遊び相手。イブの夜に誘うことはない）
+  if (s.chapter === 3 && s.aff.mother >= 75 && !s.flags.m_newyear) return [...intro,
+    { call: s => { s.flags.m_newyear = true; s.aff.mother = Math.min(100, s.aff.mother + 3); } },
     [M, '「……ねえ。あなた、年が明けても、ここにいる？」'],
     [B, '「……奥様が、望まれるなら」'],
     [M, '「嘘が上手ね。……今は、それでいいわ」', 'sad'],
@@ -465,7 +463,7 @@ function planScene(s) {
   if (s.chapter >= 2 && !f.b_hatch) tips.push([R, '「……旦那様、ワインを取りに行くと、なかなか戻らない。……資料室の床、踏むと音が違う」']);
   if (f.b_hatch && !f.b_key) tips.push([S, '「床の扉の鍵、旦那様の鍵束にあるはず。……合鍵、作れるよ。夜、部屋に呼んで」']);
   if (s.chapter >= 3 && !f.guard_info) tips.push([S, '「イブの夜の巡回員の癖、下見で見ちゃったの。……あとで二人のとき、教えるね」']);
-  if (s.chapter >= 3 && !(f.ladder && f.balcony_open) && !f.b_grate && !f.eve_mother && !f.eve_go_daughter && s.aff.red < 70)
+  if (s.chapter >= 3 && !(f.ladder && f.balcony_open) && !f.b_grate && !f.eve_go_daughter && s.aff.red < 70)
     tips.push([R, '「……夜は、倉庫の奥の扉に鍵。勝手口は、わたしの仕込み場の前。……わたしが目をつぶれば、通れる」']);
   if (!tips.length) tips.push([W, '「……現状、打てる手は打ってあります。あとは当日の動き方だけですね」'], [S, '「お兄ちゃん、ちゃんと寝てね。当日にあくびしたら、許さないから」', 'happy']);
   return [[W, '「では、今わかっていることを並べます」'], ...tips.slice(0, 3),

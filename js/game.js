@@ -16,7 +16,7 @@ import { VERSION, VERSION_DATE } from './version.js';
 import { KINDS, countOf, savedCount, saveKind, keepStorage } from './vrmstore.js';
 import * as music from './music.js';
 import { PRESETS, WHEN, REL, testState } from './evetest.js';
-import { ball2D, settleBall, daughterNight } from './ball.js';
+import { ball2D, settleBall, daughterNight, shizukuNight } from './ball.js';
 import { foreshadowList } from './recall.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
@@ -50,7 +50,7 @@ function outfitOf(who) {
   if (who === 'butler' && heist) return 'butler2';
   if ((who === 'mother' || who === 'daughter') && s.phase === 'night') return `${who}2`;
   if (who === 'daughter' && (s.phase === 'ball' || (s.phase === 'execution' && s.flags.eve_go_daughter))) return 'daughter3';   // 仮面舞踏会のドレス（そのまま部屋で過ごす夜も）
-  if (who === 'shizuku') return s.phase === 'ending' ? 'black3' : s.counters.night_black ? 'black2' : 'black';
+  if (who === 'shizuku') return s.phase === 'ending' ? 'black3' : s.counters.night_black || (s.phase === 'execution' && s.flags.dance === 'shizuku') ? 'black2' : 'black';
   return who;
 }
 const faceIcon = (who, cls = 'face-icon') => el('img', { class: cls, src: faceSrc(who), alt: '' });
@@ -429,8 +429,8 @@ function saveIO() {
 
 function resume(saved) {
   s = saved;
-  // 母娘の鉢合わせは無くした（以前のセーブに残っていれば、無かったことにする）
-  delete s.flags.family_rift;
+  // 母娘の鉢合わせと、お母様のイブの夜の招待は無くした（以前のセーブに残っていれば、無かったことにする）
+  delete s.flags.family_rift; delete s.flags.eve_mother;
   if (s.counters) delete s.counters.rift_risk;
   preloadCast(() => {
     loadPortrait();
@@ -989,7 +989,9 @@ function execution() {
   s.phase = 'execution';
   music.play('heist');
   // 舞踏会の後、お嬢様の誘いに応じていれば、お嬢様の部屋で夜を過ごす（決行はそこから始まる）
-  const withD = s.flags.eve_go_daughter ? [['n', '0時半。客が帰り、屋敷の明かりが一つずつ落ちていく。執事は、2階のお嬢様の部屋の扉を叩いた。'], ...daughterNight] : [];
+  const withD = s.flags.eve_go_daughter ? [['n', '0時半。客が帰り、屋敷の明かりが一つずつ落ちていく。執事は、2階のお嬢様の部屋の扉を叩いた。'], ...daughterNight]
+    // 雫と踊った夜は、雫が執事の部屋に来て、そのまま眠ってしまう
+    : s.flags.dance === 'shizuku' ? shizukuNight : [];
   // ルート2：イブの昼にすり替えてあれば、25日の朝に本物を運び出すだけ
   if (s.flags.swap_hidden) return playScript([
     ...withD,
@@ -1048,7 +1050,7 @@ async function runRoute(id) {
       : fail('「誰だ！」懐中電灯の光が、まっすぐ執事を捉えた。巡回員の笛が、屋敷中に響き渡った。')));
   };
   const path = () => {
-    const room = s.flags.eve_go_daughter ? 'お嬢様の部屋' : s.flags.eve_mother ? '主寝室' : null;
+    const room = s.flags.eve_go_daughter ? 'お嬢様の部屋' : null;
     const opts = [
       ...(room ? [{ t: `${room}から、そっと書斎へ向かう`, go: () => playScript([['n', `寝息を確かめ、${room}を抜け出した。`]], corridor) }] : []),
       // 夜は倉庫から資料室への扉に鍵が掛かる。屋敷に入るには、勝手口（赤メイドの前）か、地下の搬入路を通る
@@ -1143,7 +1145,7 @@ function noteTab() {
   const got = Object.entries(CLUES).filter(([k]) => s.flags[k]);
   // 目標：[文, 見せるか, 済んだか]。済んだ目標は ✓ を付けて下に並べる
   const f = s.flags, hints = BASEMENT_HINTS.filter(k => f[k]).length;
-  const way = f.eve_mother || f.eve_go_daughter || f.b_grate || s.aff.red >= ALLY_AFF || (f.ladder && f.balcony_open);
+  const way = f.eve_go_daughter || f.b_grate || s.aff.red >= ALLY_AFF || (f.ladder && f.balcony_open);
   const goals = [
     ['屋敷の構造を調べ、絵の隠し場所を突き止める', true, f.hidden_room],
     ['書斎の本棚に隠し扉の仕掛けがあるはずだ', f.hidden_room, f.red_book],
