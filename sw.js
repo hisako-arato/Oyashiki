@@ -1,5 +1,5 @@
 // オフラインでも遊べるよう、ゲームのファイルをキャッシュする
-const CACHE = 'oyashiki-1.45';
+const CACHE = 'oyashiki-1.46';
 // VRM は大きいので、版を上げても消さない別のキャッシュに置き、キャッシュを優先して使う
 // 中身を差し替えた VRM（black2・daughter2）を新しく読み込ませるため v2 にした。v1 は sw.js の activate で消える
 const VRM_CACHE = 'oyashiki-vrm-v2';
