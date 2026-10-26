@@ -41,7 +41,7 @@ export function nightOptions(s) {
 // ---- その夜に、物語の情報を聞ける見込みがあるか ----
 // 夜の場面を写しの状態で試しに流し、どれかの選び方で新しい手がかりが手に入るかを調べる（夜の選択肢に印を付ける）
 // 鉢合わせや打ち明けなど、執事が「聞き出す」話でない物は数えない
-const NOT_INFO = new Set(['family_rift', 'told_red', 'told_blue', 'told_white', 'shizuku', 'white_spy', 'guard_strict']);
+const NOT_INFO = new Set(['told_red', 'told_blue', 'told_white', 'shizuku', 'white_spy', 'guard_strict']);
 let probing = false;
 export function nightHasInfo(s, id) {
   if (probing) return false;
@@ -108,16 +108,6 @@ const count = who => ({ call: s => {
   s.counters.last_night_who = who; s.counters.last_night_day = dayIndex(s);
 } });
 
-// 母娘の両方と深い仲になると、いずれ鉢合わせる
-const clash = s => visits(s, 'mother') >= 2 && visits(s, 'daughter') + (s.counters.rift_risk || 0) >= 2 && !s.flags.family_rift;
-const CLASH = [
-  [N, '夜明け前。部屋を出たところで――廊下の向こうに、もう一人の姿があった。'],
-  [M, '「……どうして、あの子の部屋から出てくるの」'],
-  [D, '「ママこそ……なんでそんな顔するの。……まさか」'],
-  [B, '（最悪の形で、すべてが露見した）'],
-  [N, 'その朝の食卓は、凍りついたように静かだった。お父様だけが、何も知らずに新聞をめくっていた。'],
-  { fx: { aff: { mother: -15, daughter: -10 }, susp: 10, flag: 'family_rift' } },
-];
 
 export function nightScene(s, id) {
   if (id === 'rest') return REST;
@@ -145,7 +135,6 @@ function motherScene(s) {
   const intro = [{ place: '23:00　屋敷 2F　主寝室' },
     [N, '灯りを落とした2階の廊下を、足音を殺して歩く。主寝室の扉の前で、一度だけ息を整えた。'],
     [N, 'ノックをする前に、扉は内側から開いた。'], ...patrol(s), ...purpose(s, 'mother'), { fx: s => afterRoomNight(s) }];
-  if (clash(s)) return [...intro, ...CLASH, count('mother')];
   // まだ深い仲になっていない
   if (!s.flags.m_close) {
     const accept = { t: '隣に座り、グラスを受け取る', fx: { aff: { mother: 6 } }, then: [
@@ -237,7 +226,6 @@ function daughterScene(s) {
   const intro = [{ place: '23:10　屋敷 2F　お嬢様の部屋' },
     [N, '使用人棟を抜け出し、裏階段から2階へ。明かりの漏れる扉を、二度、小さく叩く。'],
     [D, '「……開いてるよ」'], ...patrol(s), ...purpose(s, 'daughter'), { fx: s => afterRoomNight(s) }];
-  if (clash(s)) return [...intro, ...CLASH, count('daughter')];
   if (!s.flags.d_close) {
     const accept = { t: '「……いますよ」と微笑む', fx: { aff: { daughter: 6 } }, then: [
       ...close(D, 0),
@@ -477,7 +465,7 @@ function planScene(s) {
   if (s.chapter >= 2 && !f.b_hatch) tips.push([R, '「……旦那様、ワインを取りに行くと、なかなか戻らない。……資料室の床、踏むと音が違う」']);
   if (f.b_hatch && !f.b_key) tips.push([S, '「床の扉の鍵、旦那様の鍵束にあるはず。……合鍵、作れるよ。夜、部屋に呼んで」']);
   if (s.chapter >= 3 && !f.guard_info) tips.push([S, '「イブの夜の巡回員の癖、下見で見ちゃったの。……あとで二人のとき、教えるね」']);
-  if (s.chapter >= 3 && !(f.ladder && f.balcony_open) && !f.b_grate && !f.eve_mother && !f.eve_daughter && s.aff.red < 70)
+  if (s.chapter >= 3 && !(f.ladder && f.balcony_open) && !f.b_grate && !f.eve_mother && !f.eve_go_daughter && s.aff.red < 70)
     tips.push([R, '「……夜は、倉庫の奥の扉に鍵。勝手口は、わたしの仕込み場の前。……わたしが目をつぶれば、通れる」']);
   if (!tips.length) tips.push([W, '「……現状、打てる手は打ってあります。あとは当日の動き方だけですね」'], [S, '「お兄ちゃん、ちゃんと寝てね。当日にあくびしたら、許さないから」', 'happy']);
   return [[W, '「では、今わかっていることを並べます」'], ...tips.slice(0, 3),

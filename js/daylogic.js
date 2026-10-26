@@ -60,10 +60,9 @@ function closeNote(s, c) {
   const n = s.counters[`${c.id}_close`] = (s.counters[`${c.id}_close`] || 0) + 1;
   if (c.id === 'tutorD') {
     let msg = ' ' + STUDY[(n - 1) % STUDY.length];
-    // お母様が在宅の日は、隣の主寝室に聞かれたかもしれない（疑惑が少し上がり、母娘の鉢合わせが近づく）
+    // お母様が在宅の日は、隣の主寝室に聞かれたかもしれない（疑惑が少し上がる）
     if (!motherOutDay(s) && rng(dayIndex(s) * 31 + 7)() < 0.4) {
       msg += ' ……隣の主寝室で、扉の閉まる音がした。聞かれただろうか。' + fxNote(applyFx(s, { susp: 3 }));
-      if (s.flags.m_close) s.counters.rift_risk = (s.counters.rift_risk || 0) + 1;
     }
     return msg;
   }

@@ -30,7 +30,6 @@ export const PROFILES = [
     notes: [
       [s => s.flags.m_secret, '【秘密】若い男に、多額の贈り物をしている。'],
       [s => s.flags.eve_mother, 'イブの夜、主寝室に招かれている。'],
-      [s => s.flags.family_rift, '執事とお嬢様の関係を知ってしまった。'],
       [s => s.flags.m_close, '執事と、夜を重ねる仲になった。孤独を、執事の前でだけ見せる。'],
       [s => s.flags.m_dealer, '夜中に絵の業者が来るのを、寝たふりをして聞いている。'],
     ] },
@@ -42,8 +41,7 @@ export const PROFILES = [
       [s => s.flags.d_close, '執事と、夜を重ねる仲になった。執事にだけは、本当の顔を見せる。'],
       [s => s.flags.d_cellar, '子どもの頃、夜中に父が資料室の床の下へ降りていくのを見た。'],
       [s => s.flags.hide_ok, '執事の「大事な物」を、クローゼットで預かってくれる。'],
-      [s => s.flags.eve_daughter, 'イブの夜、自分の部屋に招いてくれている。'],
-      [s => s.flags.family_rift, '執事とお母様の関係を知ってしまった。'],
+      [s => s.flags.eve_daughter, 'イブの夜、自分の部屋に来てほしいと言っている。'],
     ] },
   { id: 'red', name: '赤メイド', age: '年齢不詳', shown: () => true,
     text: '執事が来る前から6年働いている、屋敷でいちばんの古株。いつもぼーっとしていて、何を考えているのか分からない。料理がとても早い。',

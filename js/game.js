@@ -16,7 +16,7 @@ import { VERSION, VERSION_DATE } from './version.js';
 import { KINDS, countOf, savedCount, saveKind, keepStorage } from './vrmstore.js';
 import * as music from './music.js';
 import { PRESETS, WHEN, REL, testState } from './evetest.js';
-import { ball2D, settleBall } from './ball.js';
+import { ball2D, settleBall, daughterNight } from './ball.js';
 import { foreshadowList } from './recall.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
@@ -49,7 +49,7 @@ function outfitOf(who) {
   const heist = s.phase === 'execution' || (s.phase === 'ending' && HEIST_ENDS.includes(s.endingId));
   if (who === 'butler' && heist) return 'butler2';
   if ((who === 'mother' || who === 'daughter') && s.phase === 'night') return `${who}2`;
-  if (who === 'daughter' && s.phase === 'ball') return 'daughter3';   // 仮面舞踏会のドレス
+  if (who === 'daughter' && (s.phase === 'ball' || (s.phase === 'execution' && s.flags.eve_go_daughter))) return 'daughter3';   // 仮面舞踏会のドレス（そのまま部屋で過ごす夜も）
   if (who === 'shizuku') return s.phase === 'ending' ? 'black3' : s.counters.night_black ? 'black2' : 'black';
   return who;
 }
@@ -145,18 +145,16 @@ function secretTap() {
 }
 function testScreen(rel0) {
   let when = 'morning';
-  const rel = { daughter: 'normal', mother: 'normal', rift: false, ...rel0 };
+  const rel = { daughter: 'normal', mother: 'normal', ...rel0 };
   const whenRow = el('div', { class: 'seg' });
   const showWhen = () => whenRow.replaceChildren(...WHEN.map(([id, label]) =>
     el('button', { class: id === when ? 'primary' : 'ghost', onclick: () => { when = id; showWhen(); } }, label)));
   showWhen();
-  // お嬢様・お母様との関係（ひな形の上に重ねる）。鉢合わせは、二人とも深い仲のときだけ選べる
+  // お嬢様・お母様との関係（ひな形の上に重ねる）
   const relBox = el('div', {});
   const showRel = () => relBox.replaceChildren(
     ...[['daughter', 'お嬢様'], ['mother', 'お母様']].map(([who, name]) => el('div', { class: 'seg' }, el('span', { class: 'hint' }, name),
       ...REL.map(([id, label]) => el('button', { class: rel[who] === id ? 'primary' : 'ghost', onclick: () => { rel[who] = id; showRel(); } }, label)))),
-    rel.daughter === 'deep' && rel.mother === 'deep' ? el('div', { class: 'seg' }, el('span', { class: 'hint' }, '鉢合わせ'),
-      ...[[false, '起きていない'], [true, '知られている']].map(([v, label]) => el('button', { class: rel.rift === v ? 'primary' : 'ghost', onclick: () => { rel.rift = v; showRel(); } }, label))) : null,
     el('p', { class: 'hint' }, 'ふつう：好感度30／親しい：70（ダンスに誘える・秘密を打ち明けられている）／深い仲：85（夜を重ねた仲・イブの夜に部屋へ招かれている）'));
   showRel();
   render(el('div', { class: 'panel settings' },
@@ -431,6 +429,9 @@ function saveIO() {
 
 function resume(saved) {
   s = saved;
+  // 母娘の鉢合わせは無くした（以前のセーブに残っていれば、無かったことにする）
+  delete s.flags.family_rift;
+  if (s.counters) delete s.counters.rift_risk;
   preloadCast(() => {
     loadPortrait();
     if (s.phase === 'weekend') startWeekend();
@@ -987,8 +988,11 @@ function afterWeekend() {
 function execution() {
   s.phase = 'execution';
   music.play('heist');
+  // 舞踏会の後、お嬢様の誘いに応じていれば、お嬢様の部屋で夜を過ごす（決行はそこから始まる）
+  const withD = s.flags.eve_go_daughter ? [['n', '0時半。客が帰り、屋敷の明かりが一つずつ落ちていく。執事は、2階のお嬢様の部屋の扉を叩いた。'], ...daughterNight] : [];
   // ルート2：イブの昼にすり替えてあれば、25日の朝に本物を運び出すだけ
   if (s.flags.swap_hidden) return playScript([
+    ...withD,
     ['n', '12月24日、深夜。仮面舞踏会の客も帰り、絵は隠し部屋に戻された。……中身は、青の模写だ。'],
     ['butler', '（本物は、お嬢様のクローゼットの奥で眠っている。あとは25日の朝、運び屋と入れ違いに運び出すだけだ）'],
   ], () => runRoute('swap'));
@@ -996,6 +1000,7 @@ function execution() {
   const intro = [
     // 四人全員が協力者なら、決行の前に決起会
     ...(rallyDue(s) ? rallyScene(s) : []),
+    ...withD,
     ['n', '12月24日、クリスマス・イブの深夜。仮面舞踏会の客も帰り、絵は隠し部屋に戻され、屋敷は寝静まった。'],
     ['butler', '（今夜しかない。明日の朝には、絵は梱包されて運び出される）'],
   ];
@@ -1043,7 +1048,7 @@ async function runRoute(id) {
       : fail('「誰だ！」懐中電灯の光が、まっすぐ執事を捉えた。巡回員の笛が、屋敷中に響き渡った。')));
   };
   const path = () => {
-    const room = s.flags.eve_daughter ? 'お嬢様の部屋' : s.flags.eve_mother ? '主寝室' : null;
+    const room = s.flags.eve_go_daughter ? 'お嬢様の部屋' : s.flags.eve_mother ? '主寝室' : null;
     const opts = [
       ...(room ? [{ t: `${room}から、そっと書斎へ向かう`, go: () => playScript([['n', `寝息を確かめ、${room}を抜け出した。`]], corridor) }] : []),
       // 夜は倉庫から資料室への扉に鍵が掛かる。屋敷に入るには、勝手口（赤メイドの前）か、地下の搬入路を通る
@@ -1138,7 +1143,7 @@ function noteTab() {
   const got = Object.entries(CLUES).filter(([k]) => s.flags[k]);
   // 目標：[文, 見せるか, 済んだか]。済んだ目標は ✓ を付けて下に並べる
   const f = s.flags, hints = BASEMENT_HINTS.filter(k => f[k]).length;
-  const way = f.eve_mother || f.eve_daughter || f.b_grate || s.aff.red >= ALLY_AFF || (f.ladder && f.balcony_open);
+  const way = f.eve_mother || f.eve_go_daughter || f.b_grate || s.aff.red >= ALLY_AFF || (f.ladder && f.balcony_open);
   const goals = [
     ['屋敷の構造を調べ、絵の隠し場所を突き止める', true, f.hidden_room],
     ['書斎の本棚に隠し扉の仕掛けがあるはずだ', f.hidden_room, f.red_book],

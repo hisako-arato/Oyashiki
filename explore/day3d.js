@@ -197,6 +197,13 @@ function rayDist(x, z, dx, dz, max) {
 // 本編の予定表どおりの部屋へ、扉・廊下・階段を歩いて移る。着いたら部屋の中を歩き回る
 const people = {};
 const coneMat = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
+// ベッドに寝かせる（お嬢様の部屋のベッド：枕は南。足元から頭まで約1.5m）
+function sleepInBed(p) { Object.assign(p, { sleep: true, area: 'f2', x: 39, z: 16.1, nightRole: null }); }
+function wake(p) {
+  if (!p.sleep) return;
+  p.sleep = false; p.g.rotation.set(0, 0, 0, 'XYZ');
+  if (p.blob) p.blob.visible = true;
+}
 // 人物の足元の丸い影（人物は影を落とさない）
 const blobMat = new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.32, depthWrite: false });
 const blobGeo = new THREE.CircleGeometry(0.32, 16).rotateX(-Math.PI / 2);
@@ -205,7 +212,7 @@ function makePeople() {
   player.blob = blob(); player.g.add(player.blob);
   for (const [slot, id] of Object.keys(LOOKS).entries()) {
     const ch = { ...makeChar(scene), slot };
-    ch.g.add(blob());
+    ch.blob = blob(); ch.g.add(ch.blob);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((CONE_RAYS + 2) * 3), 3));
     geo.setIndex(Array.from({ length: CONE_RAYS }, (_, i) => [0, i + 1, i + 2]).flat());
@@ -354,6 +361,14 @@ function wantedKey(p) {
 }
 function updatePerson(p, dt) {
   let moving = false;
+  // ベッドで眠っている人（決行の夜、お嬢様の部屋から始めたときのお嬢様）
+  if (p.sleep) {
+    p.g.visible = p.area === cur.id; p.cone.visible = false; p.seeing = false;
+    if (p.blob) p.blob.visible = false;
+    p.g.position.set(p.x, 0.62, p.z); p.g.rotation.set(-Math.PI / 2, Math.PI, 0, 'YXZ');
+    if (p.g.visible) driveSeen(p, false, dt);
+    return;
+  }
   // ワルツの相手は、ダンスの間 danceTick が動かす
   if (p.dancing) { p.g.visible = p.area === cur.id; p.cone.visible = false; p.seeing = false; return; }
   // 夜だけの人（外を回る巡回員）は、昼は屋敷にいない
@@ -830,6 +845,10 @@ function nightThings() {
   // 絵を抱えたまま梯子は使えない（額縁が手すりに当たり、キャンバスに傷がつく）
   if (cur.id === 'f2' && N.ladderUp) list.push({ name: '梯子', at: at(24, 17.4), label: '梯子で降りる', night: () => N.carry === 'painting' ? say('片手で絵を抱えて梯子を降りれば、額縁が手すりに当たる。……傷ひとつ、つけるわけにはいかない。')
     : travel({ area: 'grounds', x: below[0], z: below[1] + 0.6 }) });
+  if (cur.id === 'f2' && people.daughter.sleep && !N.tucked && !N.morning) list.push({ name: 'お嬢様', at: at(39, 16.4), label: '布団を掛け直す', night: () => {
+    N.tucked = true; s.flags.tucked = true;
+    say('はだけた布団を、そっと肩まで引き上げた。', ['執事', '（……ごめん）']);
+  } });
   if (cur.id === 'f2' && s.flags.hidden_open && !N.taken) list.push({ name: '月下の庭', at: at(8, 3.2), label: '絵を外す', night: takePainting });
   if (cur.id === 'f2' && N.route === 'swap' && N.carry === 'painting' && !N.morning) list.push({ name: 'クローゼット', at: at(41.3, 14), label: '本物を隠す', night: () => {
     N.carry = null;
@@ -877,13 +896,16 @@ function startCarry() {
     Object.assign(areas.f1.nightDoor.box, { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
     areas.f1.nightDoor.g.visible = false;
     carried.ladder.visible = false; wallLadder.visible = false;
-    for (const p of Object.values(people)) { p.nightRole = null; p.area = null; p.route = null; }
+    for (const p of Object.values(people)) { wake(p); p.nightRole = null; p.area = null; p.route = null; }
     // 旦那様は1階の廊下で梱包を見張り、警備員は2階の書斎から木箱を運び出す（裏階段の近くで引き返す）
     Object.assign(people.father, { area: 'f1', x: 24, z: 6, range: 7, wait: 0, look: 0, nightRole: { i: 0, path: [[24, 6, 2.5], [43, 6, 2], [34, 6, 1]] } });
     Object.assign(people.guard2, { area: 'f2', x: 14, z: 9.5, range: 7, wait: 0, look: 0, nightRole: { i: 0, path: [[12, 9.5, 2.5], [42.5, 9.5, 1.5], [30, 9.5, 1]] } });
-    enter('cottage', 2.4, 12.5);
+    const inRoom = !!s.flags.eve_go_daughter;
+    if (inRoom) enter('f2', 37.6, 15.6); else enter('cottage', 2.4, 12.5);
     st.busy = false;
-    say('12月25日、朝7時。正門に、オークション会社のトラックが着いた。',
+    say(inRoom && 'お嬢様の部屋で目を覚ました。隣の枕は、もう冷たい。お嬢様は朝食に下りたらしい。',
+      inRoom && ['執事', '（……クローゼットは、すぐそこだ）'],
+      '12月25日、朝7時。正門に、オークション会社のトラックが着いた。',
       '旦那様は1階の廊下で梱包を見張り、警備員が2階の書斎から木箱を運び出している。',
       s.flags.caterer_friend ? '（運び屋が発つのは10時。それまでに、お嬢様の部屋のクローゼットから本物を取り出し、勝手口の外に停まった仕出し屋のバンまで運ぶ）'
         : '（運び屋が発つのは10時。それまでに、お嬢様の部屋のクローゼットから本物を取り出し、この部屋まで運ぶ）');
@@ -1348,7 +1370,7 @@ function tick(now) {
   for (const p of Object.values(people)) {
     if (p.area !== cur.id) continue;
     const alert = p.seeing && (inPrivate || night) && !isAlly(s, p.id);
-    labels.push({ x: p.x, y: 2.1, z: p.z, text: alert ? '！' : p.name, cls: alert ? 'alert' : 'name' });
+    labels.push({ x: p.x, y: p.sleep ? 0.9 : 2.1, z: p.z, text: alert ? '！' : p.name, cls: alert ? 'alert' : 'name' });
   }
   for (const t of choreThings()) { const [x, z] = t.at(); labels.push({ x, y: 0.6, z, text: `仕事：${t.name}`, cls: 'work' }); }
   if (ball) ballLabels(labels);
@@ -1377,7 +1399,7 @@ function prepare(state, h) {
   dressPlayer(false);
   if (portrait && portrait.releaseAlt) portrait.releaseAlt();
   if (!portrait && !TEST) import('./portrait.js').then(m => { portrait = m; }).catch(() => {});
-  for (const p of Object.values(people)) { p.key = undefined; p.route = null; p.nightRole = null; p.range = VIEW_RANGE; }
+  for (const p of Object.values(people)) { wake(p); p.key = undefined; p.route = null; p.nightRole = null; p.range = VIEW_RANGE; }
   syncSecret();
   syncDeco();
   syncUnder();
@@ -1451,12 +1473,17 @@ export function startNight(state, route, h) {
   Object.assign(red, { area: 'f1', x: 44.6, z: 4.6, range: 5.5, look: 0, nightRole: { yaw: 0 } });
   red.g.rotation.y = 0;
   // イブの夜にお嬢様・お母様の部屋へ招かれていれば、2階から始められる
-  const eve = s.flags.eve_daughter ? ['f2', 36, 14, 'お嬢様の部屋'] : s.flags.eve_mother ? ['f2', 12, 14, '主寝室'] : null;
+  const eve = s.flags.eve_go_daughter ? ['f2', 37.6, 15.6, 'お嬢様の部屋'] : s.flags.eve_mother ? ['f2', 12, 14, '主寝室'] : null;
   if (eve) enter(eve[0], eve[1], eve[2]); else enter('cottage', 2.4, 12.5);
-  setTimeout(() => caption('潜入', '12月24日　深夜 1:00'), 400);
+  const withD = !!s.flags.eve_go_daughter;
+  if (withD) { st.night.min = 30; sleepInBed(people.daughter); }
+  setTimeout(() => caption('潜入', `12月24日　深夜 ${withD ? '1:30' : '1:00'}`), 400);
   player.g.rotation.set(0, Math.PI / 2, 0);
-  say('12月24日、クリスマス・イブの深夜1時。仮面舞踏会の客も帰り、絵は隠し部屋に戻され、屋敷は寝静まった。',
-    eve && ['執事', `（${eve[3]}の寝息を確かめ、そっとベッドを抜け出した。ここは2階だ。書斎は近い）`],
+  say(withD ? '12月24日、クリスマス・イブの深夜1時半。仮面舞踏会の客も帰り、絵は隠し部屋に戻され、屋敷は寝静まった。'
+      : '12月24日、クリスマス・イブの深夜1時。仮面舞踏会の客も帰り、絵は隠し部屋に戻され、屋敷は寝静まった。',
+    withD && '隣で、お嬢様が小さな寝息を立てている。',
+    withD && ['お嬢様', '「（寝言）……執事さん……」'],
+    eve && ['執事', withD ? '（起こさないように、そっとベッドを抜け出した。ここは2階だ。書斎は近い）' : `（${eve[3]}の寝息を確かめ、そっとベッドを抜け出した。ここは2階だ。書斎は近い）`],
     s.flags.white_ally ? ['執事', '（白は約束どおり、警報の系統を落としてくれたはずだ）'] : ['執事', '（警報はまだ生きている。絵に触れれば鳴るだろう……）'],
     s.flags.guard_info ? ['執事', '（2階の廊下には巡回員。雫の話では、西の端で立ち止まって窓の外を眺める。その隙に背後を抜ける）']
       : ['執事', '（2階の廊下には、警備会社の巡回員がいるはずだ。懐中電灯の光に気をつけろ）'],
@@ -1760,6 +1787,15 @@ function endDance() {
   if (D.id === 'shizuku') Object.assign(D.p, { area: 'f1', x: 20.5, z: 8, wait: 0, nightRole: { i: 0, path: [[20.5, 8, 2], [24, 6, 1.5], [27.6, 8.6, 2], [24, 11.4, 1.5]] } });
   afterMsg = () => {
     if (D.id === 'shizuku') { music.play('ball'); travel({ area: 'f1', x: 24, z: 13.6 }); }
+    // お嬢様と踊ったら、このあと部屋に来てと誘われる（行く：決行はお嬢様の部屋から／行かない：バルコニーの鍵を開けておいてくれる）
+    if (D.id === 'daughter') {
+      afterMsg = () => hooks.askChoice('お嬢様の部屋へ行く？', [{ t: '行く', id: 'go', run: () => '' }, { t: '行かない', id: 'no', run: () => '' }], (msg, o) => {
+        if (o.id === 'go') { setFlag(s, 'eve_go_daughter'); return say(...BALL.inviteGo); }
+        setFlag(s, 'eve_balcony'); setFlag(s, 'balcony_open');
+        say(...BALL.inviteNo);
+      });
+      say(...BALL.daughterInvite(s));
+    }
   };
   say(`（ワルツの出来：${Math.round(ratio * 100)}点）`, ...BALL.danceResult(s, D.id, tier));
 }

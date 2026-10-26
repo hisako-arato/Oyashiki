@@ -33,9 +33,6 @@ function applyRel(s, rel) {
     if (lv !== 'normal') setFlag(s, `${pre}_secret`);
     if (lv === 'deep') { setFlag(s, `${pre}_close`); setFlag(s, `eve_${who}`); }
   }
-  // 鉢合わせ（母娘に互いの関係を知られた）：二人とも深い仲のときだけ
-  delete s.flags.family_rift;
-  if (rel.rift && rel.daughter === 'deep' && rel.mother === 'deep') setFlag(s, 'family_rift');
 }
 
 export function testState(presetId, when, rel = {}) {
