@@ -83,6 +83,26 @@ export const PROFILES = [
   { id: 'guard', name: '巡回員', shown: s => !!s.flags.guard_known,
     text: 'イブの夜だけ、旦那様が警備会社から呼んだ巡回員。2階の廊下を見回る。',
     notes: [[s => s.flags.guard_info, '廊下の西の端（物置の前）で、必ず立ち止まって窓の外を眺める。']] },
+  { id: 'reiko', name: '麗子', age: '30代', shown: s => !!(s.flags.p_lover || s.flags.ball_seen),
+    text: '旦那様の愛人。11月3日が誕生日で、旦那様は毎年花を贈っている。',
+    notes: [
+      [s => s.flags.n_codehint, '旦那様の金庫も鍵も、番号は全部この人の誕生日。'],
+      [s => s.flags.ball_seen, 'イブの仮面舞踏会に、深紅の仮面で現れた。若い男を連れていた。'],
+      [s => s.flags.ball_seen && s.flags.m_secret, '連れの若い男は、お母様が時計を贈っていた相手だった。'],
+    ] },
+  { id: 'dealer', name: 'オークション会社の担当者', age: '40代', shown: s => !!(s.flags.dealer_seen || s.flags.g_dealer || s.flags.b_letter),
+    text: '眼鏡の男。海外のオークション会社で、旦那様の「出品」を任されている。',
+    notes: [
+      [s => s.flags.b_letter, '盗品の来歴を整えて売る手はずを、旦那様と手紙でやり取りしている。'],
+      [s => s.flags.dealer_seen, '赤メイドによれば、夜中に勝手口から額縁の荷物を持ってくる車の人と同じ顔。'],
+      [s => s.flags.shizuku_courier, '12月25日の朝、運び屋と一緒に絵を引き取りに来る。'],
+    ] },
+  { id: 'caterer', name: '仕出し屋', age: '20代', shown: s => !!s.flags.caterer_friend,
+    text: 'イブの仮面舞踏会の料理を任された仕出し屋で働く青年。雫の昔の知り合い。',
+    notes: [
+      [() => true, '料理を運ぶ白いバンで、外から来て外へ帰る。'],
+      [s => s.flags.caterer_met, '「裏の白いバン、片付けが済むまで停めておきます。……何か運ぶ物があれば」'],
+    ] },
 ];
 
 const val = (v, s) => typeof v === 'function' ? v(s) : v;
@@ -101,7 +121,7 @@ export const STORY = [
   { from: s => s.chapter >= 2, title: '第3章　12月前半　月下の庭',
     text: s => (s.flags.shizuku_reunion
       ? '新しく来た黒メイドは、妹の雫だった。人前では他人のふりをしながら、二人で絵を取り戻すと誓い合う。'
-      : '新しいメイドが一人やって来た。') + 'そして書斎の電話から漏れた声――絵はイブのパーティーの翌朝、梱包されて運び出される。' },
+      : '新しいメイドが一人やって来た。') + 'そして書斎の電話から漏れた声――絵はイブの仮面舞踏会で大広間に飾られ、その翌朝、梱包されて運び出される。' },
   { from: s => s.flags.b_found, title: '地下の秘密',
     text: s => '資料室の床下には、古いワイン貯蔵庫があった。' + (s.flags.b_vault
       ? 'その奥の保管庫には、布を掛けた名画が十数枚。お父様は「月下の庭」だけでなく、裏のルートで盗品を買い集めていた。25日の朝、それらはまとめて海の向こうへ運び出される。'

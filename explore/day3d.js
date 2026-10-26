@@ -10,9 +10,12 @@ import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan,
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
+import * as BALL from '../js/ball.js';
+import { maskVRM, unmaskVRM, liftMask, updateMasks, styleOf } from './masks.js';
 
 const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か（昼）
 const NIGHT_SEC_PER_HOUR = 75; // 決行の夜
+const BALL_SEC_PER_HOUR = 40;  // 仮面舞踏会（19:00〜0:30）
 const ACT_MIN = 20;          // 調べる・話すにかかる時間（分）
 const WALK_SPEED = 5.2;      // 歩く速さ（m/秒）
 const NPC_SPEED = 2.2;       // 人物が部屋を移るときの速さ
@@ -27,7 +30,7 @@ const $ = id => document.getElementById(id);
 const root = $('day3d');
 
 // ---- 状態（その日だけ） ----
-// mode：morning（朝礼前）／day（仕事中）／night（決行の夜）
+// mode：morning（朝礼前）／day（仕事中）／ball（イブの仮面舞踏会）／night（決行の夜）
 const st = { busy: false, lastKey: null, shelfAnim: 0, mode: 'day', tut: null, night: null };
 const player = { ...makeChar(scene), x: 0, z: 0, r: 0.3 };
 const lantern = new THREE.PointLight('#ffcf8a', 0, 9, 1.6);
@@ -73,7 +76,7 @@ function nextMsg() {
   const face = who ? faceOf(said, override, who === 'black' && /お兄ちゃん/.test(said) ? 'shizuku' : who) : 'neutral';
   setFace(who, face);
   // 話し手の顔：胸から上の VRM。読み込み終わるまでは、同じ VRM から作った顔アイコンを出しておく
-  const faceId = Array.isArray(l) && l[0] === '雫' && s.counters.night_black ? 'black2' : who === 'butler' && st.mode === 'night' ? 'butler2' : who;
+  const faceId = Array.isArray(l) && l[0] === '雫' && s.counters.night_black ? 'black2' : who === 'butler' && st.mode === 'night' ? 'butler2' : who === 'daughter' && st.mode === 'ball' ? 'daughter3' : who;
   msgEl.classList.toggle('with-face', !!who);
   if (who) {
     const icon = document.createElement('img');
@@ -116,10 +119,11 @@ function enter(id, x, z) {
   if (info.outdoor) g.group.position.set(0, 0, 0);
   else g.group.position.set(-info.origin.x, -0.03 - info.below, -info.origin.z);
   for (const b of g.blocks) b.g.visible = info.outdoor || b.name !== info.hide;
-  const night = st.mode === 'night';
-  scene.background = info.underground ? UNDER_SKY : night ? NIGHT_SKY : SKY;
-  hemi.intensity = info.underground ? 0.12 : night ? (info.outdoor ? 0.35 : 0.25) : info.outdoor ? 1.4 : 1.0;
-  sun.intensity = info.underground ? 0.05 : night ? 0.45 : info.outdoor ? 2.4 : 1.2;
+  const night = st.mode === 'night', ball = st.mode === 'ball';
+  scene.background = info.underground ? UNDER_SKY : night || ball ? NIGHT_SKY : SKY;
+  // 舞踏会の夜は、外は暗く、屋敷の中はシャンデリアで明るい
+  hemi.intensity = info.underground ? 0.12 : night ? (info.outdoor ? 0.35 : 0.25) : ball ? (info.outdoor ? 0.35 : 0.95) : info.outdoor ? 1.4 : 1.0;
+  sun.intensity = info.underground ? 0.05 : night ? 0.45 : ball ? (info.outdoor ? 0.4 : 0.7) : info.outdoor ? 2.4 : 1.2;
   lantern.intensity = night || info.underground ? 7 : 0;
   camTarget.set(x, 0, z);
   zoomBase = info.outdoor ? 0.6 : 1;
@@ -344,7 +348,7 @@ function updatePerson(p, dt) {
   let moving = false;
   // 夜だけの人（外を回る巡回員）は、昼は屋敷にいない
   if ((LOOKS[p.id].nightOnly && st.mode !== 'night') || (LOOKS[p.id].ballOnly && st.mode !== 'ball')) { p.area = null; p.g.visible = false; p.cone.visible = false; p.seeing = false; return; }
-  if (st.mode === 'night') moving = nightPerson(p, dt);
+  if (st.mode === 'night' || st.mode === 'ball') moving = nightPerson(p, dt);
   else if (st.tut && p.id === 'blue') moving = tutorGuide(p, dt);
   else {
     const key = wantedKey(p);
@@ -356,6 +360,8 @@ function updatePerson(p, dt) {
   if (!here) { p.seeing = false; return; }
   p.g.position.set(p.x, 0, p.z);
   driveSeen(p, moving && !st.busy, dt);
+  // 舞踏会では、誰に見られても怪しまれない（視線の扇は出さない）
+  if (st.mode === 'ball') { p.cone.visible = false; p.seeing = false; return; }
   sight(p);
 }
 // 今こちらを見ている人（協力者は数えない）
@@ -469,6 +475,7 @@ function findTarget() {
   for (const t of choreThings()) consider(t);
   for (const t of cottageThings()) consider(t, 0.8);
   for (const t of nightThings()) consider(t, 0.8);   // 夜だけの操作を、同じ場所の昼の調べものや出入口より優先する
+  for (const t of ballThings()) consider(t, 0.6);
   if (st.mode !== 'night') for (const p of Object.values(people)) if (p.area === cur.id && !guiding(p)) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p });
   return best;
 }
@@ -480,6 +487,7 @@ function act() {
   const t = target;
   if (t.night) return t.night();
   if (st.mode === 'night') return nightAct(t);
+  if (st.mode === 'ball') return ballAct(t);
   if (t.meeting) return startMeeting();
   if (t.rest) { if (confirm(endAsk('今日の業務を終えて休みますか？'))) finish(); return; }
   // 地下から上がるとき・古井戸から降りるとき
@@ -1125,7 +1133,11 @@ function tutorTargets() {
 function drawHud(room) {
   const t = s.today;
   let clock, text;
-  if (st.mode === 'night') {
+  if (st.mode === 'ball') {
+    const m = Math.floor(st.ball.min), h = BALL.BALL_START + Math.floor(m / 60);
+    clock = `12月24日 イブ　仮面舞踏会　${h % 24}:${String(m % 60).padStart(2, '0')}`;
+    text = ballGoal();
+  } else if (st.mode === 'night') {
     const m = Math.floor(st.night.min), h = (st.night.morning ? 7 : 1) + Math.floor(m / 60);
     clock = st.night.morning ? `12月25日　朝 ${h}:${String(m % 60).padStart(2, '0')}` : `12月24日 イブ　深夜 ${h}:${String(m % 60).padStart(2, '0')}`;
     text = '目的：' + nightGoal();
@@ -1175,7 +1187,7 @@ function tick(now) {
   const rawDt = Math.min(0.5, (now - last) / 1000 || 0);   // 実時間（描画が重い端末でも、秒数を守る）
   const dt = Math.min(0.05, rawDt);
   last = now;
-  const night = st.mode === 'night';
+  const night = st.mode === 'night', ball = st.mode === 'ball';
 
   // 時間が進む（メッセージや操作待ちの間は止まる）
   if (st.mode === 'day' && !st.busy && !document.querySelector('.modal-back')) {
@@ -1221,6 +1233,7 @@ function tick(now) {
   }
   if (st.lying) { player.g.position.set(player.x, 0.62, player.z); player.g.rotation.set(-Math.PI / 2, 0, 0); }
   else { player.g.position.set(player.x, 0, player.z); animate(player, moving, dt); }
+  if (carried.tray) carried.tray.visible = ball && !!st.ball.tray;
   if (night) {
     carried.ladder.visible = st.night.carry === 'ladder';
     carried.painting.visible = st.night.carry === 'painting';
@@ -1230,7 +1243,7 @@ function tick(now) {
   // 今いる部屋
   const room = roomAt(player.x, player.z);
   const key = room && room.key || null;
-  if (!night) {
+  if (!night && !ball) {
     s.today.loc = key || 'elsewhere';
     if (key !== st.lastKey) {
       const owner = OWNERS[key];
@@ -1243,9 +1256,11 @@ function tick(now) {
   for (const p of Object.values(people)) updatePerson(p, dt);
   bobMarkers(dt);
   st.placeNow = false;
-  const inPrivate = !night && !!(room && room.private) && !choreHere(key);
+  const inPrivate = !night && !ball && !!(room && room.private) && !choreHere(key);
   for (const p of Object.values(people)) p.coneMat.color.set(isAlly(s, p.id) ? '#8ad0a0' : (night || inPrivate) && p.seeing ? '#ff5a4a' : night ? '#fff2b0' : '#ffe08a');
+  updateMasks(dt);
   if (night) nightTick(dt);
+  else if (ball) ballTick(dt);
   else {
     if (!st.busy && watchers().length && inPrivate) {
       s.susp = clamp(s.susp + 8 * dt);
@@ -1284,6 +1299,7 @@ function tick(now) {
     labels.push({ x: p.x, y: 2.1, z: p.z, text: alert ? '！' : p.name, cls: alert ? 'alert' : 'name' });
   }
   for (const t of choreThings()) { const [x, z] = t.at(); labels.push({ x, y: 0.6, z, text: `仕事：${t.name}`, cls: 'work' }); }
+  if (ball) ballLabels(labels);
   for (const t of tutorTargets()) { const [x, z] = t.at(); labels.push({ x, y: 0.6, z, text: 'ここ', cls: 'work' }); }
   if (target) {
     const [x, z] = target.at();
@@ -1391,6 +1407,222 @@ export function startNight(state, route, h) {
       : ['執事', '（2階の廊下には、警備会社の巡回員がいるはずだ。懐中電灯の光に気をつけろ）'],
     ['執事', '（夜明けまでに、終わらせる）']);
   run();
+}
+
+// ============================================================
+// イブの仮面舞踏会（12月24日 19:00〜0:30）。大広間に客が集まり、執事は料理を運ぶ
+// ============================================================
+const WAGON = [36, 5.3];                // キッチンのワゴン（料理を受け取る）
+// 一般客の立つ所 [x, z, 向き]（大広間と玄関ホール。柱・大階段・ツリーを避ける）
+const GUEST_SPOTS = [[20.7, 6.6, 1.2], [22.5, 6.2, -2.4], [26.3, 6.4, 2.6], [27.7, 7.9, -1.6], [25.7, 10.9, 3.0], [23.0, 11.0, 0.4],
+  [20.4, 11.3, 2.2], [27.9, 11.2, -2.8], [21.0, 14.7, 1.0], [24.4, 15.3, 3.1], [27.1, 14.4, -1.0], [19.9, 16.5, 0.8]];
+let ballGroup = null, ballGuests = [], ballMasters = [];
+function setupBallProps() {
+  if (!carried.tray) {
+    carried.tray = new THREE.Group(); player.g.add(carried.tray);
+    box(carried.tray, 0.5, 0.03, 0.36, M.metal, 0.05, 1.05, 0.38);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), M.metal);
+    dome.position.set(0.05, 1.08, 0.38); carried.tray.add(dome);
+  }
+  if (!ballGroup) {
+    ballGroup = new THREE.Group(); areas.f1.group.add(ballGroup);
+    // 大広間の北の壁（大階段の東）に飾る「月下の庭」と、照らすスポットライト
+    box(ballGroup, 1.75, 1.3, 0.05, M.gold, 28, 1.25, 0.1);
+    box(ballGroup, 1.5, 1.05, 0.06, mat('#ffffff', { map: TEX.painting }), 28, 1.37, 0.14);
+    const spot = new THREE.PointLight('#ffe7b0', 14, 4, 1.6); spot.position.set(28, 2.9, 1.2); spot.userData.keepNight = true; ballGroup.add(spot);
+    // 料理のワゴン（キッチン）
+    box(ballGroup, 1.1, 0.8, 0.6, M.metal, WAGON[0], 0, WAGON[1] - 0.45);
+    for (const dx of [-0.3, 0, 0.3]) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), M.metal); d.position.set(WAGON[0] + dx, 0.8, WAGON[1] - 0.45); ballGroup.add(d); }
+    ballGroup.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  }
+  ballGroup.visible = true;
+}
+// 舞踏会の人の立ち位置（nightPerson で動かす：path は巡回、yaw はその場で辺りを見る）
+function placeBallCast() {
+  const at = (id, x, z, role) => Object.assign(people[id], { area: 'f1', x, z, wait: 0, look: Math.random() * 3, nightRole: { i: 0, ...role } });
+  at('father', 27.2, 2.3, { yaw: 0.2 });
+  at('dealer', 29.1, 3.2, { yaw: -0.7 });
+  at('mother', 22.4, 9.7, { yaw: 0.5 });
+  at('daughter', 25.4, 9.3, { yaw: -0.3 });
+  at('caterer', 38.6, 2.0, { yaw: 0 });
+  at('red', 34.2, 1.7, { yaw: 0 });
+  at('guard', 24, 16.9, { yaw: Math.PI });
+  if (s.flags.white_arrived) at('white', 35, 9, { path: [[35, 9], [31, 10], [27, 10.5, 2], [21.5, 10.5, 2], [27, 10.5], [31, 10]] });
+  at('blue', 35, 5.5, { path: [[35, 5.5], [35, 9], [31, 10], [28, 10, 2], [24, 11.5, 2], [28, 10], [31, 10], [35, 9]] });
+  if (s.flags.shizuku) at('black', 20.5, 8, { path: [[20.5, 8, 2], [24, 6, 1.5], [27.6, 8.6, 2], [24, 11.4, 1.5]] });
+  // 麗子は 21時に玄関から入ってくる
+  Object.assign(people.reiko, { area: null, nightRole: null });
+}
+// 舞踏会の衣装：お嬢様はドレス（daughter3）。家族と客は仮面を付ける（使用人は付けない）
+async function dressBall() {
+  if (TEST) return;
+  if (castLoading) await castLoading;
+  const V = await import('./vrm.js');
+  const d = people.daughter;
+  if (d.vrm && !st.ball.daughterBase) {
+    st.ball.daughterBase = d.vrm;
+    V.attachVRM(d, await V.loadVRM('daughter3'));
+  }
+  for (const id of ['father', 'mother', 'daughter', 'reiko', 'dealer']) if (people[id].vrm) maskVRM(people[id].vrm, styleOf(id));
+  // 一般客：4体の型を複製して並べる
+  const G = await import('./guests.js');
+  ballMasters = await Promise.all(G.GUEST_IDS.map(id => G.loadGuest(id)));
+  if (st.mode !== 'ball') return;
+  // 立ち位置だけの客に、見た目（複製した VRM と仮面）を入れる
+  ballGuests.forEach((slot, i) => {
+    const gu = G.makeGuest(ballMasters[i % ballMasters.length], i);
+    gu.g.position.set(slot.x, 0, slot.z); gu.g.rotation.y = slot.yaw;
+    gu.wearMask();
+    ballGroup.add(gu.g);
+    Object.assign(slot, { g: gu.g, update: gu.update, unmask: gu.unmask, dispose: gu.dispose });
+  });
+}
+// 客の立ち位置（見た目は dressBall で入れる。?test では見た目なしで動く）
+const guestSlots = () => GUEST_SPOTS.map(([x, z, yaw], i) => ({ x, z, yaw, i, g: null, update() {}, unmask() {}, dispose() {} }));
+export function startBall(state, h) {
+  prepare(state, h);
+  st.mode = 'ball';
+  st.ball = { min: 0, done: {}, tray: false, reqs: [], next: 6, daughterBase: null };
+  s.flags.ball_seen = true;
+  s.ballStats = { served: 0, missed: 0 };
+  setLights(false);
+  setupNightProps();
+  setupBallProps();
+  refreshMarkers();
+  placeBallCast();
+  ballGuests = guestSlots();
+  enter('f1', 24, 13.6);
+  player.g.rotation.set(0, Math.PI, 0);
+  dressBall().catch(e => console.warn('ball', e));
+  st.ball.done.open = true;
+  afterMsg = () => { st.ball.phase = 'serve'; };
+  say(...BALL.openingLines(s));
+  run();
+}
+const ballMin = () => st.ball.min;
+// 時刻ごとの出来事（会話の間は時間が止まる）
+function ballTick(dt) {
+  const B = st.ball;
+  if (!st.busy && !document.querySelector('.modal-back')) B.min += dt * 60 / BALL_SEC_PER_HOUR;
+  // 客の顔を動かす（画面に入っている客だけ、2フレームに1回）
+  if (cur.id === 'f1' && frameNo % 2 === 0) for (const gu of ballGuests) {
+    bodySphere.center.set(gu.x, 0.9, gu.z);
+    const seen = frustum.intersectsSphere(bodySphere);
+    if (gu.g) gu.g.visible = seen;
+    if (seen) gu.update(dt * 2);
+  }
+  if (st.busy) return;
+  const at = t => B.min >= t, once = k => !B.done[k] && (B.done[k] = true);
+  const serving = (at(BALL.AT.serve) && !at(BALL.AT.dance)) || (at(BALL.AT.serve2) && !at(BALL.AT.lastCall));
+  // 料理を待つ客：「！」を出し、待たせすぎると帰ってしまう（実時間で数える）
+  if (serving) {
+    B.next -= dt;
+    if (B.next <= 0 && B.reqs.length < 2 && ballGuests.length) {
+      const free = ballGuests.filter(g => !B.reqs.some(r => r.g === g));
+      const g = free[Math.floor(Math.random() * free.length)];
+      if (g) B.reqs.push({ g, left: 32 });
+      B.next = 7 + Math.random() * 5;
+    }
+  }
+  for (const r of [...B.reqs]) {
+    r.left -= dt;
+    if (r.left <= 0) { B.reqs.splice(B.reqs.indexOf(r), 1); s.ballStats.missed++; hooks.toast('料理を待っていた客が、不満そうに席を離れた（旦那様の目が光る）'); }
+  }
+  if (at(BALL.AT.reiko) && once('reiko')) {
+    Object.assign(people.reiko, { area: 'f1', x: 24, z: 17, wait: 0, look: 0, nightRole: { i: 0, path: [[24, 13], [26.2, 4.2, 9999]] } });
+    if (people.reiko.vrm) maskVRM(people.reiko.vrm, styleOf('reiko'));
+    if (cur.id !== 'f1') travel({ area: 'f1', x: 24, z: 13.6 });
+    return say(...BALL.reikoLines(s));
+  }
+  if (at(BALL.AT.dance) && once('dance')) {
+    B.reqs = []; B.tray = false;
+    return hooks.askChoice('22時。楽団がワルツを奏で始めた。……誰と過ごす？', BALL.danceOptions(s).map(o => ({ ...o, run: () => '' })), (msg, o) => {
+      say(...BALL.danceLines(s, o.id));
+    });
+  }
+  if (at(BALL.AT.unmask) && once('unmask')) {
+    B.reqs = []; B.tray = false;
+    if (cur.id !== 'f1') travel({ area: 'f1', x: 24, z: 13.6 });
+    // 鐘に合わせて、仮面を右手へ下ろす（少しずつずらす）
+    let k = 0;
+    for (const id of ['father', 'mother', 'daughter', 'reiko', 'dealer']) {
+      const v = people[id].vrm; if (!v || !v.mask) continue;
+      setTimeout(() => liftMask(v.mask, v.humanoid.getRawBoneNode('rightHand')), 300 + 180 * k++);
+    }
+    ballGuests.forEach((g, i) => setTimeout(() => g.unmask(), 200 + i * 120));
+    afterMsg = () => { B.min = BALL.AT.close; };
+    return say(...BALL.unmaskLines(s));
+  }
+  if (at(BALL.AT.close) && once('close')) {
+    afterMsg = endBall;
+    return say(...BALL.closeLines(s));
+  }
+}
+function ballThings() {
+  if (st.mode !== 'ball' || cur.id !== 'f1') return [];
+  const B = st.ball, list = [];
+  list.push({ name: '料理のワゴン', at: () => WAGON, label: B.tray ? '料理を持っている' : '料理を受け取る', night: () => {
+    if (B.tray) return say('もう料理を持っている。「！」の客へ運ぼう。');
+    if (!B.reqs.length) return say('今は、料理を待っている客はいないようだ。');
+    B.tray = true;
+    say(['仕出し屋', '「はい、上がりました！ 熱いうちにどうぞ」']);
+  } });
+  for (const r of B.reqs) list.push({ name: '客', at: () => [r.g.x, r.g.z], label: B.tray ? '料理を出す' : '料理を待っている', night: () => {
+    if (!B.tray) return say('客「……料理はまだかね？」', '（キッチンのワゴンで、料理を受け取ってこよう）');
+    B.tray = false;
+    B.reqs.splice(B.reqs.indexOf(r), 1);
+    s.ballStats.served++;
+    // 運んだ先で、まだ聞いていない話が一つ聞こえる
+    const g = BALL.GOSSIP.find(x => !s.flags[x.id]);
+    if (g) { s.flags[g.id] = true; return say(g.line); }
+    say(BALL.SERVE_THANKS[s.ballStats.served % BALL.SERVE_THANKS.length]);
+  } });
+  list.push({ name: '月下の庭', at: () => [28, 1.0], label: '絵を見る', night: () => say('壁に飾られた「月下の庭」。月明かりの下、白い花が咲く庭。……母が一番好きだった絵だ。', '（今夜は、客と旦那様の目がある。……手は出せない）') });
+  return list;
+}
+function ballAct(t) {
+  if (t.night) return t.night();
+  if (t.person) return say(...BALL.ballTalk(s, t.person.id, ballMin()));
+  if (t.exit) {
+    if (!['f1', 'f2'].includes(t.exit.area)) return say('今は舞踏会の最中だ。屋敷を離れるわけにはいかない。');
+    return travel(t.exit);
+  }
+  say('今は舞踏会の最中だ。');
+}
+function ballLabels(labels) {
+  if (cur.id !== 'f1') return;
+  for (const r of st.ball.reqs) labels.push({ x: r.g.x, y: 2.2, z: r.g.z, text: '！料理', cls: 'alert' });
+  if (st.ball.reqs.length && !st.ball.tray) labels.push({ x: WAGON[0], y: 1.2, z: WAGON[1], text: 'ワゴン', cls: 'work' });
+}
+function ballGoal() {
+  const B = st.ball, m = B.min, st2 = s.ballStats;
+  const score = `（運んだ料理 ${st2.served}皿${st2.missed ? `・待たせた客 ${st2.missed}人` : ''}）`;
+  if (m < BALL.AT.serve) return '開宴。旦那様の乾杯を見届けよう';
+  if (m >= BALL.AT.lastCall) return '0時の鐘を待つ';
+  if (m >= BALL.AT.dance && m < BALL.AT.serve2) return 'ワルツの時間';
+  return `${B.tray ? '料理を「！」の客へ運ぶ' : B.reqs.length ? 'キッチンのワゴンで料理を受け取る' : '客の様子を見て回る（話しかけてもよい）'}${score}`;
+}
+// 閉宴：仮面と客を片付け、お嬢様の服を戻し、舞踏会だけの VRM を手放してから本編へ戻す
+async function endBall() {
+  running = false;
+  root.classList.add('hidden');
+  const B = st.ball;
+  for (const id of ['father', 'mother', 'daughter', 'reiko', 'dealer']) if (people[id].vrm) unmaskVRM(people[id].vrm);
+  for (const g of ballGuests) g.dispose();
+  ballGuests = [];
+  if (ballGroup) ballGroup.visible = false;
+  if (carried.tray) carried.tray.visible = false;
+  if (!TEST) {
+    const V = await import('./vrm.js');
+    if (B.daughterBase) { unmaskVRM(people.daughter.vrm); V.attachVRM(people.daughter, B.daughterBase); }
+    for (const id of ['reiko', 'dealer', 'caterer']) { const p = people[id]; if (p.vrm) { p.g.remove(p.vrm.scene); p.vrm = null; p.drive = null; } V.disposeVRM(id, 'lite'); }
+    V.disposeVRM('daughter3', 'lite');
+    for (const id of ['guest_m1', 'guest_m2', 'guest_f1', 'guest_f2']) V.disposeVRM(id, 'guest');
+    ballMasters = [];
+  }
+  const d = BALL.settleBall(s);
+  st.mode = 'day';
+  hooks.done(d);
 }
 
 // 調べられる小物（ストーリーに関係のない物）の数

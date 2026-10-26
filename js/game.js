@@ -16,6 +16,7 @@ import { VERSION, VERSION_DATE } from './version.js';
 import { KINDS, countOf, savedCount, saveKind, keepStorage } from './vrmstore.js';
 import * as music from './music.js';
 import { PRESETS, WHEN, testState } from './evetest.js';
+import { ball2D, settleBall } from './ball.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -47,6 +48,7 @@ function outfitOf(who) {
   const heist = s.phase === 'execution' || (s.phase === 'ending' && HEIST_ENDS.includes(s.endingId));
   if (who === 'butler' && heist) return 'butler2';
   if ((who === 'mother' || who === 'daughter') && s.phase === 'night') return `${who}2`;
+  if (who === 'daughter' && s.phase === 'ball') return 'daughter3';   // 仮面舞踏会のドレス
   if (who === 'shizuku') return s.phase === 'ending' ? 'black3' : s.counters.night_black ? 'black2' : 'black';
   return who;
 }
@@ -834,7 +836,25 @@ function endDay() {
     el('p', { class: 'hint' }, richNodes(fxNote(notes))),
     (t.traceNotes || []).map(n => el('p', { class: 'notice' }, richNodes(n))),
 
-    el('button', { class: 'primary', onclick: () => hasNight(s) ? night() : nextDay() }, '次へ')));
+    // イブの日は、業務の後に仮面舞踏会
+    el('button', { class: 'primary', onclick: () => isEve(s) ? ball() : hasNight(s) ? night() : nextDay() }, '次へ')));
+}
+
+// ---- イブの仮面舞踏会（12月24日 19:00〜0:30）。3Dの屋敷で料理を運び、0時に仮面を外す ----
+function ball() {
+  s.phase = 'ball';
+  music.play('ball');
+  preloadCast(async () => {
+    loadPortrait();
+    app().replaceChildren();
+    if (await load3D()) return day3d.startBall(s, { done: afterBall, toast, askChoice, notebook: openNotebook });
+    playScript(ball2D(s), () => afterBall(settleBall(s)));
+  });
+}
+function afterBall(d) {
+  s.phase = 'day';
+  if (d) toast(`舞踏会の給仕：旦那様の心象 ${d > 0 ? '+' : ''}${d}`);
+  nextDay();
 }
 
 // ---- 夜（22時）：休む／メイドに声をかける／部屋を訪ねる（選べることが無い夜は、画面を出さずに休む） ----
@@ -1131,7 +1151,7 @@ const OUTFITS = {
   butler: [['butler', '執事服'], ['butler2', '決行の夜', s => s.chapter >= 3]],
   black: [['black', 'メイド服'], ['black2', '部屋着', s => s.flags.shizuku_reunion], ['black3', '私服', s => s.flags.shizuku_reunion]],
   mother: [['mother', 'ふだん'], ['mother2', '部屋着', s => s.flags.m_close]],
-  daughter: [['daughter', 'ふだん'], ['daughter2', '部屋着', s => s.flags.d_close]],
+  daughter: [['daughter', 'ふだん'], ['daughter2', '部屋着', s => s.flags.d_close], ['daughter3', 'ドレス', s => s.flags.ball_seen]],
 };
 // 人物照会：VRM を回したりズームしたりして眺める
 // model：表示する VRM（雫は、再会のあとは「部屋着」black2 にも着替えられる）
