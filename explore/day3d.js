@@ -850,6 +850,11 @@ function nightThings() {
     N.tucked = true; s.flags.tucked = true;
     say('はだけた布団を、そっと肩まで引き上げた。', ['執事', '（……ごめん）']);
   } });
+  // 地下の非常口（昼に見つけておく）：重い閂を外して、塀の外の水路へ。時間がかかる
+  if (cur.id === 'basement' && N.route === 'night' && N.carry === 'painting' && s.flags.b_exit) list.push({ name: '水路への鉄の扉', at: at(22, 2.6), label: '閂を外して外へ', night: () => {
+    N.min += 20;
+    escape('tunnel');
+  } });
   if (cur.id === 'f2' && s.flags.hidden_open && !N.taken) list.push({ name: '月下の庭', at: at(8, 3.2), label: '絵を外す', night: takePainting });
   if (cur.id === 'f2' && N.route === 'swap' && N.carry === 'painting' && !N.morning) list.push({ name: 'クローゼット', at: at(41.3, 14), label: '本物を隠す', night: () => {
     N.carry = null;
@@ -942,7 +947,8 @@ function escape(how) {
   N.exit = how;
   caption('脱出', `深夜 ${nightClock()}`);
   afterMsg = () => endNight('night');
-  say('バラ園の奥の木戸の閂を、音を立てずに外した。裏の小道に、人の気配はない。', '腕の中の額縁が、月明かりを受けて鈍く光った。');
+  say(how === 'tunnel' ? '錆びた閂を、少しずつ、音を殺して外す。……20分かかった。鉄の扉を押し開けると、塀の外の水路沿いの小道に出た。屋敷の誰の目にも触れずに。'
+      : 'バラ園の奥の木戸の閂を、音を立てずに外した。裏の小道に、人の気配はない。', '腕の中の額縁が、月明かりを受けて鈍く光った。');
 }
 function nightAct(t) {
   const N = st.night;
@@ -953,7 +959,7 @@ function nightAct(t) {
     // 玄関の扉には、絵とは別の警報が付いている（白井が落としたのは絵の警報だけ）
     if (/玄関/.test(t.name) && !N.morning) return say('玄関の扉には、絵とは別の警報が付いている。白井が落としたのは、絵の警報だけだ。……開ければ鳴る。');
     if (N.carry === 'ladder' && t.exit.area !== 'grounds' && cur.id === 'grounds') return say('梯子を担いだままでは、屋敷の中を通れない。');
-    if (N.carry === 'painting' && (t.exit.area === 'basement' || cur.id === 'basement')) return say('縄梯子と狭い横穴では、額縁が壁に擦れる。……キャンバスに傷がつく。ここは通れない。');
+    if (N.carry === 'painting' && ((cur.id === 'grounds' && t.exit.area === 'basement') || (cur.id === 'basement' && t.exit.area === 'grounds'))) return say('縄梯子と狭い横穴では、額縁が壁に擦れる。……キャンバスに傷がつく。ここは通れない。');
     return travel(t.exit);
   }
   if (t.spot && t.spot[0] === 'kback') {
@@ -968,7 +974,6 @@ function nightAct(t) {
     return say('赤い本を引き、鍵を差し込む。本棚が音もなく開いた。');
   }
   if (t.special === 'notebook') return hooks.notebook();
-  if (t.special === 'hatch' && N.carry === 'painting') return say('縄梯子と狭い横穴では、額縁が壁に擦れる。……キャンバスに傷がつく。ここは通れない。');
   if (t.special === 'hatch') return s.flags.b_key ? travel({ area: 'basement', x: 1.0, z: 4.0 }) : say('床の扉には鍵が掛かっている。');
   if (t.say) return say(...t.say.map(l => typeof l === 'function' ? l(s) : l));
   say('今は調べている場合ではない。');
@@ -978,7 +983,7 @@ function nightGoal() {
   if (N.morning) return N.carry === 'painting' ? (s.flags.caterer_friend ? '本物を、勝手口の外の仕出し屋のバンへ運ぶ（旦那様と警備員に見られないように）' : '本物を、使用人棟の執事の部屋まで運ぶ（旦那様と警備員に見られないように）')
     : 'お嬢様の部屋のクローゼットから、本物を取り出す（運び屋が発つ10時まで）。1階の廊下に旦那様、2階の廊下に木箱を運ぶ警備員';
   if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す'
-    : `絵を抱えて、屋敷の中を1階へ降り、勝手口から庭へ出て、${s.flags.back_gate ? 'バラ園の奥の通用口' : '裏庭のどこかの出口'}から抜け出す（梯子と井戸は絵を傷める。玄関には警報${isAlly(s, 'red') ? '' : '。勝手口の前の赤羽は、1時半ごろに休む'}）`;
+    : `絵を抱えて、屋敷の中を1階へ降り、${[s.flags.back_gate && '勝手口から庭へ出てバラ園の奥の通用口', s.flags.b_exit && s.flags.b_key && '資料室の床の扉から地下へ降りて搬入路の非常口'].filter(Boolean).join('か、') || '勝手口から庭へ出て、裏庭のどこかの出口'}から抜け出す（梯子と井戸は絵を傷める。玄関には警報${isAlly(s, 'red') ? '' : '。勝手口の前の赤羽は、1時半ごろに休む'}）`;
   if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
   if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
   const hall = people.black.sleep ? '大広間は眠れない旦那様が歩き回っている' : '大広間は雫（見逃してくれる）';

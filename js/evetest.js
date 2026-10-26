@@ -8,7 +8,7 @@ const BASE = ['tutorial_done', 'white_arrived', 'white_spy', 'shizuku', 'strict_
 const INFO = ['c_import', 'c_red', 'c_daughter', 'c_study', 'h_window', 'h_blueprint', 'hidden_room', 'hint_redbook', 'red_book',
   'desk_lock', 'p_lover', 'p_bday', 'n_codehint', 'key_hidden', 'found_painting', 'breaker_seen', 'white_elec', 'ladder', 'balcony_open',
   'hall_patrol', 'shizuku_reunion', 'shizuku_diary', 'shizuku_courier', 'guard_known', 'guard_info', 'back_gate', 'caterer_friend', 'eve_display',
-  'b_well', 'b_plan', 'b_hatch', 'b_key', 'b_light', 'b_tool', 'b_found', 'b_vault', 'b_tunnel', 'b_grate'];
+  'b_well', 'b_plan', 'b_hatch', 'b_key', 'b_light', 'b_tool', 'b_found', 'b_vault', 'b_tunnel', 'b_grate', 'b_exit'];
 const FORGERY = ['forgery_start', 'forgery_ready', 'hide_ok'];
 
 export const PRESETS = [

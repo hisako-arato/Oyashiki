@@ -1153,7 +1153,7 @@ function noteTab() {
     ['人のいない時に、書斎から隠し部屋へ入る（12月以降）', f.red_book && f.key_hidden, f.found_painting],
     ['昼のうちに、バルコニーのガラス戸の鍵を外しておく', s.chapter >= 3 && f.ladder, f.balcony_open],
     ['絵の警報をどうにかする方法が要る', f.found_painting, f.white_ally],
-    ['絵を傷めずに運び出せる出口を探す（梯子と井戸は、額縁が擦れる）', f.found_painting, f.back_gate],
+    ['絵を傷めずに運び出せる出口を探す（梯子と井戸は、額縁が擦れる）', f.found_painting, f.back_gate || (f.b_exit && f.b_key)],
     // すり替え（ルート2）
     ['青島に、絵の模写を頼めるかもしれない（好感度60以上で、昼に話しかけるか、夜に共用室で）', f.found_painting, f.forgery_start],
     [forgeryGoal(), f.forgery_start, f.forgery_ready],

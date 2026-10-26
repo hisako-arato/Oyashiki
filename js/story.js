@@ -269,8 +269,9 @@ export const ARRIVAL = [
 export const ROUTES = [
   { id: 'night', name: 'ルート1：一夜で持ち去る',
     desc: '誰にも見つからず、正しい道順で絵を持ち去る。',
-    ok: s => s.flags.found_painting && s.flags.back_gate && !s.flags.swap_hidden,
-    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない', !s.flags.back_gate && '絵を傷めずに運び出せる出口が分からない',
+    // 絵を傷めずに出られる道：裏庭の通用口か、地下の非常口（床の扉の鍵が要る）
+    ok: s => s.flags.found_painting && (s.flags.back_gate || (s.flags.b_exit && s.flags.b_key)) && !s.flags.swap_hidden,
+    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない', !(s.flags.back_gate || (s.flags.b_exit && s.flags.b_key)) && '絵を傷めずに運び出せる出口が分からない（裏庭の通用口／地下の非常口）',
       s.flags.swap_hidden && '隠し部屋に戻されたのは、青島の模写だ'] },
   { id: 'swap', name: 'ルート2：贋作とすり替える',
     desc: 'イブの昼、大広間に飾られた絵を青島の模写とすり替え、本物はお嬢様の部屋に隠してある。25日の朝、運び屋が偽物を梱包している間に、本物を運び出す。',

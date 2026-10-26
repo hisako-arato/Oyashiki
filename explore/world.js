@@ -1011,6 +1011,9 @@ AREAS.basement = {
     const lamp = new THREE.PointLight('#cfe0ff', 1.8, 6, 1.6); lamp.position.set(13, 2.6, 3.5); A.group.add(lamp);
     // 搬入路の先の鉄格子（外すまでは通れない）
     A.grate = { g: F.grate(29.9, 3, 1, 2), box: A.solids[A.solids.length - 1] };
+    // 搬入路の途中の、水路へ出る鉄の扉（旦那様の逃げ道）
+    box(A.group, 1.1, 1.9, 0.08, mat('#5a5048', { metalness: 0.5, roughness: 0.6 }), 22, 0, 2.06);
+    box(A.group, 0.5, 0.08, 0.08, mat('#3a3430'), 22, 1.05, 2.12);
   },
   setup() {
     exit('資料室へ上がる', 1.0, 3.4, { area: 'f1', x: 8.5, z: 5.2 });
@@ -1024,6 +1027,7 @@ AREAS.basement = {
     spot('手紙の束', 11.1, 1.8, 'vault', 'letters');
     spot('発送伝票', 13.6, 3.7, 'vault', 'slip');
     spot('搬入路の鉄格子', 29.2, 3, 'vault', 'grate', { when: s => !s.flags.b_grate });
+    spot('搬入路の鉄の扉', 22, 2.5, 'vault', 'exitdoor');
     exit('古井戸から地上へ', 29.2, 3, { area: 'grounds', x: 8, z: 45 }, { when: s => !!s.flags.b_grate });
   },
 };
