@@ -11,6 +11,7 @@ import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
 import * as BALL from '../js/ball.js';
+import * as music from '../js/music.js';
 import { maskVRM, unmaskVRM, liftMask, updateMasks, styleOf } from './masks.js';
 
 const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か（昼）
@@ -346,6 +347,8 @@ function wantedKey(p) {
 }
 function updatePerson(p, dt) {
   let moving = false;
+  // ワルツの相手は、ダンスの間 danceTick が動かす
+  if (p.dancing) { p.g.visible = p.area === cur.id; p.cone.visible = false; p.seeing = false; return; }
   // 夜だけの人（外を回る巡回員）は、昼は屋敷にいない
   if ((LOOKS[p.id].nightOnly && st.mode !== 'night') || (LOOKS[p.id].ballOnly && st.mode !== 'ball')) { p.area = null; p.g.visible = false; p.cone.visible = false; p.seeing = false; return; }
   if (st.mode === 'night' || st.mode === 'ball') moving = nightPerson(p, dt);
@@ -480,6 +483,7 @@ function findTarget() {
   return best;
 }
 function act() {
+  if (st.dance) return danceTap();
   if (!msgEl.classList.contains('hidden')) return nextMsg();
   // 会話を閉じた直後の連打では、次の会話を始めない（押し続けている間は待ち時間を延ばす）
   if (performance.now() < actLock) { actLock = performance.now() + 500; return; }
@@ -1232,6 +1236,7 @@ function tick(now) {
     player.g.rotation.y = Math.atan2(dx, dz);
   }
   if (st.lying) { player.g.position.set(player.x, 0.62, player.z); player.g.rotation.set(-Math.PI / 2, 0, 0); }
+  else if (st.dance) danceTick(rawDt);
   else { player.g.position.set(player.x, 0, player.z); animate(player, moving, dt); }
   if (carried.tray) carried.tray.visible = ball && !!st.ball.tray;
   if (night) {
@@ -1537,7 +1542,8 @@ function ballTick(dt) {
   if (at(BALL.AT.dance) && once('dance')) {
     B.reqs = []; B.tray = false;
     return hooks.askChoice('22時。楽団がワルツを奏で始めた。……誰と過ごす？', BALL.danceOptions(s).map(o => ({ ...o, run: () => '' })), (msg, o) => {
-      say(...BALL.danceLines(s, o.id));
+      if (o.id !== 'work') afterMsg = () => startDance(o.id);
+      say(...BALL.danceIntro(s, o.id));
     });
   }
   if (at(BALL.AT.unmask) && once('unmask')) {
@@ -1558,6 +1564,68 @@ function ballTick(dt) {
     return say(...BALL.closeLines(s));
   }
 }
+// ---- ワルツ（22時）：二人で回りながら、3拍子の1拍目（輪が重なる瞬間）にタップする ----
+const BEAT = 0.5, MEASURES = 16;   // 1拍 0.5秒、16小節（約24秒）
+const PARTNER = { daughter: 'daughter', shizuku: 'black', blue: 'blue' };
+let VM = null;
+async function startDance(id) {
+  const p = people[PARTNER[id]];
+  const c = id === 'shizuku' ? { area: 'f2', x: 24, z: 16.4 } : { area: 'f1', x: 24, z: 8 };
+  if (!TEST) VM = VM || await import('./vrm.js');
+  if (id === 'shizuku') music.play('shizuku');
+  const back = { area: p.area, x: p.x, z: p.z, nightRole: p.nightRole };
+  enter(c.area, c.x, c.z);
+  Object.assign(p, { area: c.area, dancing: true });
+  const ui = document.createElement('div');
+  ui.className = 'dance3d';
+  ui.innerHTML = '<div class="dance-target"></div><div class="dance-ring"></div><p class="dance-msg">輪が重なった瞬間にタップ（1小節に1回）</p><p class="dance-score"></p>';
+  ui.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); danceTap(); });
+  root.append(ui);
+  st.busy = true;
+  st.dance = { id, p, c, back, t: -2 * BEAT * 3, hits: {}, pts: 0, ui };
+}
+function danceTap() {
+  const D = st.dance;
+  const beat = D.t / BEAT, mi = Math.round(beat / 3), off = Math.abs(beat - mi * 3) * BEAT;
+  if (mi < 1 || mi > MEASURES || D.hits[mi] != null) return;
+  const pt = off <= 0.12 ? 2 : off <= 0.25 ? 1 : 0;
+  D.hits[mi] = pt; D.pts += pt;
+  const msg = D.ui.querySelector('.dance-msg');
+  msg.textContent = pt === 2 ? 'ぴったり！' : pt === 1 ? 'いいね' : 'ずれた……';
+  msg.className = `dance-msg hit${pt}`;
+}
+function danceTick(dt) {
+  const D = st.dance;
+  D.t += dt;
+  const beat = Math.max(0, D.t / BEAT), turn = beat / 12 * Math.PI * 2, r = 0.24;   // 4小節で一回り
+  const me = [D.c.x + Math.cos(turn) * r, D.c.z + Math.sin(turn) * r], you = [D.c.x - Math.cos(turn) * r, D.c.z - Math.sin(turn) * r];
+  player.x = me[0]; player.z = me[1];
+  player.g.position.set(me[0], 0, me[1]); player.g.rotation.y = Math.atan2(you[0] - me[0], you[1] - me[1]);
+  D.p.x = you[0]; D.p.z = you[1];
+  D.p.g.position.set(you[0], 0, you[1]); D.p.g.rotation.y = Math.atan2(me[0] - you[0], me[1] - you[1]);
+  if (VM) {
+    if (player.vrm) VM.driveVRM(player.vrm, false, dt, { dance: { beat, role: 'lead' } });
+    if (D.p.vrm) VM.driveVRM(D.p.vrm, false, dt, { dance: { beat, role: 'follow' } });
+  }
+  // 輪：1小節かけて縮み、1拍目で的に重なる
+  const f = D.t < 0 ? 0 : (beat % 3) / 3;
+  D.ui.querySelector('.dance-ring').style.transform = `translate(-50%, -50%) scale(${1 + (1 - f) * 1.6})`;
+  D.ui.querySelector('.dance-score').textContent = D.t < 0 ? `${Math.ceil(-D.t)}…` : `${Math.min(MEASURES, Math.floor(beat / 3))} / ${MEASURES}小節`;
+  if (beat > MEASURES * 3 + 1.5) endDance();
+}
+function endDance() {
+  const D = st.dance;
+  D.ui.remove();
+  st.dance = null; st.busy = false;
+  const ratio = D.pts / (MEASURES * 2), tier = ratio >= 0.7 ? 'great' : ratio >= 0.4 ? 'ok' : 'poor';
+  s.flags.dance_score = Math.round(ratio * 100);
+  Object.assign(D.p, D.back, { dancing: false });
+  afterMsg = () => {
+    if (D.id === 'shizuku') { music.play('ball'); travel({ area: 'f1', x: 24, z: 13.6 }); }
+  };
+  say(`（ワルツの出来：${Math.round(ratio * 100)}点）`, ...BALL.danceResult(s, D.id, tier));
+}
+
 function ballThings() {
   if (st.mode !== 'ball' || cur.id !== 'f1') return [];
   const B = st.ball, list = [];

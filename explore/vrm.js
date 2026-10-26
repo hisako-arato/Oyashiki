@@ -47,6 +47,7 @@ const smooth = (a, b, k) => a + (b - a) * Math.min(1, k);
 function pose(vrm, walk, amt, t = 0, extra = {}) {
   const s = Math.sin(walk), breath = Math.sin(t * 1.6) * 0.015;
   const bow = extra.bow || 0, wave = extra.wave || 0;
+  if (extra.dance) return waltz(vrm, extra.dance);
   set(vrm, 'spine', bow * 0.35 + breath);
   set(vrm, 'chest', bow * 0.25 - breath * 0.5);
   set(vrm, 'neck', bow * 0.15);
@@ -69,6 +70,29 @@ function pose(vrm, walk, amt, t = 0, extra = {}) {
   }
 }
 
+// ワルツの姿勢（dance.beat：拍の位置、dance.role：lead 執事／follow 相手）
+// lead は左手で相手の右手を取り、右手を相手の背中へ。follow は右手を預け、左手を相手の肩に置く
+// 左腕は y がマイナスで前へ、右腕は y がプラスで前へ（z で上げ下げ）
+function waltz(vrm, d) {
+  const sway = Math.sin(d.beat / 3 * Math.PI * 2);        // 1小節で揺れが一巡
+  const down = d.beat % 3 < 1 ? 1 - (d.beat % 3) : 0;       // 1拍目で沈み、2・3拍目で伸び上がる
+  const step = Math.sin(d.beat * Math.PI);                  // 拍ごとに出す脚が替わる（ボックスステップ）
+  const lead = d.role === 'lead';
+  set(vrm, 'spine', 0.03 + down * 0.05, 0, sway * 0.08);
+  set(vrm, 'chest', -0.04, 0, sway * 0.04);
+  set(vrm, 'neck', 0, lead ? 0.2 : -0.2, 0);
+  set(vrm, 'head', -0.06, lead ? 0.25 : -0.25, sway * 0.05);   // 顔は相手の肩越しに
+  set(vrm, 'leftUpperLeg', -step * 0.28 - down * 0.1); set(vrm, 'rightUpperLeg', step * 0.28 - down * 0.1);
+  set(vrm, 'leftLowerLeg', Math.max(0, step) * 0.35 + down * 0.15); set(vrm, 'rightLowerLeg', Math.max(0, -step) * 0.35 + down * 0.15);
+  if (lead) {
+    set(vrm, 'leftUpperArm', 0, -0.45, -0.3); set(vrm, 'leftLowerArm', 0, -1.2, 0);
+    set(vrm, 'rightUpperArm', 0, 0.85, 0.65); set(vrm, 'rightLowerArm', 0, 1.25, 0);
+  } else {
+    set(vrm, 'rightUpperArm', 0, 0.45, 0.3); set(vrm, 'rightLowerArm', 0, 1.2, 0);
+    set(vrm, 'leftUpperArm', 0, -1.0, -0.45); set(vrm, 'leftLowerArm', 0, -0.7, 0);
+  }
+}
+
 // 毎フレーム呼ぶ。moving：歩いているか
 // 会話の顔（portrait.js）は同じ VRM を借りて描くので、屋敷で動かした時刻を覚えておき、二重に動かさないようにする
 // 姿勢だけをつける（m：動きの状態。舞踏会の客の複製は、それぞれの状態で同じ型の VRM を動かす）
@@ -78,7 +102,7 @@ export function poseWith(vrm, m, moving, dt, extra = {}) {
   m.amt = smooth(m.amt || 0, moving ? 1 : 0, dt * 8);
   m.bow = smooth(m.bow || 0, extra.pose === 'bow' ? 1 : 0, dt * 4);
   m.wave = smooth(m.wave || 0, extra.pose === 'wave' ? 1 : 0, dt * 5);
-  pose(vrm, m.walk, m.amt, m.t, { bow: m.bow, wave: m.wave });
+  pose(vrm, m.walk, m.amt, m.t, { bow: m.bow, wave: m.wave, dance: extra.dance });
 }
 export function driveVRM(vrm, moving, dt, extra = {}) {
   const m = vrm.motion;

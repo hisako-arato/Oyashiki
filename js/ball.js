@@ -47,19 +47,13 @@ export function danceOptions(s) {
   list.push({ t: '仕事に徹する（配膳を続ける）', id: 'work' });
   return list;
 }
-export function danceLines(s, id) {
+// ワルツの前と後。tier は踊りの出来（great ぴったり／ok まずまず／poor ずれっぱなし）。3Dでは間にダンスの遊びが入る
+export function danceIntro(s, id) {
   s.flags.dance = id;
-  if (id === 'daughter') {
-    s.aff.daughter = clamp(s.aff.daughter + 6);
-    return [
-      '22時。ワルツが始まった。仮面を付けたお嬢様が、まっすぐこちらへ歩いてくる。',
-      [D, '「執事さん。……一曲だけ、いいでしょ。仮面を付けてれば、誰も気にしないから」'],
-      '大広間の真ん中で、二人はゆっくりと回った。お嬢様のドレスの裾が、月の光のように揺れる。',
-      [D, '「……ずっと、こうしていられたらいいのに」'],
-      s.flags.shizuku_reunion ? '2階のバルコニーから、メイド服の影がひとつ、こちらを見下ろしていた。' : null,
-      s.flags.shizuku_reunion ? [S, '（……お兄ちゃん、楽しそう。……いいの、仕事だもんね）'] : null,
-    ].filter(Boolean);
-  }
+  if (id === 'daughter') return [
+    '22時。ワルツが始まった。仮面を付けたお嬢様が、まっすぐこちらへ歩いてくる。',
+    [D, '「執事さん。……一曲だけ、いいでしょ。仮面を付けてれば、誰も気にしないから」'],
+  ];
   if (id === 'shizuku') {
     // 断られたお嬢様は、少しすねる
     if (s.flags.d_close || s.aff.daughter >= 70) s.aff.daughter = clamp(s.aff.daughter - 4);
@@ -67,25 +61,52 @@ export function danceLines(s, id) {
       '22時。ワルツが始まった。執事はそっと大広間を抜け、2階のバルコニーへ上がった。',
       '月明かりの下、メイド服のままの雫が、手すりにもたれて待っていた。',
       [S, '「……来てくれたんだ。私も一度、こういう場所で踊ってみたかったの」'],
-      '階下から届くワルツに合わせて、兄妹は小さく回った。雫は、少しだけ泣きそうな顔で笑っていた。',
-      s.flags.d_close || s.aff.daughter >= 70 ? [D, '（……執事さん、どこ行っちゃったの。……つまんない）'] : null,
-    ].filter(Boolean);
-  }
-  if (id === 'blue') {
-    s.aff.blue = clamp(s.aff.blue + 5);
-    return [
-      '22時。ワルツが始まった。青が、トレイを置いて駆け寄ってくる。',
-      [BL, '「執事さん、一曲だけ！ ……わたし、ダンスは初めてなんですけど！」'],
-      '三拍子のたびに、青の靴が執事の靴を踏んだ。四回、五回。',
-      [BL, '「す、すみません！ ……でも、楽しいです！」'],
     ];
   }
+  if (id === 'blue') return [
+    '22時。ワルツが始まった。青が、トレイを置いて駆け寄ってくる。',
+    [BL, '「執事さん、一曲だけ！ ……わたし、ダンスは初めてなんですけど！」'],
+  ];
   s.trust = clamp(s.trust + 2);
   return [
     '22時。ワルツが始まった。執事は壁際に立ち、空いたグラスを静かに下げ続けた。',
     [F, '「……ふむ。よく気の付く男だ」'],
   ];
 }
+// 踊りの出来で、相手の反応と好感度が変わる
+export function danceResult(s, id, tier) {
+  s.flags.dance_tier = tier;
+  const up = { great: 8, ok: 5, poor: 1 }[tier];
+  if (id === 'daughter') {
+    s.aff.daughter = clamp(s.aff.daughter + up);
+    return [
+      tier === 'great' ? '大広間の真ん中で、二人はなめらかに回った。客たちの輪が、いつの間にか二人を囲んでいる。'
+        : tier === 'ok' ? '大広間の真ん中で、二人はゆっくりと回った。お嬢様のドレスの裾が、月の光のように揺れる。'
+        : '何度か足がもつれ、お嬢様がくすくす笑った。仮面の下の頬が赤い。',
+      [D, tier === 'poor' ? '「執事さん、ダンスは苦手なんだ。……ふふ、ちょっと安心した」' : '「……ずっと、こうしていられたらいいのに」'],
+      s.flags.shizuku_reunion ? '2階のバルコニーから、メイド服の影がひとつ、こちらを見下ろしていた。' : null,
+      s.flags.shizuku_reunion ? [S, '（……お兄ちゃん、楽しそう。……いいの、仕事だもんね）'] : null,
+    ].filter(Boolean);
+  }
+  if (id === 'shizuku') return [
+    tier === 'great' ? '階下から届くワルツに、兄妹の足取りがぴたりと重なった。子どもの頃、母の前で踊ってみせたときのように。'
+      : tier === 'ok' ? '階下から届くワルツに合わせて、兄妹は小さく回った。'
+      : '何度も足を踏み合って、二人は声を殺して笑った。',
+    [S, tier === 'poor' ? '「……下手くそ。でも、いいの。お兄ちゃんと踊れたから」' : '「……ありがとう、お兄ちゃん。明日の朝には、全部終わってるんだね」'],
+    '雫は、少しだけ泣きそうな顔で笑っていた。',
+    s.flags.d_close || s.aff.daughter >= 70 ? [D, '（……執事さん、どこ行っちゃったの。……つまんない）'] : null,
+  ].filter(Boolean);
+  if (id === 'blue') {
+    s.aff.blue = clamp(s.aff.blue + up);
+    return [
+      tier === 'great' ? '執事がうまく導くと、青の足取りも少しずつ揃っていった。踏まれたのは、二回だけだ。' : '三拍子のたびに、青の靴が執事の靴を踏んだ。四回、五回。',
+      [BL, tier === 'great' ? '「わ、わたし、踊れてます！？ ……執事さん、すごいです！」' : '「す、すみません！ ……でも、楽しいです！」'],
+    ];
+  }
+  return [];
+}
+// 3Dが使えないとき（?2d）は、遊びを挟まずに続けて出す
+export const danceLines = (s, id) => [...danceIntro(s, id), ...danceResult(s, id, 'ok')];
 
 // 0:00 仮面外し
 export function unmaskLines(s) {
