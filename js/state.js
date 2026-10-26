@@ -43,6 +43,19 @@ export function save(s, n = slot) {
   s.savedAt = Date.now();
   try { localStorage.setItem(slotKey(n), JSON.stringify(s)); } catch (e) { /* 保存できない環境でも続行 */ }
 }
+// イブの朝の自動セーブ（枠ごとに1つ）。結末の画面から「イブの朝からやり直す」
+const eveKey = n => `oyashiki-eve-${n}`;
+export function saveEve(s, n = slot) {
+  if (testing) return;
+  try { localStorage.setItem(eveKey(n), JSON.stringify(s)); } catch (e) { /* noop */ }
+}
+export function loadEve(n = slot) {
+  try { const raw = localStorage.getItem(eveKey(n)); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+// 見た結末（端末に覚える。エンディング一覧に出す）
+const SEEN_END = 'oyashiki-endings';
+export function seenEndings() { try { return new Set(JSON.parse(localStorage.getItem(SEEN_END) || '[]')); } catch (e) { return new Set(); } }
+export function markSeenEnding(id) { try { const set = seenEndings(); set.add(id); localStorage.setItem(SEEN_END, JSON.stringify([...set])); } catch (e) { /* noop */ } }
 export function load(n = slot) {
   migrate();
   try {

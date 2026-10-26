@@ -1,11 +1,11 @@
 // ゲーム進行と画面描画
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY, BASEMENT_HINTS } from './data.js';
-import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdown, newState, save, load, clearSave, listSlots, copySlot, markCleared, isTesting, setTesting, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
+import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdown, newState, save, load, clearSave, listSlots, copySlot, markCleared, isTesting, setTesting, saveEve, loadEve, seenEndings, markSeenEnding, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
 import * as DL from './daylogic.js';
-import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ARRIVAL, interrogation } from './story.js';
+import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ENDING_HINTS, ARRIVAL, interrogation } from './story.js';
 import { WHITE_ARRIVAL, whiteReport, strictDue, strictScene, whiteActive, whiteCovers } from './white.js';
 import { hasNight, nightOptions, nightScene, nightChoices, markNightSeen, REST, rallyDue, rallyScene } from './night.js';
 import { morningEvents, joined } from './sister.js';
@@ -114,6 +114,7 @@ export function title() {
     el('div', { class: 'menu' },
       any ? el('button', { onclick: () => slotScreen('continue') }, 'つづきから') : null,
       el('button', { onclick: () => slotScreen('new') }, 'はじめから'),
+      seenEndings().size ? el('button', { class: 'ghost', onclick: endingList }, 'エンディング一覧') : null,
       el('button', { class: 'ghost', onclick: titleSettings }, '設定')),
     el('p', { class: 'note', onclick: secretTap }, versionLabel())));
   // 新しい版で初めて起動したときに、一度だけ知らせる
@@ -122,6 +123,17 @@ export function title() {
     if (seen && seen !== VERSION) toast(`バージョン ${VERSION} に更新しました`);
     localStorage.setItem('oyashiki-version', VERSION);
   } catch (e) { /* noop */ }
+}
+
+// エンディング一覧：見た結末は題名、まだの結末は「？？？」と条件のヒント
+function endingList() {
+  const seen = seenEndings(), ids = Object.keys(ENDINGS);
+  render(el('div', { class: 'panel settings' },
+    el('h2', {}, 'エンディング一覧'),
+    el('p', { class: 'hint' }, `見た結末 ${ids.filter(id => seen.has(id)).length} / ${ids.length}`),
+    el('ul', { class: 'endings' }, ids.map(id => el('li', { class: seen.has(id) ? (ENDINGS[id].good ? 'good' : '') : 'miss' },
+      seen.has(id) ? el('b', {}, ENDINGS[id].title) : [el('b', {}, '？？？'), el('small', {}, ENDING_HINTS[id] || '')]))),
+    el('button', { class: 'primary', onclick: title }, 'タイトルに戻る')));
 }
 
 // ---- 24日のテストプレイ（バージョン表示を5回続けてタップすると出る。セーブはしない） ----
@@ -481,13 +493,36 @@ function blackout(next) {
   setTimeout(() => { b.classList.remove('on'); setTimeout(() => b.remove(), 700); next(); }, 1600);
 }
 
+// 既読の早送り：一度読んだ台詞には「既読スキップ」が出る。押すと、まだ読んでいない台詞か選択肢まで早送りする
+let skipping = false, readCache = null, readDirty = false;
+const READ_KEY = 'oyashiki-read';
+const hashText = t => { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return (h >>> 0).toString(36); };
+function readSet() {
+  if (!readCache) { try { readCache = new Set(JSON.parse(localStorage.getItem(READ_KEY) || '[]')); } catch (e) { readCache = new Set(); } }
+  return readCache;
+}
+function markRead(h) {
+  const set = readSet();
+  if (set.has(h)) return;
+  set.add(h);
+  if (!readDirty) { readDirty = true; setTimeout(() => { readDirty = false; try { localStorage.setItem(READ_KEY, JSON.stringify([...set].slice(-6000))); } catch (e) { /* noop */ } }, 1500); }
+}
 function showLine(who, text, next, face) {
-  const box = stage(who === 'n' ? null : who, el('p', { class: who === 'n' ? 'narr' : '' }, text, el('span', { class: 'cursor' }, '▼')), text, face);
+  const h = hashText(`${who}:${text}`), seen = readSet().has(h);
+  markRead(h);
+  if (!seen) skipping = false;
+  if (seen && skipping) {
+    render(stage(who === 'n' ? null : who, el('p', { class: who === 'n' ? 'narr' : '' }, text), text, face));
+    return setTimeout(next, 70);
+  }
+  const skip = seen ? el('button', { class: 'skip-read', onclick: e => { e.stopPropagation(); skipping = true; next(); } }, '既読スキップ ▶▶') : null;
+  const box = stage(who === 'n' ? null : who, el('div', {}, el('p', { class: who === 'n' ? 'narr' : '' }, text, el('span', { class: 'cursor' }, '▼')), skip), text, face);
   box.addEventListener('click', next, { once: true });
   render(box);
 }
 
 function showChoice(choices, pick) {
+  skipping = false;
   render(stage(null, el('div', { class: 'choices' },
     choices.map(c => el('button', { onclick: () => pick(c) }, c.t)))));
 }
@@ -539,6 +574,7 @@ async function startWeekday() {
   }
   if (checkFatal()) return;
   save(s);
+  if (isEve(s) && s.phase === 'meeting') saveEve(s);   // イブの朝は、専用の枠にも残す
   // 3Dの屋敷では、執事の部屋で目を覚まし、共用室の席に着いて朝礼を始める
   app().replaceChildren();
   if (await load3D()) {
@@ -1040,6 +1076,8 @@ function ending(id) {
     // クリアしてもセーブは消さない（枠に「クリア済み」と記す。消すのはプレイヤーが手で）
     if (e.good) markCleared(s, id);
     const retry = isTesting() ? null : load();
+    const eve = isTesting() ? null : loadEve();
+    if (!isTesting()) markSeenEnding(id);
     // 盗み出せた夜の手際（かかった時間・ニアミス）
     const h = e.good && s.heist && s.heist.route === id && id !== 'blackout' ? s.heist : null;
     // ENDING 3 の称号：明かりが戻る前の残り時間と、取り調べで残った疑い
@@ -1055,6 +1093,7 @@ function ending(id) {
         el('small', {}, `明かりが戻るまで残り ${dark.left}秒　／　取り調べの疑い ${Math.max(0, dark.doubt)}`)) : null,
       el('div', { class: 'menu' },
         retry ? el('button', { onclick: () => resume(retry) }, e.good ? '最後のセーブから、別の結末を探す' : '直前のセーブからやり直す') : null,
+        eve ? el('button', { onclick: () => resume(eve) }, 'イブの朝からやり直す') : null,
         isTesting() ? el('button', { onclick: () => startTest(s.testPreset, s.testWhen) }, 'テストのはじめに戻る') : null,
         isTesting() ? el('button', { onclick: testScreen }, '別の条件でテストする') : null,
         el('button', { onclick: title }, 'タイトルへ'))));
