@@ -1,6 +1,7 @@
 // 仮面舞踏会の仮面：ベネチア風の半仮面を、ゲームの中で作って頭の骨に付ける（仮面姿の VRM は作らない）
 // 人物ごとに色と飾りを変える。0時の仮面外し（仮面を右手へ下ろす）と、床に落ちた仮面の切れ端も作る
 import * as THREE from '../vendor/three.module.min.js';
+import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 
 // 人物ごとの仮面：base 仮面の色、trim 縁取り、deco 飾り（feather 羽根／gem 宝石／lace 下の縁飾り）
 export const MASK_STYLE = {
@@ -85,9 +86,27 @@ export function makeMask(style) {
       g.add(d);
     }
   }
-  g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; o.userData.maskPart = true; } });
-  g.userData.mask = true;
-  return g;
+  return merged(g);
+}
+// 同じ材質の部品を1つにまとめる（描く回数を減らす：仮面1枚が 5〜12 部品 → 2〜3 部品）
+function merged(g) {
+  g.updateMatrixWorld(true);
+  const byMat = new Map();
+  for (const m of g.children) {
+    const geo = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+    geo.applyMatrix4(m.matrix);
+    for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
+    if (!byMat.has(m.material)) byMat.set(m.material, []);
+    byMat.get(m.material).push(geo);
+  }
+  const out = new THREE.Group();
+  for (const [material, geos] of byMat) {
+    const mesh = new THREE.Mesh(mergeGeometries(geos), material);
+    mesh.castShadow = false; mesh.frustumCulled = false; mesh.userData.maskPart = true;
+    out.add(mesh);
+  }
+  out.userData.mask = true;
+  return out;
 }
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), q = new THREE.Quaternion();

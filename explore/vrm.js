@@ -125,7 +125,17 @@ export function driveVRM(vrm, moving, dt, extra = {}) {
     // 話している間は口を動かす（extra.talk：0〜1）
     if (extra.talk != null) em.setValue('aa', extra.talk * (0.25 + 0.5 * Math.abs(Math.sin(m.t * 13))) * (1 - busy * 0.5));
   }
-  vrm.update(dt);
+  // 人が多い場面（舞踏会）では、揺れもの（髪・スカート）・視線・材質の時間の計算を省き、骨と表情だけ動かす
+  if (crowd && !extra.portrait) { vrm.humanoid.update(); if (em) em.update(); }
+  else vrm.update(dt);
+}
+// 舞踏会のように人が多い場面の軽い描き方：揺れものを止め（髪やスカートは形を固定）、輪郭線を省く
+// 屋敷の人物はとても小さく映るので、見た目はほとんど変わらない。会話の顔に映すときだけは輪郭線を戻す（portrait.js）
+let crowd = false;
+export function setCrowd(on) { crowd = on; }
+export const crowdMode = () => crowd;
+export function setOutline(root, on) {
+  root.traverse(o => { if (o.isMesh && Array.isArray(o.material)) for (const m of o.material) if (m.isOutline) m.visible = on; });
 }
 
 // 口だけ動かす（屋敷で動いている人を会話の顔に映すとき）。talk：0〜1

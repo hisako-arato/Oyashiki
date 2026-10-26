@@ -2,11 +2,11 @@
 // 物語パートの会話画面と、3Dの屋敷のメッセージ欄の両方で使う。描画は1つの canvas を使い回す
 // 端末のメモリを節約するため、屋敷と同じレンダラー（engine.js）で描き、屋敷で使っている VRM をそのまま借りる
 // （VRM の複製や、2つ目の3D描画を作らない）。借りるのは描く一瞬だけで、描いたら屋敷の中の元の場所へ戻す
-import { THREE, loadVRM, disposeVRM, loaded, driveVRM, talkMouth } from './vrm.js';
+import { THREE, loadVRM, disposeVRM, loaded, driveVRM, talkMouth, crowdMode, setOutline } from './vrm.js';
 import { renderer } from './engine.js';
 
 let canvas = null, ctx = null, scene, camera, rt = null, buf = null, img = null;
-let cur = null, want = null, face = 'neutral', talkLeft = 0, last = 0, lastDraw = 0, looping = false;
+let cur = null, want = null, face = 'neutral', talkLeft = 0, last = 0, lastDraw = 0, looping = false, dirty = true, activeUntil = 0;
 const heads = new Map();
 const ALT = new Set(['butler2', 'mother2', 'daughter2', 'black2', 'black3']);
 let lastAlt = null;
@@ -44,8 +44,9 @@ export function showPortrait(id, f, textLen = 0) {
   loadVRM(id, 'lite').then(vrm => {
     if (want !== id) return;
     if (!cur) cur = { id, vrm, head: headHeight(id, vrm) };
-    canvas.classList.add('ready');
+    dirty = true;
   }).catch(() => {});
+  dirty = true;
   if (!looping) { looping = true; last = performance.now(); requestAnimationFrame(frame); }
 }
 
@@ -67,7 +68,10 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   talkLeft = Math.max(0, talkLeft - dt);
-  if (now - lastDraw < 33) return;   // 1秒に30回まで
+  // 1秒に30回まで（人が多い場面は15回）。話していない間は、表情が落ち着くまで描いたら止める
+  if (now - lastDraw < (crowdMode() ? 66 : 33)) return;
+  if (talkLeft > 0 || dirty) { activeUntil = now + 700; dirty = false; }
+  if (crowdMode() && now > activeUntil) return;   // 人が多い場面だけ、黙っている間は描くのを止める
   lastDraw = now;
   const pr = Math.min(devicePixelRatio, canvas.clientWidth > 200 ? 1.5 : 2);
   const w = Math.round(canvas.clientWidth * pr), h = Math.round(canvas.clientHeight * pr);
@@ -76,10 +80,11 @@ function frame(now) {
     canvas.width = w; canvas.height = h;
     camera.aspect = w / h; camera.updateProjectionMatrix();
     if (rt) rt.dispose();
-    rt = new THREE.WebGLRenderTarget(w, h, { samples: 4 });
+    rt = new THREE.WebGLRenderTarget(w, h, { samples: 2 });
     rt.texture.colorSpace = THREE.SRGBColorSpace;
     buf = new Uint8Array(w * h * 4);
     img = ctx.createImageData(w, h);
+    activeUntil = now + 700;
   }
   if (!cur) { ctx.clearRect(0, 0, w, h); return; }
   const { vrm } = cur;
@@ -102,6 +107,8 @@ function draw(vrm, w, h) {
   const y = cur.head;
   camera.position.set(0, y + 0.04, 1.5);
   camera.lookAt(0, y - 0.01, 0);
+  const crowd = crowdMode();
+  if (crowd) setOutline(s, true);   // 舞踏会で省いている輪郭線を、顔を描く間だけ戻す
   const prevTarget = renderer.getRenderTarget(), alpha = renderer.getClearAlpha();
   renderer.getClearColor(clearColor);
   renderer.setRenderTarget(rt);
@@ -111,6 +118,7 @@ function draw(vrm, w, h) {
   renderer.readRenderTargetPixels(rt, 0, 0, w, h, buf);
   renderer.setRenderTarget(prevTarget);
   renderer.setClearColor(clearColor, alpha);
+  if (crowd) setOutline(s, false);
   // 屋敷の元の場所へ戻す
   if (home) home.add(s); else scene.remove(s);
   s.position.copy(pos); s.quaternion.copy(rot); s.visible = vis;
@@ -129,4 +137,9 @@ function draw(vrm, w, h) {
     }
   }
   ctx.putImageData(img, 0, 0);
+  // 本当に描けたか（真ん中の縦一列に、透明でない点があるか）を確かめてから顔アイコンと入れ替える
+  // 端末が重くて描けなかったときは、顔アイコンを出したままにする
+  let ok = false;
+  for (let yy = 0; yy < h && !ok; yy += 4) if (buf[(yy * w + (w >> 1)) * 4 + 3] > 0) ok = true;
+  canvas.classList.toggle('ready', ok);
 }

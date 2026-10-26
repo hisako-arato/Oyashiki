@@ -481,7 +481,8 @@ function findTarget() {
   for (const t of nightThings()) consider(t, 0.8);   // 夜だけの操作を、同じ場所の昼の調べものや出入口より優先する
   for (const t of ballThings()) consider(t, 0.6);
   for (const t of eveThings()) consider(t, 0.8);
-  if (st.mode !== 'night') for (const p of Object.values(people)) if (p.area === cur.id && !guiding(p)) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p });
+  // 舞踏会で雫を探しているときは、見つけた雫に話しかけるのを優先する
+  if (st.mode !== 'night') for (const p of Object.values(people)) if (p.area === cur.id && !guiding(p)) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p }, st.mode === 'ball' && st.ball.search && p.id === 'black' ? 1.2 : 0);
   return best;
 }
 function act() {
@@ -1545,18 +1546,37 @@ async function dressBall() {
     V.attachVRM(d, await V.loadVRM('daughter3'));
   }
   for (const id of ['father', 'mother', 'daughter', 'reiko', 'dealer']) if (people[id].vrm) maskVRM(people[id].vrm, styleOf(id));
+  crowdLook(V, true);
   // 一般客：4体の型を複製して並べる
   const G = await import('./guests.js');
   ballMasters = await Promise.all(G.GUEST_IDS.map(id => G.loadGuest(id)));
   if (st.mode !== 'ball') return;
+  for (const m of ballMasters) V.setOutline(m.scene, false);   // 複製は材質を共有するので、型の輪郭線を消せば全員消える
   // 立ち位置だけの客に、見た目（複製した VRM と仮面）を入れる
   ballGuests.forEach((slot, i) => {
     const gu = G.makeGuest(ballMasters[i % ballMasters.length], i);
     gu.g.position.set(slot.x, 0, slot.z); gu.g.rotation.y = slot.yaw;
     gu.wearMask();
+    gu.g.traverse(o => { if (o.isMesh) o.castShadow = false; });
+    gu.g.add(blob());
     ballGroup.add(gu.g);
     Object.assign(slot, { g: gu.g, update: gu.update, unmask: gu.unmask, dispose: gu.dispose });
   });
+}
+// ---- 舞踏会の軽い描き方：人数は減らさず、小さく映るので見えない所の計算を省く ----
+// 揺れもの（髪・スカート）を止める／輪郭線を省く／影を落とさず、足元に丸い影を置く（explore/vrm.js の setCrowd）
+const blobMat = new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.32, depthWrite: false });
+const blobGeo = new THREE.CircleGeometry(0.32, 16).rotateX(-Math.PI / 2);
+function blob() { const b = new THREE.Mesh(blobGeo, blobMat); b.position.y = 0.015; b.userData.blob = true; return b; }
+function crowdLook(V, on) {
+  V.setCrowd(on);
+  sun.castShadow = !on;
+  for (const ch of [player, ...Object.values(people)]) {
+    if (ch.vrm) V.setOutline(ch.vrm.scene, !on);
+    const b = ch.g.children.find(o => o.userData.blob);
+    if (on && !b) ch.g.add(blob());
+    if (!on && b) ch.g.remove(b);
+  }
 }
 // 客の立ち位置（見た目は dressBall で入れる。?test では見た目なしで動く）
 const guestSlots = () => GUEST_SPOTS.map(([x, z, yaw], i) => ({ x, z, yaw, i, g: null, update() {}, unmask() {}, dispose() {} }));
@@ -1584,13 +1604,16 @@ const ballMin = () => st.ball.min;
 // 時刻ごとの出来事（会話の間は時間が止まる）
 function ballTick(dt) {
   const B = st.ball;
-  if (!st.busy && !document.querySelector('.modal-back')) B.min += dt * 60 / BALL_SEC_PER_HOUR;
+  if (!st.busy && !B.search && !document.querySelector('.modal-back')) B.min += dt * 60 / BALL_SEC_PER_HOUR;
   // 客の顔を動かす（画面に入っている客だけ、2フレームに1回）
-  if (cur.id === 'f1' && frameNo % 2 === 0) for (const gu of ballGuests) {
+  // 近い客は2フレームに1回、遠い客（12m 以上）は4フレームに1回
+  if (cur.id === 'f1') for (const gu of ballGuests) {
+    const far = Math.hypot(gu.x - player.x, gu.z - player.z) > 12, every = far ? 4 : 2;
+    if ((frameNo + gu.i) % every) continue;
     bodySphere.center.set(gu.x, 0.9, gu.z);
     const seen = frustum.intersectsSphere(bodySphere);
     if (gu.g) gu.g.visible = seen;
-    if (seen) gu.update(dt * 2);
+    if (seen) gu.update(dt * every);
   }
   if (st.busy) return;
   const at = t => B.min >= t, once = k => !B.done[k] && (B.done[k] = true);
@@ -1618,9 +1641,17 @@ function ballTick(dt) {
   }
   if (at(BALL.AT.dance) && once('dance')) {
     B.reqs = []; B.tray = false;
-    return hooks.askChoice('22時。楽団がワルツを奏で始めた。……誰と過ごす？', BALL.danceOptions(s).map(o => ({ ...o, run: () => '' })), (msg, o) => {
+    const partner = () => hooks.askChoice('22時。楽団がワルツを奏で始めた。……誰と過ごす？', BALL.danceOptions(s).map(o => ({ ...o, run: () => '' })), (msg, o) => {
       if (o.id !== 'work') afterMsg = () => startDance(o.id);
       say(...BALL.danceIntro(s, o.id));
+    });
+    // 雫と再会していれば、雫がいないことに気づく。探しに行くと、2階のバルコニーにいる
+    if (!s.flags.shizuku_reunion) return partner();
+    Object.assign(people.black, { area: 'f2', x: 24, z: 17.3, wait: 0, look: 0, nightRole: { i: 0, yaw: 0 } });
+    return hooks.askChoice(BALL.shizukuMissing, [{ t: '雫を探す', id: 'search', run: () => '' }, { t: '仕事に戻る', id: 'work', run: () => '' }], (msg, o) => {
+      if (o.id === 'search') { B.search = true; return say('（仕事を置いて、屋敷の中を探そう）'); }
+      afterMsg = partner;
+      say(BALL.shizukuStayed);
     });
   }
   if (B.dark) return darkTick(dt);
@@ -1650,7 +1681,7 @@ const PARTNER = { daughter: 'daughter', shizuku: 'black', blue: 'blue' };
 let VM = null;
 async function startDance(id) {
   const p = people[PARTNER[id]];
-  const c = id === 'shizuku' ? { area: 'f2', x: 24, z: 16.4 } : { area: 'f1', x: 24, z: 8 };
+  const c = id === 'shizuku' ? { area: 'f2', x: 24, z: 16.6 } : { area: 'f1', x: 24, z: 8 };
   if (!TEST) VM = VM || await import('./vrm.js');
   if (id === 'shizuku') music.play('shizuku');
   const back = { area: p.area, x: p.x, z: p.z, nightRole: p.nightRole };
@@ -1701,6 +1732,8 @@ function endDance() {
   const ratio = D.pts / (MEASURES * 2), tier = ratio >= 0.7 ? 'great' : ratio >= 0.4 ? 'ok' : 'poor';
   s.flags.dance_score = Math.round(ratio * 100);
   Object.assign(D.p, D.back, { dancing: false });
+  // 雫は踊り終えたら、大広間の見回りに戻る
+  if (D.id === 'shizuku') Object.assign(D.p, { area: 'f1', x: 20.5, z: 8, wait: 0, nightRole: { i: 0, path: [[20.5, 8, 2], [24, 6, 1.5], [27.6, 8.6, 2], [24, 11.4, 1.5]] } });
   afterMsg = () => {
     if (D.id === 'shizuku') { music.play('ball'); travel({ area: 'f1', x: 24, z: 13.6 }); }
   };
@@ -1853,6 +1886,12 @@ function ballThings() {
 }
 function ballAct(t) {
   if (t.night) return t.night();
+  if (t.person && t.person.id === 'black' && st.ball.search) {
+    st.ball.search = false;
+    music.play('shizuku');
+    afterMsg = () => startDance('shizuku');
+    return say(...BALL.shizukuScene(s));
+  }
   if (t.person) {
     const id = t.person.id;
     afterMsg = () => { const k = { red: s.flags.dealer_seen && 'dealer', caterer: 'caterer', guard: 'guard', white: 'company' }[id]; if (k) recall(s, k); };
@@ -1862,6 +1901,7 @@ function ballAct(t) {
     if (!['f1', 'f2'].includes(t.exit.area)) return say('今は舞踏会の最中だ。屋敷を離れるわけにはいかない。');
     return travel(t.exit);
   }
+  if (t.say) return say(...t.say.map(l => typeof l === 'function' ? l(s) : l));
   say('今は舞踏会の最中だ。');
 }
 function ballLabels(labels) {
@@ -1882,6 +1922,7 @@ function ballGoal() {
   const score = `（運んだ料理 ${st2.served}皿${st2.missed ? `・待たせた客 ${st2.missed}人` : ''}）`;
   if (m < BALL.AT.serve) return '開宴。旦那様の乾杯を見届けよう';
   if (m >= BALL.AT.lastCall) return '0時の鐘を待つ';
+  if (B.search) return '雫を探す（屋敷のどこかにいる）';
   if (m >= BALL.AT.dance && m < BALL.AT.serve2) return 'ワルツの時間';
   return `${B.tray ? '料理を「！」の客へ運ぶ' : B.reqs.length ? 'キッチンのワゴンで料理を受け取る' : '客の様子を見て回る（話しかけてもよい）'}${score}`;
 }
@@ -1902,6 +1943,7 @@ async function endBall() {
   if (!TEST) {
     const V = await import('./vrm.js');
     if (B.daughterBase) { unmaskVRM(people.daughter.vrm); V.attachVRM(people.daughter, B.daughterBase); }
+    crowdLook(V, false);
     for (const id of ['reiko', 'dealer', 'caterer']) { const p = people[id]; if (p.vrm) { p.g.remove(p.vrm.scene); p.vrm = null; p.drive = null; } V.disposeVRM(id, 'lite'); }
     V.disposeVRM('daughter3', 'lite');
     for (const id of ['guest_m1', 'guest_m2', 'guest_f1', 'guest_f2']) V.disposeVRM(id, 'guest');

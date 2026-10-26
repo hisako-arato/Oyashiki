@@ -44,7 +44,6 @@ export function reikoLines(s) {
 export function danceOptions(s) {
   const list = [];
   if (s.flags.d_close || s.aff.daughter >= 70) list.push({ t: 'お嬢様と踊る（大広間の真ん中で）', id: 'daughter' });
-  if (s.flags.shizuku_reunion) list.push({ t: '雫と踊る（2階のバルコニーで、二人きり）', id: 'shizuku' });
   if (isAlly(s, 'blue')) list.push({ t: '青に誘われる（足を踏まれそうだ）', id: 'blue' });
   list.push({ t: '仕事に徹する（配膳を続ける）', id: 'work' });
   return list;
@@ -56,15 +55,6 @@ export function danceIntro(s, id) {
     '22時。ワルツが始まった。仮面を付けたお嬢様が、まっすぐこちらへ歩いてくる。',
     [D, '「執事さん。……一曲だけ、いいでしょ。仮面を付けてれば、誰も気にしないから」'],
   ];
-  if (id === 'shizuku') {
-    // 断られたお嬢様は、少しすねる
-    if (s.flags.d_close || s.aff.daughter >= 70) s.aff.daughter = clamp(s.aff.daughter - 4);
-    return [
-      '22時。ワルツが始まった。執事はそっと大広間を抜け、2階のバルコニーへ上がった。',
-      '月明かりの下、メイド服のままの雫が、手すりにもたれて待っていた。',
-      [S, '「……来てくれたんだ。私も一度、こういう場所で踊ってみたかったの」'],
-    ];
-  }
   if (id === 'blue') return [
     '22時。ワルツが始まった。青が、トレイを置いて駆け寄ってくる。',
     [BL, '「執事さん、一曲だけ！ ……わたし、ダンスは初めてなんですけど！」'],
@@ -91,13 +81,10 @@ export function danceResult(s, id, tier) {
     ].filter(Boolean);
   }
   if (id === 'shizuku') return [
-    tier === 'great' ? '階下から届くワルツに、兄妹の足取りがぴたりと重なった。子どもの頃、母の前で踊ってみせたときのように。'
-      : tier === 'ok' ? '階下から届くワルツに合わせて、兄妹は小さく回った。'
-      : '何度も足を踏み合って、二人は声を殺して笑った。',
-    [S, tier === 'poor' ? '「……下手くそ。でも、いいの。お兄ちゃんと踊れたから」' : '「……ありがとう、お兄ちゃん。明日の朝には、全部終わってるんだね」'],
-    '雫は、少しだけ泣きそうな顔で笑っていた。',
-    s.flags.d_close || s.aff.daughter >= 70 ? [D, '（……執事さん、どこ行っちゃったの。……つまんない）'] : null,
-  ].filter(Boolean);
+    ...(tier === 'poor' ? [[S, '「……下手くそ。でも、いいの」']] : tier === 'great' ? ['階下から届くワルツに、兄妹の足取りがぴたりと重なった。'] : []),
+    [B, '「お母さんとの思い出も、雫がいるから輝くんだよ」'],
+    '雫は何も言わず、兄の胸に額を押し当てた。階下のワルツが、静かに終わった。',
+  ];
   if (id === 'blue') {
     s.aff.blue = clamp(s.aff.blue + up);
     return [
@@ -109,6 +96,28 @@ export function danceResult(s, id, tier) {
 }
 // 3Dが使えないとき（?2d）は、遊びを挟まずに続けて出す
 export const danceLines = (s, id) => [...danceIntro(s, id), ...danceResult(s, id, 'ok')];
+
+// 22:00 雫がいない。探しに行くか、仕事に戻るか
+export const shizukuMissing = '22時。楽団がワルツを奏で始めた。……ふと見回すと、大広間に雫の姿がない。';
+// 2階のバルコニーで見つけた雫（ここで「別れのワルツ」が流れ始める）。最後にダンスへ
+export function shizukuScene(s) {
+  s.flags.dance = 'shizuku';
+  // 誘いたかったお嬢様は、少しすねる
+  if (s.flags.d_close || s.aff.daughter >= 70) s.aff.daughter = clamp(s.aff.daughter - 4);
+  return [
+    '2階のバルコニー。月明かりの下、メイド服のままの雫が、ひとりで手すりにもたれていた。寂しそうな横顔だった。',
+    [K, '「……執事さん。仕事をサボって、何をしているんですか。お客様がお待ちですよ」'],
+    [S, '「……なんてね。ごめん、ちょっと抜けてきちゃった」'],
+    [S, '「ねえ、覚えてる？ お母さんと三人で行った遊園地。メリーゴーラウンドの音楽が、ちょうどこんな三拍子で……お母さん、ずっと手を振ってくれてた」'],
+    [S, '「お兄ちゃんは昔から、何でも一人でできたよね。……今回だって、私がいなくても、お兄ちゃんなら一人で盗み出せてたかも」'],
+    [S, '「それに……お兄ちゃん、モテモテだね」', 'happy'],
+    '雫は涙を浮かべたまま、にっこりと笑った。',
+    [B, '「雫は、昔から踊るのが好きだったよね」'],
+    '執事は、雫の手を取った。',
+  ];
+}
+// 雫を探しに行かなかったとき（仕事に戻る）
+export const shizukuStayed = '（……雫のことだ。きっと、どこかで休んでいるだけだろう）';
 
 // 0:00 仮面外し
 export function unmaskLines(s) {
