@@ -789,12 +789,14 @@ function nightThings() {
     N.carry = null; N.ladderUp = true;
     say('バルコニーの手すりに、そっと梯子を掛けた。');
   } });
-  if (cur.id === 'grounds' && N.ladderUp && !N.carry && !N.paintAtWall) list.push({ name: '梯子', at: at(...below), label: '梯子を登る', night: () => {
+  if (cur.id === 'grounds' && N.ladderUp && !N.carry) list.push({ name: '梯子', at: at(...below), label: '梯子を登る', night: () => {
     if (!s.flags.balcony_open) return say('登ってみたが、バルコニーのガラス戸には鍵が掛かっていた。こじ開ければ音が出る……別の道を探すしかない。');
     travel({ area: 'f2', x: 24, z: 16.4 });
   } });
-  if (cur.id === 'grounds' && N.ladderUp && N.carry === 'painting') list.push({ name: '梯子', at: at(...below), label: '梯子を登る', night: () => say('絵を抱えたままでは登れない。') });
-  if (cur.id === 'f2' && N.ladderUp) list.push({ name: '梯子', at: at(24, 17.4), label: '梯子で降りる', night: () => travel({ area: 'grounds', x: below[0], z: below[1] + 0.6 }) });
+  if (cur.id === 'grounds' && N.ladderUp && N.carry === 'painting') list.push({ name: '梯子', at: at(...below), label: '梯子を登る', night: () => say('片手で絵を抱えて梯子を降りれば、額縁が手すりに当たる。……傷ひとつ、つけるわけにはいかない。') });
+  // 絵を抱えたまま梯子は使えない（額縁が手すりに当たり、キャンバスに傷がつく）
+  if (cur.id === 'f2' && N.ladderUp) list.push({ name: '梯子', at: at(24, 17.4), label: '梯子で降りる', night: () => N.carry === 'painting' ? say('片手で絵を抱えて梯子を降りれば、額縁が手すりに当たる。……傷ひとつ、つけるわけにはいかない。')
+    : travel({ area: 'grounds', x: below[0], z: below[1] + 0.6 }) });
   if (cur.id === 'f2' && s.flags.hidden_open && !N.taken) list.push({ name: '月下の庭', at: at(8, 3.2), label: '絵を外す', night: takePainting });
   if (cur.id === 'f2' && N.route === 'swap' && N.carry === 'painting' && !N.morning) list.push({ name: 'クローゼット', at: at(41.3, 14), label: '本物を隠す', night: () => {
     N.carry = null;
@@ -803,18 +805,7 @@ function nightThings() {
     say('お嬢様の寝息を確かめ、クローゼットの奥に本物をそっと隠した。', '……あとは朝、運び屋が偽物を運び出す騒ぎにまぎれて、本物を持ち出すだけだ。');
   } });
   if (cur.id === 'grounds' && N.route === 'night' && N.carry === 'painting') list.push({ name: '正門', at: at(38, 56.6), label: '調べる', night: () =>
-    say('正門には閂が下ろされ、巡回員が行き来している。……怪盗が正面から出ていくわけにはいかない。', '（裏庭の通用口か、古井戸の搬入路か。……梯子があれば、塀を越える手もある）') });
-  // 上級：絵を塀の陰に置き、バルコニーの梯子を外して運び、塀に掛けて越える
-  const WALL = [90.6, 44];
-  if (cur.id === 'grounds' && N.route === 'night' && N.carry === 'painting' && N.ladderUp) list.push({ name: '東の塀', at: at(...WALL), label: '絵を塀の陰に置く', night: () => {
-    N.carry = null; N.paintAtWall = true;
-    say('絵を塀の陰にそっと寝かせた。……バルコニーの梯子を外して、ここまで運んでこよう。');
-  } });
-  if (cur.id === 'grounds' && N.paintAtWall && N.ladderUp && !N.carry) list.push({ name: '梯子', at: at(...below), label: '梯子を外す', night: () => {
-    N.ladderUp = false; N.carry = 'ladder';
-    say('バルコニーから梯子を外し、肩に担いだ。……東の塀まで、もう一度。');
-  } });
-  if (cur.id === 'grounds' && N.paintAtWall && N.carry === 'ladder') list.push({ name: '東の塀', at: at(...WALL), label: '梯子で塀を越える', night: () => escape('wall') });
+    say('正門には閂が下ろされ、巡回員が行き来している。……怪盗が正面から出ていくわけにはいかない。', s.flags.back_gate ? '（バラ園の奥の、庭師の通用口へ）' : '（裏庭のどこかに、ほかの出口は……）') });
   return list;
 }
 // 25日の朝：クローゼットから本物を取り出し、洗濯かごに隠して、使用人棟の自室まで運ぶ
@@ -871,30 +862,28 @@ function takePainting() {
     st.busy = false;
     N.card = !!o.card;
     say(o.card ? '胸ポケットから白いカードを取り出し、空の額縁の前にそっと立て掛けた。' : '壁に残ったのは、額縁の形に褪せなかった壁紙だけだ。',
-      '「月下の庭」を布で包んだ。……あとは、誰にも見つからずに正門から出るだけだ。');
+      '「月下の庭」を布で包んだ。……梯子も井戸も、絵を傷める。屋敷の中を歩いて1階へ降り、勝手口から庭へ出よう。');
   });
 }
 const nightClock = () => { const m = Math.floor(st.night.min); return `${1 + Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
-// 屋敷を抜け出す（一夜で持ち去るルート）。逃げ道は通用口・搬入路・塀
+// 屋敷を抜け出す（一夜で持ち去るルート）。絵を傷めずに出られるのは、裏庭の通用口だけ
 function escape(how) {
   const N = st.night;
   N.exit = how;
   caption('脱出', `深夜 ${nightClock()}`);
   afterMsg = () => endNight('night');
-  say(how === 'back' ? 'バラ園の奥の木戸の閂を、音を立てずに外した。裏の小道に、人の気配はない。'
-    : how === 'tunnel' ? '古井戸の搬入路を抜けると、塀の外の水路に出た。……屋敷の誰の目にも触れずに。'
-    : '梯子を塀に掛け、絵を抱えて登る。塀の向こうに梯子を下ろし、夜の街へ降り立った。',
-  '腕の中の額縁が、月明かりを受けて鈍く光った。');
+  say('バラ園の奥の木戸の閂を、音を立てずに外した。裏の小道に、人の気配はない。', '腕の中の額縁が、月明かりを受けて鈍く光った。');
 }
 function nightAct(t) {
   const N = st.night;
-  // 裏庭の通用口と、古井戸の搬入路から抜け出す
+  // 裏庭の通用口から抜け出す
   if (t.spot && t.spot[1] === 'backgate') return N.route === 'night' && N.carry === 'painting' ? escape('back')
     : say('裏の小道へ出られる、庭師の木戸だ。……絵を手に入れたら、ここから抜けられる。');
-  if (t.exit && cur.id === 'basement' && t.exit.area === 'grounds' && N.route === 'night' && N.carry === 'painting') return escape('tunnel');
   if (t.exit) {
-    if (/玄関/.test(t.name) && !N.morning) return say('玄関は内側から閂が掛けられている。');
+    // 玄関の扉には、絵とは別の警報が付いている（白が落としたのは絵の警報だけ）
+    if (/玄関/.test(t.name) && !N.morning) return say('玄関の扉には、絵とは別の警報が付いている。白が落としたのは、絵の警報だけだ。……開ければ鳴る。');
     if (N.carry === 'ladder' && t.exit.area !== 'grounds' && cur.id === 'grounds') return say('梯子を担いだままでは、屋敷の中を通れない。');
+    if (N.carry === 'painting' && (t.exit.area === 'basement' || cur.id === 'basement')) return say('縄梯子と狭い横穴では、額縁が壁に擦れる。……キャンバスに傷がつく。ここは通れない。');
     return travel(t.exit);
   }
   if (t.spot && t.spot[0] === 'kback') {
@@ -909,6 +898,7 @@ function nightAct(t) {
     return say('赤い本を引き、鍵を差し込む。本棚が音もなく開いた。');
   }
   if (t.special === 'notebook') return hooks.notebook();
+  if (t.special === 'hatch' && N.carry === 'painting') return say('縄梯子と狭い横穴では、額縁が壁に擦れる。……キャンバスに傷がつく。ここは通れない。');
   if (t.special === 'hatch') return s.flags.b_key ? travel({ area: 'basement', x: 1.0, z: 4.0 }) : say('床の扉には鍵が掛かっている。');
   if (t.say) return say(...t.say.map(l => typeof l === 'function' ? l(s) : l));
   say('今は調べている場合ではない。');
@@ -917,9 +907,8 @@ function nightGoal() {
   const N = st.night;
   if (N.morning) return N.carry === 'painting' ? '本物を、使用人棟の執事の部屋まで運ぶ（旦那様と警備員に見られないように）'
     : 'お嬢様の部屋のクローゼットから、本物を取り出す（運び屋が発つ10時まで）。1階の廊下に旦那様、2階の廊下に木箱を運ぶ警備員';
-  if (N.paintAtWall) return N.carry === 'ladder' ? '梯子を東の塀に掛けて、越える' : 'バルコニーの梯子を外して、東の塀まで運ぶ';
   if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す'
-    : `絵を抱えて屋敷を抜け出す（正門は閂と巡回員。${s.flags.back_gate ? 'バラ園の奥の通用口' : '裏庭のどこかに出口は……'}${s.flags.b_grate ? '、古井戸の搬入路' : ''}${N.ladderUp ? '、梯子で東の塀を越える手も' : ''}）`;
+    : `絵を抱えて、屋敷の中を1階へ降り、勝手口から庭へ出て、${s.flags.back_gate ? 'バラ園の奥の通用口' : '裏庭のどこかの出口'}から抜け出す（梯子と井戸は絵を傷める。玄関には警報${isAlly(s, 'red') ? '' : '。勝手口の前の赤メイドは、1時半ごろに休む'}）`;
   if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
   if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
   return '2階の書斎へ。夜は倉庫から奥への扉に鍵。勝手口の先には赤メイド、大広間は雫、2階の廊下には巡回員';
@@ -942,6 +931,11 @@ function nightTick(dt) {
       N.dawn = true;
       afterMsg = () => endNight('caught25');
       say('10時。トラックが正門を出ていった。……旦那様が、屋敷じゅうの点検を始めた。');
+    } else if (!N.morning && N.min >= 30 && !N.redAsleep) {
+      // 1時半、キッチン裏の赤メイドは仕込みを終えて休む（勝手口の前が空く）
+      N.redAsleep = true;
+      Object.assign(people.red, { area: null, nightRole: null, seeing: false });
+      if (cur.id === 'f1') hooks.toast('キッチン裏の明かりが消えた。赤メイドが、自室へ戻っていった。');
     } else if (!N.morning && N.min >= 240 && !N.dawn) {
       N.dawn = true;
       afterMsg = () => endNight('caught');
@@ -1375,12 +1369,12 @@ export function startNight(state, route, h) {
   const black = people.black, red = people.red, guard = people.guard;
   // 白の報告でお父様が巡回を厳しくさせたとき（guard_strict）は、西の端で立ち止まる時間が短く、よく見ている
   // 2階の巡回員は、西の端で立ち止まって窓の外を眺める（雫の情報）。ときどき途中で引き返す
-  // 外の巡回員は、屋敷の前庭から正門の前までを回る（梯子を掛ける所と、正門を見張る）
+  // 外の巡回員は、屋敷の前庭から正門の前、西の芝生（古井戸と通用口の手前）までを回る
   const strict = !!s.flags.guard_strict;
   Object.assign(guard, { area: 'f2', x: 30, z: 9.5, range: strict ? 8 : 7, wait: 0, look: 0,
     nightRole: { i: 0, path: [[3.2, 9.5, strict ? 2.5 : 6], [24, 9.5, 1.2], [14, 9.5], [40.5, 9.5, 1.5], [30, 9.5, 1.2]] } });
   Object.assign(people.guard2, { area: 'grounds', x: 24, z: 39, range: 7.5, wait: 0, look: 0,
-    nightRole: { i: 0, path: [[24, 39, 2], [38, 39.6], [38, 39, 2.5], [52, 39, 2.5], [52, 52], [42, 53, 2], [24, 52]] } });
+    nightRole: { i: 0, path: [[24, 39, 2], [38, 39.6], [38, 39, 2.5], [52, 39, 2.5], [52, 52], [42, 53, 2], [24, 52], [8, 50], [7, 41, 3], [16, 39]] } });
   Object.assign(black, { area: 'f1', x: 24, z: 10.5, range: 7.5, wait: 0, look: 0,
     nightRole: { i: 0, path: [[24, 10.5, 2], [23, 6.5], [20.5, 4.5, 2.5], [27.5, 4.5, 2], [27.5, 10.5], [24, 15, 2.5], [24, 10.5]] } });
   Object.assign(red, { area: 'f1', x: 44.6, z: 4.6, range: 5.5, look: 0, nightRole: { yaw: 0 } });

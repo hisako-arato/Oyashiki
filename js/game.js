@@ -898,7 +898,7 @@ async function runRoute(id) {
     ['butler', '（「月下の庭」……今、迎えに来た）'],
   ], () => {
     if (!alarmOff) return fail('額縁に手をかけた瞬間、甲高い警報が屋敷中に鳴り響いた。');
-    if (id === 'night') return playScript([['n', '絵を布で包み、バルコニーから梯子で前庭へ降りる。闇に紛れて、屋敷を後にした。']], () => ending('night'));
+    if (id === 'night') return playScript([['n', '絵を布で包み、裏階段から1階へ。勝手口から庭へ出て、バラ園の奥の通用口から屋敷を後にした。']], () => ending('night'));
     playScript([
       ['n', '青の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。'],
       ['n', 'お嬢様の部屋のクローゼットに本物を隠し、執事は何食わぬ顔で自室に戻った。'],
@@ -962,8 +962,7 @@ function ending(id) {
     const retry = isTesting() ? null : load();
     // 盗み出せた夜の手際（かかった時間・ニアミス）
     const h = e.good && s.heist && s.heist.route === id ? s.heist : null;
-    // 梯子で塀を越えたときは、ニアミスを2回分おまけする（上級の逃げ道）
-    const near = h ? Math.max(0, h.near - (h.exit === 'wall' ? 2 : 0)) : 0;
+    const near = h ? h.near : 0;
     const rank = h && (near === 0 && h.min <= 90 ? '月下の怪盗' : near <= 2 ? '影の執事' : '危うい綱渡り');
     render(el('div', { class: 'card end' },
       el('h2', {}, e.title),
@@ -1011,6 +1010,7 @@ function noteTab() {
     ['人のいない時に、書斎から隠し部屋へ入る（12月以降）', f.red_book && f.key_hidden, f.found_painting],
     ['昼のうちに、バルコニーのガラス戸の鍵を外しておく', s.chapter >= 3 && f.ladder, f.balcony_open],
     ['絵の警報をどうにかする方法が要る', f.found_painting, f.white_ally],
+    ['絵を傷めずに運び出せる出口を探す（梯子と井戸は、額縁が擦れる）', f.found_painting, f.back_gate],
     // すり替え（ルート2）
     ['青に、絵の模写を頼めるかもしれない（好感度60以上で、昼に話しかけるか、夜に共用室で）', f.found_painting, f.forgery_start],
     [forgeryGoal(), f.forgery_start, f.forgery_ready],

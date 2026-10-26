@@ -245,8 +245,8 @@ export const ARRIVAL = [
 export const ROUTES = [
   { id: 'night', name: 'ルート1：一夜で持ち去る',
     desc: '誰にも見つからず、正しい道順で絵を持ち去る。',
-    ok: s => s.flags.found_painting,
-    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない'] },
+    ok: s => s.flags.found_painting && s.flags.back_gate,
+    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない', !s.flags.back_gate && '絵を傷めずに運び出せる出口が分からない'] },
   { id: 'swap', name: 'ルート2：贋作とすり替える',
     desc: '青の模写とすり替え、本物はお嬢様の部屋に隠す。25日の朝、運び屋が偽物を梱包している間に、本物を運び出す。',
     ok: s => s.flags.found_painting && s.flags.forgery_ready && s.flags.hide_ok,
@@ -302,7 +302,6 @@ const sendOff = { if: s => s.flags.shizuku && ['red', 'blue', 'white'].every(m =
 
 export const ENDINGS = {
   night: { title: 'ENDING 1　月下の怪盗執事', good: true, lines: [
-    { if: s => s.heist && s.heist.exit === 'wall', then: [[N, '東の塀の外に、一本の梯子だけが残されていた。']] },
     [N, '翌朝、鷹宮家から執事の姿が消えていた。隠し部屋の額縁は空っぽだった。'],
     [N, '警察は動かなかった。もともと盗品だった絵の被害届など、出せるはずもない。'],
     { if: s => s.heist && s.heist.card, then: [
