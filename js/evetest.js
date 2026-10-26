@@ -21,8 +21,24 @@ export const PRESETS = [
   { id: 'bad', name: '何もそろっていない', desc: '調べ物も協力者も無い。BAD END の確認用', flags: [], aff: {} },
 ];
 export const WHEN = [['morning', '24日の朝（イブの昼）から'], ['night', '24日の深夜（作戦を選ぶ画面）から']];
+// お嬢様・お母様との関係（ひな形の上に重ねる）
+// ふつう：好感度30／親しい：70（ダンスに誘える・秘密を打ち明けられている）／深い仲：85（夜を重ねた仲・イブの夜に部屋へ招かれている）
+export const REL = [['normal', 'ふつう'], ['close', '親しい'], ['deep', '深い仲']];
+const AFF = { normal: 30, close: 70, deep: 85 };
+function applyRel(s, rel) {
+  for (const [who, pre] of [['daughter', 'd'], ['mother', 'm']]) {
+    const lv = rel[who] || 'normal';
+    s.aff[who] = AFF[lv];
+    for (const f of [`${pre}_secret`, `${pre}_close`, `eve_${who}`]) delete s.flags[f];
+    if (lv !== 'normal') setFlag(s, `${pre}_secret`);
+    if (lv === 'deep') { setFlag(s, `${pre}_close`); setFlag(s, `eve_${who}`); }
+  }
+  // 鉢合わせ（母娘に互いの関係を知られた）：二人とも深い仲のときだけ
+  delete s.flags.family_rift;
+  if (rel.rift && rel.daughter === 'deep' && rel.mother === 'deep') setFlag(s, 'family_rift');
+}
 
-export function testState(presetId, when) {
+export function testState(presetId, when, rel = {}) {
   const p = PRESETS.find(x => x.id === presetId);
   const s = newState();
   Object.assign(s, { chapter: 3, week: 1, day: when === 'night' ? 5 : 4, phase: when === 'night' ? 'weekend' : 'meeting', trust: 60, susp: 10 });
@@ -33,6 +49,7 @@ export function testState(presetId, when) {
   if (presetId === 'e3') { setFlag(s, 'plan_blackout'); setFlag(s, 'rally_done'); }
   // 深夜から始めるときは、ENDING 2 のすり替え（イブの昼）も済ませておく
   if (presetId === 'e2' && when === 'night') { setFlag(s, 'swapped'); setFlag(s, 'swap_hidden'); }
-  s.testPreset = presetId; s.testWhen = when;
+  applyRel(s, rel);
+  s.testPreset = presetId; s.testWhen = when; s.testRel = rel;
   return s;
 }

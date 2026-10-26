@@ -315,3 +315,7 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .endings li.good b { color: var(--gold); }
 .endings li.miss { color: var(--muted); }
 .endings li small { display: block; margin-top: 4px; font-size: .8rem; }
+/* テストプレイの切り替え（1行に並べる小さなボタン） */
+.seg { display: flex; gap: 6px; align-items: center; margin: 0 0 8px; }
+.seg > span { flex: 0 0 4.5em; }
+.seg button { flex: 1; margin: 0; padding: 7px 4px; font-size: .85rem; width: auto; min-width: 0; }

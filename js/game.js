@@ -15,7 +15,7 @@ import { richNodes } from './richtext.js';
 import { VERSION, VERSION_DATE } from './version.js';
 import { KINDS, countOf, savedCount, saveKind, keepStorage } from './vrmstore.js';
 import * as music from './music.js';
-import { PRESETS, WHEN, testState } from './evetest.js';
+import { PRESETS, WHEN, REL, testState } from './evetest.js';
 import { ball2D, settleBall } from './ball.js';
 import { foreshadowList } from './recall.js';
 
@@ -143,23 +143,34 @@ function secretTap() {
   taps = [...taps.filter(t => now - t < 3000), now];
   if (taps.length >= 5) { taps = []; testScreen(); }
 }
-function testScreen() {
+function testScreen(rel0) {
   let when = 'morning';
-  const whenRow = el('div', { class: 'row' });
+  const rel = { daughter: 'normal', mother: 'normal', rift: false, ...rel0 };
+  const whenRow = el('div', { class: 'seg' });
   const showWhen = () => whenRow.replaceChildren(...WHEN.map(([id, label]) =>
     el('button', { class: id === when ? 'primary' : 'ghost', onclick: () => { when = id; showWhen(); } }, label)));
   showWhen();
+  // お嬢様・お母様との関係（ひな形の上に重ねる）。鉢合わせは、二人とも深い仲のときだけ選べる
+  const relBox = el('div', {});
+  const showRel = () => relBox.replaceChildren(
+    ...[['daughter', 'お嬢様'], ['mother', 'お母様']].map(([who, name]) => el('div', { class: 'seg' }, el('span', { class: 'hint' }, name),
+      ...REL.map(([id, label]) => el('button', { class: rel[who] === id ? 'primary' : 'ghost', onclick: () => { rel[who] = id; showRel(); } }, label)))),
+    rel.daughter === 'deep' && rel.mother === 'deep' ? el('div', { class: 'seg' }, el('span', { class: 'hint' }, '鉢合わせ'),
+      ...[[false, '起きていない'], [true, '知られている']].map(([v, label]) => el('button', { class: rel.rift === v ? 'primary' : 'ghost', onclick: () => { rel.rift = v; showRel(); } }, label))) : null,
+    el('p', { class: 'hint' }, 'ふつう：好感度30／親しい：70（ダンスに誘える・秘密を打ち明けられている）／深い仲：85（夜を重ねた仲・イブの夜に部屋へ招かれている）'));
+  showRel();
   render(el('div', { class: 'panel settings' },
     el('h2', {}, '24日のテストプレイ'),
     el('p', { class: 'hint' }, 'テスト用。どのセーブ枠にも保存しない。'),
     el('h4', {}, '始める時点'), whenRow,
-    el('h4', {}, '条件のひな形'),
-    PRESETS.map(p => el('button', { class: 'route', onclick: () => startTest(p.id, when) }, el('b', {}, p.name), el('small', {}, p.desc))),
+    el('h4', {}, 'お嬢様・お母様との関係'), relBox,
+    el('h4', {}, '条件のひな形（押すと始まる）'),
+    PRESETS.map(p => el('button', { class: 'route', onclick: () => startTest(p.id, when, { ...rel }) }, el('b', {}, p.name), el('small', {}, p.desc))),
     el('button', { class: 'ghost', onclick: title }, 'タイトルに戻る')));
 }
-function startTest(preset, when) {
+function startTest(preset, when, rel) {
   setTesting(true);
-  s = testState(preset, when);
+  s = testState(preset, when, rel);
   testBadge();
   preloadCast(() => { loadPortrait(); when === 'night' ? startWeekend() : startWeekday(); });
 }
@@ -1094,8 +1105,8 @@ function ending(id) {
       el('div', { class: 'menu' },
         retry ? el('button', { onclick: () => resume(retry) }, e.good ? '最後のセーブから、別の結末を探す' : '直前のセーブからやり直す') : null,
         eve ? el('button', { onclick: () => resume(eve) }, 'イブの朝からやり直す') : null,
-        isTesting() ? el('button', { onclick: () => startTest(s.testPreset, s.testWhen) }, 'テストのはじめに戻る') : null,
-        isTesting() ? el('button', { onclick: testScreen }, '別の条件でテストする') : null,
+        isTesting() ? el('button', { onclick: () => startTest(s.testPreset, s.testWhen, s.testRel) }, 'テストのはじめに戻る') : null,
+        isTesting() ? el('button', { onclick: () => testScreen(s.testRel) }, '別の条件でテストする') : null,
         el('button', { onclick: title }, 'タイトルへ'))));
   });
 }
