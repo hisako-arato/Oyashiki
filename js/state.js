@@ -159,7 +159,7 @@ export const activeMaids = s => MAIDS.filter(m => maidAvailable(s, m));
 export const BALL_CAST = ['reiko', 'dealer', 'caterer', 'daughter3', 'guest_m1', 'guest_m2', 'guest_f1', 'guest_f2'];
 export const castNeeded = s => ['butler', 'father', 'mother', 'daughter', ...activeMaids(s), ...(s.chapter >= 3 ? ['guard'] : []), ...(s.phase === 'execution' ? ['butler2'] : []), ...(s.phase === 'ball' ? BALL_CAST : [])];
 // 好感度70以上のメイドは協力者。黒メイド（妹の雫）は、屋敷に来た日から味方
-// 白メイドは、寝返った後（white_turned）も味方
+// 白井は、寝返った後（white_turned）も味方
 export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.flags.shizuku : s.aff[who] >= ALLY_AFF || (who === 'white' && !!s.flags.white_turned));
 
 // ---- 1日の予定 ----

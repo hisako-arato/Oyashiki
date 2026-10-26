@@ -18,7 +18,7 @@ export const SPOTS = {
   ],
   kitchen: [
     { id: 'pantry', name: '食料庫', run: s => {
-      if (!s.flags.b_hatch || s.flags.b_key) return { text: '赤メイドが整理した食料庫。几帳面に並んでいる。' };
+      if (!s.flags.b_hatch || s.flags.b_key) return { text: '赤羽が整理した食料庫。几帳面に並んでいる。' };
       if (s.flags.b_key_lost) return { text: '奥の釘には何も掛かっていない。錠を付け替えてから、旦那様は鍵を肌身離さず持ち歩いている。' };
       if (fatherHome(s)) return { text: '奥の釘には何も掛かっていない。旦那様が家にいる日は、鍵束を持ち歩いているのだろう。' };
       setFlag(s, 'b_key');
@@ -188,7 +188,7 @@ export const SPOTS = {
 // ask：主人公から振る一言（手がかりの話は、主人公が尋ねて相手が答える形にする）
 export const TALKS = {
   father: [
-    // 白の報告で疑惑が上がった翌週
+    // 白井の報告で疑惑が上がった翌週
     { if: s => s.counters.w_warn != null && dayIndex(s) - s.counters.w_warn <= 5,
       line: '「最近、仕事の合間に屋敷をうろついているそうだな。……執事の仕事は、屋敷の中を嗅ぎ回ることではないぞ」' },
     { line: '「報告は手短に。……君の仕事ぶりには満足している」' },
@@ -208,8 +208,8 @@ export const TALKS = {
     { line: '「執事さんって何でもできるよね。私、何にもできないや」' },
   ],
   red: [
-    { if: s => (afterNight(s, 'mother') && s.flags.m_close) || (afterNight(s, 'daughter') && s.flags.d_close), line: '「……今朝の執事さん、甘い匂い」（赤は鍋をかき混ぜながら、こちらを見ずに言った）' },
-    { if: s => s.aff.red >= 25 && !s.flags.c_red, flag: 'c_red', ask: '「赤さん、旦那様は夜も遅くまで起きていらっしゃるのかな」',
+    { if: s => (afterNight(s, 'mother') && s.flags.m_close) || (afterNight(s, 'daughter') && s.flags.d_close), line: '「……今朝の執事さん、甘い匂い」（赤羽は鍋をかき混ぜながら、こちらを見ずに言った）' },
+    { if: s => s.aff.red >= 25 && !s.flags.c_red, flag: 'c_red', ask: '「赤羽さん、旦那様は夜も遅くまで起きていらっしゃるのかな」',
       line: '「……うん。わたし、夜中に仕込みしてるから、聞こえる。この前、書斎で電話してた。『あの絵は年明けに海外で』って。……それだけ」' },
     { if: s => s.aff.red >= 35 && !s.counters.night_red, line: '「……仕事のあと、たまに共用室で熱燗飲んでる。……執事さんも、来る？」' },
     { if: s => s.aff.red >= 40 && !s.flags.ladder, flag: 'ladder', ask: '「2階のバルコニーの窓、外側が汚れていてね。外から拭けないものかな」',
@@ -222,8 +222,8 @@ export const TALKS = {
     { line: '「……（ぼーっとしている）……あ、お昼もうできてます」' },
   ],
   blue: [
-    { if: s => s.flags.found_painting && !s.flags.forgery_start && s.aff.blue >= 60, forgery: true, ask: '「青さん、絵の模写を頼めないかな。見たままを、そっくりに」',
-      line: '「え、絵の模写ですか？ 任せてください！ 見たままを描くの、得意なんです！」' },
+    { if: s => s.flags.found_painting && !s.flags.forgery_start && s.aff.blue >= 60, forgery: true, ask: '「青島さん、絵の模写を頼めないかな。見たままを、そっくりに」',
+      line: '「え、絵の模写ですか？ 任せてください！ 美大の模写の授業、ずっといちばんだったんです！」' },
     { if: s => s.flags.forgery_start && !s.flags.forgery_ready, line: '「模写、順調ですよ！ 筆が乗ってきました！」' },
     { if: s => s.aff.blue >= 35 && !s.counters.night_blue, line: '「今夜、共用室で一緒に飲みませんか？ 甘いの、冷やしてあるんです！」' },
     { if: s => s.aff.blue >= 70, line: '「執事さんの似顔絵、また描いちゃいました！ ほら、ちょっと笑ってる顔です」' },
@@ -236,7 +236,7 @@ export const TALKS = {
     { line: '「掃除は終わりました。次の指示をお願いします」' },
   ],
   white: [
-    { if: s => s.aff.white >= 40 && !s.flags.white_elec, flag: 'white_elec', ask: '「白さん、この屋敷の配電盤は古いね。見たことはある？」',
+    { if: s => s.aff.white >= 40 && !s.flags.white_elec, flag: 'white_elec', ask: '「白井さん、この屋敷の配電盤は古いね。見たことはある？」',
       line: '「この屋敷、警報だけ独立した系統なんですよ。大学で電気工学をやってたので、配線を見れば分かります」' },
     { if: s => s.aff.white >= 35 && !s.counters.night_white, line: '「仕事のあと、共用室でハイボールでもどうです？ 一人で飲むのは、非合理なので」' },
     { if: s => s.aff.white >= 45 && ch(s) >= 1 && s.flags.white_elec && !s.flags.b_circuit, flag: 'b_circuit', ask: '「配電盤のことで、ほかに気づいたことは？」',

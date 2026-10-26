@@ -12,7 +12,7 @@ export const BALL_START = 19, BALL_END = 24.5;   // 時刻（時）
 // 出来事の時刻（19:00 からの分）
 export const AT = { serve: 30, reiko: 120, dance: 180, serve2: 195, lastCall: 290, unmask: 300, close: 330 };
 
-const B = '執事', F = 'お父様', M = 'お母様', D = 'お嬢様', R = '赤メイド', BL = '青メイド', K = '黒メイド', W = '白メイド', S = '雫', RK = '麗子', DL = '担当者', C = '仕出し屋';
+const B = '執事', F = 'お父様', M = 'お母様', D = 'お嬢様', R = '赤羽', BL = '青島', K = '黒メイド', W = '白井', S = '雫', RK = '麗子', DL = '担当者', C = '仕出し屋';
 
 // 19:00 開宴と乾杯：お父様が「月下の庭」を大広間に飾り、客に見せびらかす
 export function openingLines(s) {
@@ -21,8 +21,8 @@ export function openingLines(s) {
     [F, '「今宵は年に一度の仮面舞踏会だ。……そして今年は、皆さんに特別な物をお見せしたい」'],
     '旦那様が布を引くと、大広間の壁に一枚の絵が現れた。月明かりの下、白い花が咲く庭。',
     [F, '「『月下の庭』。……これを人前に出すのは、今夜が最初で最後だ」'],
-    s.flags.swapped ? [B, '（……あれは、青の模写だ。旦那様は、偽物を誇らしげに見せびらかしている）'] : null,
-    s.flags.swapped ? [BL, '（青が、トレイを持ったまま小さく息をのんだ。自分の絵が、客たちのため息を集めている）'] : null,
+    s.flags.swapped ? [B, '（……あれは、青島の模写だ。旦那様は、偽物を誇らしげに見せびらかしている）'] : null,
+    s.flags.swapped ? [BL, '（青島が、トレイを持ったまま小さく息をのんだ。自分の絵が、客たちのため息を集めている）'] : null,
     '客席から、ため息のようなざわめきが広がった。眼鏡の男が一人、仮面の下で満足そうに頷いている。',
     [B, '（母さん。……すぐそこに、あの絵がある）'],
     [F, '「それから、娘を紹介しよう。美術史を学んでいる自慢の娘だ」'],
@@ -49,7 +49,7 @@ export function reikoLines(s) {
 export function danceOptions(s) {
   const list = [];
   if (s.flags.d_close || s.aff.daughter >= 70) list.push({ t: 'お嬢様と踊る（大広間の真ん中で）', id: 'daughter' });
-  if (isAlly(s, 'blue')) list.push({ t: '青に誘われる（足を踏まれそうだ）', id: 'blue' });
+  if (isAlly(s, 'blue')) list.push({ t: '青島に誘われる（足を踏まれそうだ）', id: 'blue' });
   list.push({ t: '仕事に徹する（配膳を続ける）', id: 'work' });
   return list;
 }
@@ -61,7 +61,7 @@ export function danceIntro(s, id) {
     [D, '「執事さん。……一曲だけ、いいでしょ。仮面を付けてれば、誰も気にしないから」'],
   ];
   if (id === 'blue') return [
-    '22時。ワルツが始まった。青が、トレイを置いて駆け寄ってくる。',
+    '22時。ワルツが始まった。青島が、トレイを置いて駆け寄ってくる。',
     [BL, '「執事さん、一曲だけ！ ……わたし、ダンスは初めてなんですけど！」'],
   ];
   s.trust = clamp(s.trust + 2);
@@ -94,7 +94,7 @@ export function danceResult(s, id, tier) {
   if (id === 'blue') {
     s.aff.blue = clamp(s.aff.blue + up);
     return [
-      tier === 'great' ? '執事がうまく導くと、青の足取りも少しずつ揃っていった。踏まれたのは、二回だけだ。' : '三拍子のたびに、青の靴が執事の靴を踏んだ。四回、五回。',
+      tier === 'great' ? '執事がうまく導くと、青島の足取りも少しずつ揃っていった。踏まれたのは、二回だけだ。' : '三拍子のたびに、青島の靴が執事の靴を踏んだ。四回、五回。',
       [BL, tier === 'great' ? '「わ、わたし、踊れてます！？ ……執事さん、すごいです！」' : '「す、すみません！ ……でも、楽しいです！」'],
     ];
   }
@@ -220,7 +220,7 @@ export function ballTalk(s, id, min) {
       : [[M, '「……今夜は話しかけないで。あの人の『お客様』が来るのよ」']];
     case 'daughter': return [[D, s.flags.d_close ? '「執事さん。……あとで、一曲くらい付き合ってよね」' : '「仮面って、息苦しい。……早く終わらないかな」']];
     case 'reiko': return [[RK, '「あら、素敵な執事さん。……鷹宮さんの奥様には、内緒にしておいてね」']];
-    case 'dealer': return [[DL, '「（眼鏡の奥で、壁の絵から目を離さずに）……良い保存状態だ。25日の朝、予定どおり伺いますよ」'], s.flags.swapped ? [B, '（……専門家の目も、青の筆には気づかない）'] : null].filter(Boolean);
+    case 'dealer': return [[DL, '「（眼鏡の奥で、壁の絵から目を離さずに）……良い保存状態だ。25日の朝、予定どおり伺いますよ」'], s.flags.swapped ? [B, '（……専門家の目も、青島の筆には気づかない）'] : null].filter(Boolean);
     case 'caterer':
       if (s.flags.caterer_friend) { setFlag(s, 'caterer_met'); return [[C, '「……雫ちゃんのお兄さん、ですよね。話は聞いてます」'], [C, '「裏の白いバン、片付けが済むまで停めておきます。……何か運ぶ物があれば」']]; }
       return [[C, '「お疲れさまです！ 次の料理、すぐ上がります！」']];

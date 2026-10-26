@@ -570,14 +570,14 @@ async function startWeekday() {
   music.play('day');
   // 章が進んで新しい人が来たら、先に読み込む
   if (castMissing()) return preloadCast(startWeekday);
-  // 第2章の初日は、お父様が白メイドを連れてくる（それより後から遊び始めたセーブでは、場面を飛ばして済ませる）
+  // 第2章の初日は、お父様が白井を連れてくる（それより後から遊び始めたセーブでは、場面を飛ばして済ませる）
   if (s.chapter >= 1 && !s.flags.white_arrived) {
     if (s.chapter === 1 && s.week === 0 && s.day === 0) return playScript(WHITE_ARRIVAL, startWeekday);
     setFlag(s, 'white_arrived'); setFlag(s, 'white_spy');
   }
   // 第3章の初日は、新しいメイド（妹の雫）がやって来る
   if (s.chapter >= 2 && !s.flags.shizuku) return playScript(ARRIVAL, startWeekday);
-  // 最終章の初日：白の報告が積み重なっていれば、お父様がイブの夜の巡回を厳しくする
+  // 最終章の初日：白井の報告が積み重なっていれば、お父様がイブの夜の巡回を厳しくする
   if (strictDue(s)) { const sc = strictScene(s); if (sc.length) return playScript(sc, startWeekday); }
   s.phase = 'meeting';
   if (!s.today || s.today.dayIndex !== dayIndex(s)) {
@@ -848,9 +848,9 @@ function wineCheck() {
   return DL.fatherWine(s, t.loc === 'vault' ? (s.chapter >= 3 ? 'tunnel' : 'vault') : 'cellar');
 }
 
-// 青メイドへの模写の依頼（3Dの屋敷からも使う）
+// 青島への模写の依頼（3Dの屋敷からも使う）
 function askForgery(msg, done) {
-  const back = modal(el('p', {}, msg), el('p', {}, '青メイドに「月下の庭」の模写を頼みますか？ 絵の特徴は口頭で伝える。'),
+  const back = modal(el('p', {}, msg), el('p', {}, '青島に「月下の庭」の模写を頼みますか？ 絵の特徴は口頭で伝える。'),
     el('div', { class: 'row' },
       el('button', { onclick: () => { back.remove(); done(DL.startForgery(s)); } }, '頼む'),
       el('button', { class: 'ghost', onclick: () => { back.remove(); done(msg); } }, 'やめておく')));
@@ -868,7 +868,7 @@ function endDay() {
     const def = CHORES[c.id];
     if (c.assignee === 'butler' && c.progress >= def.hours) c.done = true;
     if (c.done && !c.failed) { trust += 1; s.weekStats.done++; lines.push(`○ ${def.name}`); if (def.xmas) setFlag(s, `deco_${c.id}`); }
-    else if (c.failed) { trust -= 2; s.weekStats.done++; lines.push(`△ ${def.name}（青メイドが失敗）`); }
+    else if (c.failed) { trust -= 2; s.weekStats.done++; lines.push(`△ ${def.name}（青島が失敗）`); }
     else if (!def.optional) { trust -= c.id === 'cook' ? 10 : 5; s.weekStats.missed++; lines.push(`× ${def.name}${c.overload ? '（時間内に終わらず）' : ''}`); }
     if (MAIDS.includes(c.assignee)) {
       const m = c.assignee;
@@ -881,7 +881,7 @@ function endDay() {
 
   if (s.flags.forgery_start && !s.flags.forgery_ready && dayIndex(s) - s.forgeryDay >= DL.FORGERY_DAYS) {
     setFlag(s, 'forgery_ready');
-    notes.push('青メイドの模写が完成した！');
+    notes.push('青島の模写が完成した！');
   }
   if (checkFatal()) return;
   render(el('div', { class: 'panel' }, statusBar(),
@@ -995,7 +995,7 @@ function execution() {
   // ルート2：イブの昼にすり替えてあれば、25日の朝に本物を運び出すだけ
   if (s.flags.swap_hidden) return playScript([
     ...withD,
-    ['n', '12月24日、深夜。仮面舞踏会の客も帰り、絵は隠し部屋に戻された。……中身は、青の模写だ。'],
+    ['n', '12月24日、深夜。仮面舞踏会の客も帰り、絵は隠し部屋に戻された。……中身は、青島の模写だ。'],
     ['butler', '（本物は、お嬢様のクローゼットの奥で眠っている。あとは25日の朝、運び屋と入れ違いに運び出すだけだ）'],
   ], () => runRoute('swap'));
   const avail = ROUTES.filter(r => r.ok(s));
@@ -1034,7 +1034,7 @@ async function runRoute(id) {
     if (!alarmOff) return fail('額縁に手をかけた瞬間、甲高い警報が屋敷中に鳴り響いた。');
     if (id === 'night') return playScript([['n', '絵を布で包み、裏階段から1階へ。勝手口から庭へ出て、バラ園の奥の通用口から屋敷を後にした。']], () => ending('night'));
     playScript([
-      ['n', '青の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。'],
+      ['n', '青島の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。'],
       ['n', 'お嬢様の部屋のクローゼットに本物を隠し、執事は何食わぬ顔で自室に戻った。'],
       ['n', '数日後、休暇を取った執事は「母への贈り物」を受け取り、屋敷を去った。'],
     ], () => ending('swap'));
@@ -1053,19 +1053,19 @@ async function runRoute(id) {
     const room = s.flags.eve_go_daughter ? 'お嬢様の部屋' : null;
     const opts = [
       ...(room ? [{ t: `${room}から、そっと書斎へ向かう`, go: () => playScript([['n', `寝息を確かめ、${room}を抜け出した。`]], corridor) }] : []),
-      // 夜は倉庫から資料室への扉に鍵が掛かる。屋敷に入るには、勝手口（赤メイドの前）か、地下の搬入路を通る
+      // 夜は倉庫から資料室への扉に鍵が掛かる。屋敷に入るには、勝手口（赤羽の前）か、地下の搬入路を通る
       { t: `${s.flags.b_grate && s.flags.b_found ? '古井戸から地下を抜けて屋敷に入り、' : '屋敷に入り、'}大広間の大階段を上る${s.flags.hall_patrol ? '（黒メイド――雫が見回っている）' : ''}`, go: () => {
         const way = s.flags.b_grate && s.flags.b_found ? 'tunnel' : s.aff.red >= ALLY_AFF ? 'back' : null;
-        if (!way) return fail('倉庫の奥の扉には、夜は鍵が掛かっていた。勝手口に回ると、キッチン裏の赤メイドが振り返った。「……誰？」');
+        if (!way) return fail('倉庫の奥の扉には、夜は鍵が掛かっていた。勝手口に回ると、キッチン裏の赤羽が振り返った。「……誰？」');
         const inside = way === 'tunnel'
           ? ['n', '古井戸の底の横穴から搬入路へ。保管庫を抜け、資料室の床の扉を下から押し上げた。誰にも見られていない。']
-          : ['n', '勝手口から入る。仕込みをしていた赤メイドは、こちらを見ないふりをしてくれた。'];
+          : ['n', '勝手口から入る。仕込みをしていた赤羽は、こちらを見ないふりをしてくれた。'];
         if (!isAlly(s, 'black')) return fail('大広間に足を踏み入れた瞬間、懐中電灯の光が執事を照らした。');
         playScript([inside, ['n', '大広間の懐中電灯の光は、執事の前でわざと逸らされた。すれ違いざま、雫が小さく頷いた。']], corridor);
       } },
-      { t: '裏階段を使う（キッチン裏の赤メイドの前を通る）', go: () => s.aff.red >= ALLY_AFF
-        ? playScript([['n', '仕込みをしていた赤メイドと目が合った気がしたが、彼女は黙って鍋に向き直った。']], corridor)
-        : fail('「……誰？」キッチン裏の赤メイドが振り返った。足音を聞かれてしまった。') },
+      { t: '裏階段を使う（キッチン裏の赤羽の前を通る）', go: () => s.aff.red >= ALLY_AFF
+        ? playScript([['n', '仕込みをしていた赤羽と目が合った気がしたが、彼女は黙って鍋に向き直った。']], corridor)
+        : fail('「……誰？」キッチン裏の赤羽が振り返った。足音を聞かれてしまった。') },
     ];
     if (s.flags.ladder) opts.push({ t: '倉庫の梯子を前庭に運び、バルコニーから2階へ', go: () => s.flags.balcony_open
       ? playScript([['n', '前庭の闇に梯子を立て、バルコニーへ登る。昼のうちに鍵を外しておいたガラス戸は、音もなく開いた。']], corridor)
@@ -1135,11 +1135,11 @@ function openNotebook(tab = 'note') {
 
 // 模写の完成を待つ目標。イブに間に合わないときは、そう知らせる
 function forgeryGoal() {
-  if (!s.flags.forgery_start || s.flags.forgery_ready) return '青の模写の完成を待つ';
+  if (!s.flags.forgery_start || s.flags.forgery_ready) return '青島の模写の完成を待つ';
   const left = Math.max(0, DL.FORGERY_DAYS - (dayIndex(s) - s.forgeryDay));
   const eveIdx = (3 * WEEKS_PER_CHAPTER + WEEKS_PER_CHAPTER - 1) * 5 + 4;
   const late = left > eveIdx - dayIndex(s);
-  return `青の模写の完成を待つ（あと${left}日）${late ? '……このままではイブに間に合わない。夜も描いてもらえれば' : ''}`;
+  return `青島の模写の完成を待つ（あと${left}日）${late ? '……このままではイブに間に合わない。夜も描いてもらえれば' : ''}`;
 }
 function noteTab() {
   const got = Object.entries(CLUES).filter(([k]) => s.flags[k]);
@@ -1155,17 +1155,17 @@ function noteTab() {
     ['絵の警報をどうにかする方法が要る', f.found_painting, f.white_ally],
     ['絵を傷めずに運び出せる出口を探す（梯子と井戸は、額縁が擦れる）', f.found_painting, f.back_gate],
     // すり替え（ルート2）
-    ['青に、絵の模写を頼めるかもしれない（好感度60以上で、昼に話しかけるか、夜に共用室で）', f.found_painting, f.forgery_start],
+    ['青島に、絵の模写を頼めるかもしれない（好感度60以上で、昼に話しかけるか、夜に共用室で）', f.found_painting, f.forgery_start],
     [forgeryGoal(), f.forgery_start, f.forgery_ready],
     ['本物を隠しておける場所を探す（お嬢様……？）', f.forgery_start, f.hide_ok],
-    ['白メイドに見られたことは、週末に旦那様へ報告される（仲良くなれば、伏せてくれるかもしれない）', whiteActive(s), whiteCovers(s)],
+    ['白井に見られたことは、週末に旦那様へ報告される（仲良くなれば、伏せてくれるかもしれない）', whiteActive(s), whiteCovers(s)],
     ['地下があるらしい。資料室の床を調べる', s.chapter >= 2 && hints >= 2, f.b_hatch],
     ['床の扉の鍵を手に入れる（旦那様が出かける日の、食料庫あたり？）', f.b_hatch && !f.b_key_lost, f.b_key],
     ['地下の鍵を取り上げられた。新しい鍵を手に入れる（雫なら……）', f.b_key_lost, f.b_key],
     ['地下を照らす明かりが要る（倉庫の工具棚）', f.b_hatch, f.b_light],
     ['ワイン貯蔵庫の奥を調べる（旦那様が在宅の日は、17時台に降りてくる）', f.b_found, f.b_vault],
     ['搬入路の鉄格子を外す道具を探す（倉庫の工具棚）', f.b_tunnel, f.b_grate],
-    ['決行の夜、屋敷に入る道を考える（夜は倉庫の奥の扉に鍵。勝手口の先には赤メイド）', s.chapter >= 3, way],
+    ['決行の夜、屋敷に入る道を考える（夜は倉庫の奥の扉に鍵。勝手口の先には赤羽）', s.chapter >= 3, way],
   ].filter(([, show]) => show);
   const todo = goals.filter(([, , done]) => !done), done = goals.filter(([, , d]) => d);
   const goalList = el('div', {}, el('h4', {}, 'いまの目標'),

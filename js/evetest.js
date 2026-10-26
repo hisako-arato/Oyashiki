@@ -12,9 +12,9 @@ const INFO = ['c_import', 'c_red', 'c_daughter', 'c_study', 'h_window', 'h_bluep
 const FORGERY = ['forgery_start', 'forgery_ready', 'hide_ok'];
 
 export const PRESETS = [
-  { id: 'e1', name: 'ENDING 1 の条件', desc: '白が協力者。絵の場所・暗証番号・巡回員の癖が分かっている',
+  { id: 'e1', name: 'ENDING 1 の条件', desc: '白井が協力者。絵の場所・暗証番号・巡回員の癖が分かっている',
     flags: [...INFO, 'white_ally'], aff: { white: 75 } },
-  { id: 'e2', name: 'ENDING 2 の条件', desc: 'ENDING 1 の条件に加えて、青の模写が完成し、お嬢様のクローゼットに隠せる',
+  { id: 'e2', name: 'ENDING 2 の条件', desc: 'ENDING 1 の条件に加えて、青島の模写が完成し、お嬢様のクローゼットに隠せる',
     flags: [...INFO, 'white_ally', ...FORGERY], aff: { white: 75, blue: 75, daughter: 75 } },
   { id: 'e3', name: 'ENDING 3 の条件', desc: '4人全員が協力者で、23日の夜に予告状を出すと決めてある（朝から始めると、0時の仮面外しで停電劇）',
     flags: [...INFO, 'white_ally', 'white_turned', ...FORGERY, 'told_red', 'told_blue', 'told_white'], aff: { red: 75, blue: 75, white: 75, daughter: 75 } },

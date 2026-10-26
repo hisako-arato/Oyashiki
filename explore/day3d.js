@@ -353,7 +353,7 @@ function sight(p) {
   }
   pos.needsUpdate = true;
 }
-// 朝礼前の使用人棟：赤はお茶を淹れ、黒は先に席で待ち、青と白は身支度中。家族は母屋にいる
+// 朝礼前の使用人棟：赤羽はお茶を淹れ、黒は先に席で待ち、青島と白井は身支度中。家族は母屋にいる
 const MORNING = { red: 'c_kettle', blue: 'c_blue', black: 'servants', white: 'c_white' };
 function wantedKey(p) {
   if (LOOKS[p.id].nightOnly || LOOKS[p.id].ballOnly) return null;   // 夜だけの人（外の巡回員）と舞踏会の客は、昼は屋敷にいない
@@ -391,7 +391,7 @@ function updatePerson(p, dt) {
   sight(p);
 }
 // 今こちらを見ている人（協力者は数えない）
-// チュートリアルで付いてくる青メイドは、資料室の練習のとき以外は数えない
+// チュートリアルで付いてくる青島は、資料室の練習のとき以外は数えない
 const guiding = p => st.tut && p.id === 'blue' && st.tut.step !== 2;
 const watchers = () => Object.values(people).filter(p => p.area === cur.id && p.seeing && !isAlly(s, p.id) && !guiding(p)).map(p => p.id);
 
@@ -554,7 +554,7 @@ function startMeeting() {
     const [x, z, yaw] = seats[i % seats.length];
     p.x = x; p.z = z; p.g.rotation.y = yaw; p.still = true; p.route = null; p.g.position.set(x, 0, z);
   });
-  const hint = st.tutPending ? '【朝礼】メイドが二人になったので、今日から執事が仕事を割り振る。赤は料理が速く、新人の青は絵（花の飾り付け）が得意だが、掃除や料理は苦手でときどき失敗する。執事が担当した仕事は、屋敷の緑の印の場所で行う。迷ったら「おまかせで割り振る」。' : null;
+  const hint = st.tutPending ? '【朝礼】メイドが二人になったので、今日から執事が仕事を割り振る。赤羽は料理が速く、新人の青島は絵（花の飾り付け）が得意だが、掃除や料理は苦手でときどき失敗する。執事が担当した仕事は、屋敷の緑の印の場所で行う。迷ったら「おまかせで割り振る」。' : null;
   hooks.openMeeting(() => {
     st.mode = 'day';
     s.today.hour = 9; s.today.min = 0;
@@ -681,31 +681,31 @@ function special(kind) {
 }
 
 // ============================================================
-// 初日（11月1日）のチュートリアル：新しく来た青メイドに、執事が屋敷の仕事と決まりを教える
-// （執事は何か月も働いているので、教わる側ではなく教える側。青が後ろを付いて歩く）
+// 初日（11月1日）のチュートリアル：新しく来た青島に、執事が屋敷の仕事と決まりを教える
+// （執事は何か月も働いているので、教わる側ではなく教える側。青島が後ろを付いて歩く）
 // ============================================================
 const TUT = [
   { goal: () => {
     // どの仕事を、どこでやるのかを示す（印は別の階や建物にあることもある）
     const c = s.today.chores.find(c => c.assignee === 'butler' && !c.done && !CHORES[c.id].optional);
-    if (!c) return '青に仕事を見せる：担当の仕事を、緑の印の場所で済ませる';
+    if (!c) return '青島に仕事を見せる：担当の仕事を、緑の印の場所で済ませる';
     const [area] = WORK[c.id], room = ROOMS[CHORES[c.id].room];
-    return `青に仕事を見せる：担当の「${CHORES[c.id].name}」を済ませる（${AREA_INFO[area].name}${room ? `・${room.name}` : ''}の緑の印）`;
-  }, say: [['執事', '「青さん、まずは仕事の流れから。朝礼で決めた担当の仕事は、その場所で片付けます。付いてきてください」'],
-    ['青メイド', '「はいっ！ 執事さんの後ろ、ぴったり付いていきます！」']] },
-  { goal: '青に記録の整理を教える：倉庫の古い運送伝票を調べる', at: ['f1', 4.7, 2.0],
+    return `青島に仕事を見せる：担当の「${CHORES[c.id].name}」を済ませる（${AREA_INFO[area].name}${room ? `・${room.name}` : ''}の緑の印）`;
+  }, say: [['執事', '「青島さん、まずは仕事の流れから。朝礼で決めた担当の仕事は、その場所で片付けます。付いてきてください」'],
+    ['青島', '「はいっ！ 執事さんの後ろ、ぴったり付いていきます！」']] },
+  { goal: '青島に記録の整理を教える：倉庫の古い運送伝票を調べる', at: ['f1', 4.7, 2.0],
     say: [['執事', '「次は倉庫です。古い伝票の整理も仕事のうち。気になる物は、こうして手に取って確かめます」'],
-      ['青メイド', '「伝票……！ 字がいっぱい……がんばります！」']] },
-  { goal: '決まりを見せる：青に見られながら、資料室に入ってみる', at: ['f1', 12, 4], post: ['f1', 19.2, 4, -Math.PI / 2],
+      ['青島', '「伝票……！ 字がいっぱい……がんばります！」']] },
+  { goal: '決まりを見せる：青島に見られながら、資料室に入ってみる', at: ['f1', 12, 4], post: ['f1', 19.2, 4, -Math.PI / 2],
     say: [['執事', '（何か月も働いた屋敷だ。だが、盗む者の目で見直すと、まるで違って見える）'],
       ['執事', '「最後に大事な決まりを。書斎や資料室、奥様やお嬢様のお部屋に用もなく入っているのを見られたら、旦那様に報告されます」'],
-      ['執事', '「青さん、そこから見ていてください。私が資料室に入ってみます」'],
-      ['青メイド', '「はいっ、じーっと見てます！」']] },
+      ['執事', '「青島さん、そこから見ていてください。私が資料室に入ってみます」'],
+      ['青島', '「はいっ、じーっと見てます！」']] },
 ];
 function tutorStart(filled) {
   st.tut = { step: 0, lastPlan: 0 };
-  say(['青メイド', '「今日からよろしくお願いします！ 掃除も料理も苦手ですけど、元気だけは負けません！」'],
-    ['執事', '（赤と二人で回してきた屋敷も、今日からは三人。仕事の割り振りは、私の役目になった）'],
+  say(['青島', '「今日からよろしくお願いします！ 掃除も料理も苦手ですけど、元気だけは負けません！」'],
+    ['執事', '（赤羽と二人で回してきた屋敷も、今日からは三人。仕事の割り振りは、私の役目になった）'],
     filled.length && `（誰にも割り振られていなかった仕事は、${filled.map(m => PEOPLE[m].name).join('と')}に振り分けておいた）`, ...TUT[0].say);
 }
 function tutorNext() {
@@ -715,7 +715,7 @@ function tutorNext() {
   setFlag(s, 'tutorial_done');
   st.tut = null;
   people.blue.key = undefined;   // 自分の持ち場へ戻る
-  say(['青メイド', '「ぜんぶ覚えました！ ……たぶん！ じゃあ、わたしも持ち場に行ってきます！」'],
+  say(['青島', '「ぜんぶ覚えました！ ……たぶん！ じゃあ、わたしも持ち場に行ってきます！」'],
     ['執事', '（夕方になったら、使用人棟のベッドで休むとしよう）'],
     '（メニューの「手帳」で、手がかりや好感度をいつでも確認できる）');
 }
@@ -725,7 +725,7 @@ function tutorEvent(kind, key, id) {
   if (step === 0 && kind === 'chore') afterMsg = tutorNext;
   if (step === 1 && kind === 'search' && key === 'storage') afterMsg = tutorNext;
 }
-// 青メイドは執事についてくる。最後の決まりの間は、資料室の入口で見ている
+// 青島は執事についてくる。最後の決まりの間は、資料室の入口で見ている
 function tutorGuide(p, dt) {
   const step = TUT[st.tut.step];
   if (step && step.post) {
@@ -750,16 +750,16 @@ function tutorGuide(p, dt) {
   if (!p.route) return false;
   return walkLegs(p, dt * 1.4);
 }
-// 最後の決まり：資料室に入ったところを青メイドに見せて、見られるとどうなるかを教える
+// 最後の決まり：資料室に入ったところを青島に見せて、見られるとどうなるかを教える
 function tutorCheck(key) {
   if (!st.tut || st.tut.step !== 2 || st.busy) return;
   if (key === 'archive' && people.blue.seeing) {
     const before = st.tut.susp ?? s.susp;
     afterMsg = () => { s.susp = before; tutorNext(); };
-    say(['青メイド', '「あっ、見えました！ 執事さん、資料室に入ってます！」'],
+    say(['青島', '「あっ、見えました！ 執事さん、資料室に入ってます！」'],
       ['執事', '「そう、それです。人の視界に入ると、その人の視線が赤く光る。見たのが旦那様に報告する人なら、私でも疑いをかけられます」'],
       ['執事', '「担当の仕事でその部屋にいるときは大丈夫。……今のは練習ですから、黙っていてくださいね」'],
-      ['青メイド', '「はいっ、ないしょです！」'],
+      ['青島', '「はいっ、ないしょです！」'],
       '（左上の「疑惑」が100になると、正体が露見してしまう。私室を調べるときは、人の視界に入らないように）');
   } else if (key !== 'archive') st.tut.susp = s.susp;
 }
@@ -922,7 +922,7 @@ function takePainting() {
   areas.f2.secret.objs[0].visible = false;
   recall(s, 'stamp');
   caption('奪取', `深夜 ${nightClock()}　「月下の庭」`);
-  if (N.route === 'swap') return say('青の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。', '本物をお嬢様の部屋のクローゼットに隠そう。');
+  if (N.route === 'swap') return say('青島の模写を額に収め、本物を布で包む。見た目には、何ひとつ変わらない。', '本物をお嬢様の部屋のクローゼットに隠そう。');
   // 空になった額縁に、カードを残すか
   st.busy = true;
   hooks.askChoice('月明かりの下、額縁が静かに外れた。……空になった壁に、何か残していくか？', [
@@ -950,14 +950,14 @@ function nightAct(t) {
   if (t.spot && t.spot[1] === 'backgate') return N.route === 'night' && N.carry === 'painting' ? escape('back')
     : say('裏の小道へ出られる、庭師の木戸だ。……絵を手に入れたら、ここから抜けられる。');
   if (t.exit) {
-    // 玄関の扉には、絵とは別の警報が付いている（白が落としたのは絵の警報だけ）
-    if (/玄関/.test(t.name) && !N.morning) return say('玄関の扉には、絵とは別の警報が付いている。白が落としたのは、絵の警報だけだ。……開ければ鳴る。');
+    // 玄関の扉には、絵とは別の警報が付いている（白井が落としたのは絵の警報だけ）
+    if (/玄関/.test(t.name) && !N.morning) return say('玄関の扉には、絵とは別の警報が付いている。白井が落としたのは、絵の警報だけだ。……開ければ鳴る。');
     if (N.carry === 'ladder' && t.exit.area !== 'grounds' && cur.id === 'grounds') return say('梯子を担いだままでは、屋敷の中を通れない。');
     if (N.carry === 'painting' && (t.exit.area === 'basement' || cur.id === 'basement')) return say('縄梯子と狭い横穴では、額縁が壁に擦れる。……キャンバスに傷がつく。ここは通れない。');
     return travel(t.exit);
   }
   if (t.spot && t.spot[0] === 'kback') {
-    if (N.alarmOff) return say('警報の系統のランプが消えている。白は約束を守ってくれた。');
+    if (N.alarmOff) return say('警報の系統のランプが消えている。白井は約束を守ってくれた。');
     if (!confirm('配電盤を自分で操作しますか？')) return;
     afterMsg = () => endNight('caught');
     return say('どれが警報の系統か分からないまま切ったブレーカーは、屋敷全体の電源だった。真っ暗な屋敷に、家族の悲鳴が響く。');
@@ -978,11 +978,11 @@ function nightGoal() {
   if (N.morning) return N.carry === 'painting' ? (s.flags.caterer_friend ? '本物を、勝手口の外の仕出し屋のバンへ運ぶ（旦那様と警備員に見られないように）' : '本物を、使用人棟の執事の部屋まで運ぶ（旦那様と警備員に見られないように）')
     : 'お嬢様の部屋のクローゼットから、本物を取り出す（運び屋が発つ10時まで）。1階の廊下に旦那様、2階の廊下に木箱を運ぶ警備員';
   if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す'
-    : `絵を抱えて、屋敷の中を1階へ降り、勝手口から庭へ出て、${s.flags.back_gate ? 'バラ園の奥の通用口' : '裏庭のどこかの出口'}から抜け出す（梯子と井戸は絵を傷める。玄関には警報${isAlly(s, 'red') ? '' : '。勝手口の前の赤メイドは、1時半ごろに休む'}）`;
+    : `絵を抱えて、屋敷の中を1階へ降り、勝手口から庭へ出て、${s.flags.back_gate ? 'バラ園の奥の通用口' : '裏庭のどこかの出口'}から抜け出す（梯子と井戸は絵を傷める。玄関には警報${isAlly(s, 'red') ? '' : '。勝手口の前の赤羽は、1時半ごろに休む'}）`;
   if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
   if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
   const hall = people.black.sleep ? '大広間は眠れない旦那様が歩き回っている' : '大広間は雫（見逃してくれる）';
-  return `2階の書斎へ。夜は倉庫から奥への扉に鍵。勝手口の先には赤メイド（1時半に休む）、${hall}、2階の廊下には巡回員`;
+  return `2階の書斎へ。夜は倉庫から奥への扉に鍵。勝手口の先には赤羽（1時半に休む）、${hall}、2階の廊下には巡回員`;
 }
 function endNight(id) {
   // 盗み出せたときは、手際（かかった時間・ニアミス・カード）を残してエンディングで見せる
@@ -1003,10 +1003,10 @@ function nightTick(dt) {
       afterMsg = () => endNight('caught25');
       say('10時。トラックが正門を出ていった。……旦那様が、屋敷じゅうの点検を始めた。');
     } else if (!N.morning && N.min >= 30 && !N.redAsleep) {
-      // 1時半、キッチン裏の赤メイドは仕込みを終えて休む（勝手口の前が空く）
+      // 1時半、キッチン裏の赤羽は仕込みを終えて休む（勝手口の前が空く）
       N.redAsleep = true;
       Object.assign(people.red, { area: null, nightRole: null, seeing: false });
-      if (cur.id === 'f1') hooks.toast('キッチン裏の明かりが消えた。赤メイドが、自室へ戻っていった。');
+      if (cur.id === 'f1') hooks.toast('キッチン裏の明かりが消えた。赤羽が、自室へ戻っていった。');
     } else if (!N.morning && N.min >= 240 && !N.dawn) {
       N.dawn = true;
       afterMsg = () => endNight('caught');
@@ -1211,7 +1211,7 @@ function drawHud(room) {
     else if (cur.id === 'basement' && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) clock += '　（17時ごろ旦那様が降りてくる）';
     const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${withPerson(c.id) && !c.done ? `（任意・${PEOPLE[withPerson(c.id)].name}に話しかける）` : CHORES[c.id].after && !c.done && t.hour < CHORES[c.id].after ? `（任意・${CHORES[c.id].after}時から）` : CHORES[c.id].optional ? '（任意）' : ''}`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
-      : st.tut && TUT[st.tut.step] ? `【青に教える ${st.tut.step + 1}/3】${typeof TUT[st.tut.step].goal === 'function' ? TUT[st.tut.step].goal() : TUT[st.tut.step].goal}`
+      : st.tut && TUT[st.tut.step] ? `【青島に教える ${st.tut.step + 1}/3】${typeof TUT[st.tut.step].goal === 'function' ? TUT[st.tut.step].goal() : TUT[st.tut.step].goal}`
       : todo.length ? todo.join('　') : '執事の担当なし';
     // 痕跡が残っていれば、目立つように知らせる
     const tr = st.mode === 'day' ? DL.traces(s) : [];
@@ -1343,7 +1343,7 @@ function tick(now) {
     } else if (carried.painting && st.mode === 'day') carried.painting.visible = false;
     if (!st.busy && watchers().length && inPrivate) {
       s.susp = clamp(s.susp + 8 * dt);
-      // 白に私室にいるところを見られたら、その部屋につき一度だけ報告の種になる
+      // 白井に私室にいるところを見られたら、その部屋につき一度だけ報告の種になる
       if (st.wSaw !== key && watchers().includes('white')) { st.wSaw = key; const n = whiteSaw(s, 10); if (n) hooks.toast(n); }
     }
     if (!inPrivate) st.wSaw = null;
@@ -1429,13 +1429,13 @@ export function startMorning(state, h) {
   enter('cottage', 1.2, 13.3);
   st.lying = true;
   afterMsg = () => { st.lying = false; player.g.rotation.set(0, Math.PI / 2, 0); player.x = 2.4; player.z = 12.5; };
-  // 初日（11月1日）は、新しいメイド（青）が来る日。赤が起こしに来る
+  // 初日（11月1日）は、新しいメイド（青島）が来る日。赤羽が起こしに来る
   const firstDay = s.chapter === 0 && s.week === 0 && s.day === 0 && !s.flags.tutorial_done;
   st.tutPending = firstDay;
   if (firstDay) {
     say(['執事', `（${dateLabel(s)}、朝7時30分。……さて、今日も完璧な執事を演じるとしよう）`],
-      ['赤メイド', '「……執事さん、起きてる？ 新しい子、今日から。もう共用室で待ってる。……緊張してるみたい」'],
-      ['執事', '（12月の来客に備えて、旦那様が雇ったメイドだ。今日から、屋敷の仕事の割り振りは私が任される。……都合がいい。誰をどこに置くか、私が決められる）'],
+      ['赤羽', '「……執事さん、起きてる？ 新しい子、今日から。もう共用室で待ってる。……緊張してるみたい」'],
+      ['執事', '（赤羽さんが春から産休に入るのに備えて、旦那様が雇ったメイドだ。今日から、屋敷の仕事の割り振りは私が任される。……都合がいい。誰をどこに置くか、私が決められる）'],
       '身支度を整えたら、共用室の席に着いて朝礼を始めよう。');
   } else {
     say(['執事', `（${dateLabel(s)}、朝7時30分。……さて、今日も完璧な執事を演じるとしよう）`],
@@ -1462,10 +1462,10 @@ export function startNight(state, route, h) {
   if (route === 'swap') { enter('cottage', 2.4, 12.5); run(); return startCarry(); }
   Object.assign(areas.f1.nightDoor.box, { minX: 5.86, maxX: 6.14, minZ: 3, maxZ: 5 });
   areas.f1.nightDoor.g.visible = true;
-  // 夜の見張り：黒メイド（雫）は大広間と玄関ホールを見回るが、兄を見逃す。赤メイドはキッチン裏で仕込み
+  // 夜の見張り：黒メイド（雫）は大広間と玄関ホールを見回るが、兄を見逃す。赤羽はキッチン裏で仕込み
   // 2階の廊下は警備会社の巡回員が往復し、西の端（物置の前）で立ち止まって窓の外を眺める
   const black = people.black, red = people.red, guard = people.guard;
-  // 白の報告でお父様が巡回を厳しくさせたとき（guard_strict）は、西の端で立ち止まる時間が短く、よく見ている
+  // 白井の報告でお父様が巡回を厳しくさせたとき（guard_strict）は、西の端で立ち止まる時間が短く、よく見ている
   // 2階の巡回員は、西の端で立ち止まって窓の外を眺める（雫の情報）。ときどき途中で引き返す
   // 外の巡回員は、屋敷の前庭から正門の前、西の芝生（古井戸と通用口の手前）までを回る
   const strict = !!s.flags.guard_strict;
@@ -1502,7 +1502,7 @@ export function startNight(state, route, h) {
     withS && ['執事', '（雫が眠っている今夜は、大広間の見回りがいない。……いや、大広間の明かりが一つ点いている。旦那様が、眠れずに歩き回っているらしい）'],
     withD && ['お嬢様', '「（寝言）……執事さん……」'],
     eve && ['執事', withD ? '（起こさないように、そっとベッドを抜け出した。ここは2階だ。書斎は近い）' : `（${eve[3]}の寝息を確かめ、そっとベッドを抜け出した。ここは2階だ。書斎は近い）`],
-    s.flags.white_ally ? ['執事', '（白は約束どおり、警報の系統を落としてくれたはずだ）'] : ['執事', '（警報はまだ生きている。絵に触れれば鳴るだろう……）'],
+    s.flags.white_ally ? ['執事', '（白井は約束どおり、警報の系統を落としてくれたはずだ）'] : ['執事', '（警報はまだ生きている。絵に触れれば鳴るだろう……）'],
     s.flags.guard_info ? ['執事', '（2階の廊下には巡回員。雫の話では、西の端で立ち止まって窓の外を眺める。その隙に背後を抜ける）']
       : ['執事', '（2階の廊下には、警備会社の巡回員がいるはずだ。懐中電灯の光に気をつけろ）'],
     ['執事', '（夜明けまでに、終わらせる）']);
@@ -1551,20 +1551,20 @@ function syncHallArt() {
   hallArt.visible = st.mode === 'ball' || (st.mode === 'day' && isEve(s) && s.today.hour >= EVE_HANG);
 }
 const EVE_HANG = 13;   // イブの昼、旦那様が自ら絵を大広間に掛ける時刻
-// ルート2（すり替え）：イブの昼、大広間に飾られた絵を青の模写とすり替え、本物をお嬢様のクローゼットへ
+// ルート2（すり替え）：イブの昼、大広間に飾られた絵を青島の模写とすり替え、本物をお嬢様のクローゼットへ
 // 見張りの目（協力者は数えない）があるとすり替えられない。本物を抱えて運ぶ間に見られると、疑われる
 function eveThings() {
   if (st.mode !== 'day' || !isEve(s) || s.today.hour < EVE_HANG) return [];
   const list = [];
   if (cur.id === 'f1' && !s.flags.swapped) list.push({ name: '月下の庭', at: () => [28, 1.0], label: s.flags.forgery_ready && s.flags.hide_ok ? 'すり替える' : '絵を見る', night: () => {
     recall(s, 'oil');
-    if (!s.flags.forgery_ready || !s.flags.hide_ok) return say('大広間の壁に、「月下の庭」が掛けられていた。旦那様が自ら掛けたらしい。', '（今夜、客の前に出す絵だ。……青の模写と、隠し場所があれば）');
+    if (!s.flags.forgery_ready || !s.flags.hide_ok) return say('大広間の壁に、「月下の庭」が掛けられていた。旦那様が自ら掛けたらしい。', '（今夜、客の前に出す絵だ。……青島の模写と、隠し場所があれば）');
     if (watchers().length) return say('人の目がある。……今は手を出せない。');
-    if (!confirm('青の模写とすり替えますか？（本物は、お嬢様の部屋のクローゼットへ運ぶ）')) return;
+    if (!confirm('青島の模写とすり替えますか？（本物は、お嬢様の部屋のクローゼットへ運ぶ）')) return;
     setFlag(s, 'swapped');
     st.dayCarry = 'painting';
     recall(s, 'stamp');
-    say('青の模写を額に収め、本物をテーブルクロスで包む。壁の絵は、何ひとつ変わらないように見えた。',
+    say('青島の模写を額に収め、本物をテーブルクロスで包む。壁の絵は、何ひとつ変わらないように見えた。',
       s.flags.shizuku ? ['執事', '（雫が、旦那様を書斎に引き止めてくれている。……今のうちだ）'] : null,
       '本物を、2階のお嬢様の部屋のクローゼットへ運ぼう。人に見られないように。');
   } });
@@ -1824,7 +1824,7 @@ function endDance() {
   say(`（ワルツの出来：${Math.round(ratio * 100)}点）`, ...BALL.danceResult(s, D.id, tier));
 }
 
-// ---- ENDING 3 の停電劇：0時の仮面外しの瞬間、白が屋敷の電気を落とす。暗闇は90秒 ----
+// ---- ENDING 3 の停電劇：0時の仮面外しの瞬間、白井が屋敷の電気を落とす。暗闇は90秒 ----
 // 壁の絵からキャンバスを外し、昇降機・配膳車・ピアノのどれかに隠して、明かりが戻る前に大広間の元の場所（真ん中）へ戻る
 // 停電の間だけ、増やされた巡回員が懐中電灯で大広間を回る。絵を抱えているところを照らされたら失敗
 const DARK_SEC = 90, HOME = [24, 8];
@@ -1849,7 +1849,7 @@ function startBlackout() {
     ['お父様', '「皆さん、時間だ。……仮面を――」'],
     '――その瞬間、屋敷じゅうの明かりが消えた。',
     '悲鳴と、グラスの割れる音。暗闇の中で、客たちのスマートフォンの灯りが、小さな影のように揺れる。',
-    ['執事', '（白が、約束どおり電源を落とした。……明かりが戻るまで、90秒）'],
+    ['執事', '（白井が、約束どおり電源を落とした。……明かりが戻るまで、90秒）'],
     BALL.firstTime('dark') && '【暗闇】壁の「月下の庭」からキャンバスを外し、昇降機・配膳車・ピアノのどれかに隠して、明かりが戻る前に大広間の真ん中へ戻ろう。巡回員の懐中電灯に気をつけて。');
 }
 function setDark(on) {
@@ -1918,7 +1918,7 @@ function darkThings() {
     hallArt.children[1].visible = false;
     recall(s, 'stamp');
     st.busy = true;
-    hooks.askChoice('額縁からキャンバスを外した。……青が作った、仮面の切れ端を落としていくか？', [
+    hooks.askChoice('額縁からキャンバスを外した。……青島が作った、仮面の切れ端を落としていくか？', [
       { t: '麗子の深紅の仮面の切れ端を落とす', id: 'reiko', run: () => '' },
       { t: '担当者の灰色の仮面の切れ端を落とす', id: 'dealer', run: () => '' },
       { t: '何も落とさない', id: null, run: () => '' },
@@ -1965,7 +1965,7 @@ function ballThings() {
     say(BALL.SERVE_THANKS[s.ballStats.served % BALL.SERVE_THANKS.length]);
   } });
   list.push({ name: '月下の庭', at: () => [28, 1.0], label: '絵を見る', night: () => s.flags.swapped
-    ? say('壁に飾られた「月下の庭」。……青の模写だ。客たちは、うっとりと見入っている。', '（本物は、お嬢様のクローゼットの奥で眠っている）')
+    ? say('壁に飾られた「月下の庭」。……青島の模写だ。客たちは、うっとりと見入っている。', '（本物は、お嬢様のクローゼットの奥で眠っている）')
     : say('壁に飾られた「月下の庭」。月明かりの下、白い花が咲く庭。……母が一番好きだった絵だ。', '（今夜は、客と旦那様の目がある。……手は出せない）') });
   return list;
 }

@@ -66,7 +66,7 @@ function closeNote(s, c) {
     }
     return msg;
   }
-  return ' ' + ESCORT[(n - 1) % ESCORT.length] + ' 屋敷に戻ると、赤メイドが小さく鼻を鳴らした。「……お母様と、同じ香水」';
+  return ' ' + ESCORT[(n - 1) % ESCORT.length] + ' 屋敷に戻ると、赤羽が小さく鼻を鳴らした。「……お母様と、同じ香水」';
 }
 
 // 仕事をする。残り時間の分だけ進め、結果の文を返す
@@ -91,7 +91,7 @@ export function doChore(s, i) {
 }
 
 // 調査。seen は見ていた人の一覧、room は調べた部屋。{ msg, code, clue } を返す
-// 白メイドに見られると、週末にお父様へ報告される（書斎・私室なら重い）
+// 白井に見られると、週末にお父様へ報告される（書斎・私室なら重い）
 export function investigate(s, spot, seen, room) {
   const res = spot.run(s);
   let msg = res.text;
@@ -168,7 +168,7 @@ export function talk(s, p, others = 0) {
 export function startForgery(s) {
   setFlag(s, 'forgery_start');
   s.forgeryDay = dayIndex(s);
-  return `青メイドは目を輝かせて引き受けてくれた。完成まで${FORGERY_DAYS}日ほどかかるらしい。`;
+  return `青島は目を輝かせて引き受けてくれた。完成まで${FORGERY_DAYS}日ほどかかるらしい。`;
 }
 
 // 隠し部屋を開ける。開けられたら null、だめなら理由の文を返す

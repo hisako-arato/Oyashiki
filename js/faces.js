@@ -15,6 +15,6 @@ export function faceOf(text, override, who) {
   if (override && FACE_KEYS.includes(override)) return override;
   const t = String(text || '');
   for (const [face, re] of RULES) if (re.test(t)) return face;
-  if (who === 'blue' && /！/.test(t)) return 'happy';   // 青はいつも元気
+  if (who === 'blue' && /！/.test(t)) return 'happy';   // 青島はいつも元気
   return DEFAULT[who] || 'neutral';
 }
