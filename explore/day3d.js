@@ -1643,11 +1643,37 @@ function ballTick(dt) {
       if (o.id !== 'work') afterMsg = () => startDance(o.id);
       say(...BALL.danceIntro(s, o.id));
     });
+    // 雫と再会していれば、雫は2階のバルコニーにいて、大広間からいなくなる
+    if (s.flags.shizuku_reunion) Object.assign(people.black, { area: 'f2', x: 24, z: 17.3, wait: 0, look: 0, nightRole: { i: 0, yaw: 0 } });
+    const search = () => { B.search = true; };
+    // お嬢様と踊れるときは、まずお嬢様が誘いに来る：「お嬢様とダンスする」か「仕事に戻る」
+    // 踊ると決めたところで雫がいないことに気づき、もう一度「お嬢様とダンスする」か「雫を探しに行く」
+    if (BALL.daughterCan(s)) {
+      const dance = () => { s.flags.dance = 'daughter'; startDance('daughter'); };
+      const back = () => {
+        const others = BALL.danceOptions(s).filter(o => o.id !== 'daughter');
+        if (others.length < 2) { say(...BALL.danceIntro(s, 'work')); return; }
+        hooks.askChoice('（仕事に戻ろう。……）', others.map(o => ({ ...o, run: () => '' })), (msg, o) => {
+          if (o.id !== 'work') afterMsg = () => startDance(o.id);
+          say(...BALL.danceIntro(s, o.id));
+        });
+      };
+      afterMsg = () => hooks.askChoice('お嬢様が、手を差し出している。', [{ t: 'お嬢様とダンスする', id: 'dance', run: () => '' }, { t: '仕事に戻る', id: 'work', run: () => '' }], (msg, o) => {
+        if (o.id === 'work') return back();
+        if (!s.flags.shizuku_reunion) return dance();
+        afterMsg = () => hooks.askChoice('（お嬢様の話を聞きながら、雫のことが頭をよぎる……）', [{ t: 'お嬢様とダンスする', id: 'dance', run: () => '' }, { t: '雫を探しに行く', id: 'search', run: () => '' }], (msg2, o2) => {
+          if (o2.id === 'dance') return dance();
+          search();
+          say(...BALL.daughterLeft);
+        });
+        say(...BALL.daughterPractice);
+      });
+      return say(...BALL.daughterAsks);
+    }
     // 雫と再会していれば、雫がいないことに気づく。探しに行くと、2階のバルコニーにいる
     if (!s.flags.shizuku_reunion) return partner();
-    Object.assign(people.black, { area: 'f2', x: 24, z: 17.3, wait: 0, look: 0, nightRole: { i: 0, yaw: 0 } });
     return hooks.askChoice(BALL.shizukuMissing, [{ t: '雫を探す', id: 'search', run: () => '' }, { t: '仕事に戻る', id: 'work', run: () => '' }], (msg, o) => {
-      if (o.id === 'search') { B.search = true; return say('（仕事を置いて、屋敷の中を探そう）'); }
+      if (o.id === 'search') { search(); return say('（仕事を置いて、屋敷の中を探そう）'); }
       afterMsg = partner;
       say(BALL.shizukuStayed);
     });
