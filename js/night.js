@@ -5,6 +5,7 @@ import { PEOPLE, CLUES } from './data.js';
 import { activeMaids, fatherHome, rng, dayIndex, isAlly, WEEKS_PER_CHAPTER, applyFx, afterNight } from './state.js';
 import { joined, told, sulking, sis, afterSisterNight, afterMaidNight, afterRoomNight, tell } from './sister.js';
 import { whiteSaw } from './white.js';
+import { startForgery } from './daylogic.js';
 
 const N = 'n', B = 'butler', M = 'mother', D = 'daughter';
 const R = 'red', BL = 'blue', K = 'black', W = 'white', S = 'shizuku';
@@ -395,6 +396,11 @@ const TOPICS = {
       [BL, '「それに旦那様の書斎の前を通ると、ときどき油絵具とニスの匂いがするんです。……旦那様、絵を描くんでしょうか？」'],
       { fx: { flag: 'bl_frame', aff: { blue: 3 } } },
       [B, '（絵を描く人ではない。……絵を手入れする人の匂いだ）']] },
+    { t: '「青さん、絵の模写を頼めないかな。見たままを、そっくりに」', if: s => s.flags.found_painting && !s.flags.forgery_start && s.aff.blue >= 60, done: s => s.flags.forgery_start, then: [
+      [BL, '「え、絵の模写ですか？ ……任せてください！ 見たままを描くの、得意なんです！」'],
+      [BL, '「何に使うのかは……聞かないでおきますね。執事さんの頼みなら」'],
+      { call: s => startForgery(s) }, { fx: { aff: { blue: 3 } } },
+      [B, '（完成まで、5日ほどかかるらしい）']] },
     { t: '「模写の進み具合はどう？」', if: s => s.flags.forgery_start && !s.flags.forgery_ready, done: s => s.counters.blue_rush, then: [
       [BL, '「順調です！ ……夜も描いていいなら、見張っててくれるなら、もっと早く仕上げます！」'],
       { call: s => { s.forgeryDay -= 2; s.counters.blue_rush = 1; } }, { fx: { aff: { blue: 3 } } },

@@ -58,6 +58,11 @@ export const SPOTS = {
   ],
   garden: [
     { id: 'path', name: '裏口への小道', run: () => ({ text: '裏庭から倉庫へ抜ける小道。屋敷の窓からは死角になっている。' }) },
+    { id: 'backgate', name: '裏庭の通用口', run: s => {
+      if (s.flags.back_gate) return { text: 'バラ園の奥の、庭師の通用口。内側の閂を外せば、裏の小道へ出られる。' };
+      setFlag(s, 'back_gate');
+      return { text: 'バラ園の奥の塀に、古い木戸があった。庭師の通用口だ。内側に閂が掛かっているだけで、鍵はない。……外の巡回員の目も、ここまでは届かないだろう。', clue: true };
+    } },
     { id: 'well', name: '古井戸', run: s => {
       if (s.flags.b_grate) return { text: '古井戸の底の横穴は、地下の搬入路につながっている。鉄格子はもう外してある。' };
       if (ch(s) < 1) return { text: '今は使われていない古井戸。覗き込むと、ひんやりとした風が上がってくる。' };
@@ -105,7 +110,9 @@ export const SPOTS = {
       return { text: '上から5段目、赤い背表紙の本だけ埃が積もっていない。これだ。', clue: true };
     } },
     { id: 'desk', name: '机の引き出し', run: s => {
-      if (s.flags.key_hidden) return { text: '引き出しは空だ。鍵はもう手元にある。' };
+      // 隠し部屋の鍵は、使うたびに取り出し、使い終わったら戻す（番号は分かっている）
+      if (s.flags.key_hidden && s.flags.key_out) { s.flags.key_out = false; return { text: '隠し部屋の鍵を引き出しに戻し、ダイヤルを回して錠を掛けた。' }; }
+      if (s.flags.key_hidden) { s.flags.key_out = true; return { text: '番号を合わせ、引き出しから隠し部屋の鍵を取り出した。……使ったら、戻しておかなければ。' }; }
       setFlag(s, 'desk_lock');
       return { text: '4桁のダイヤル錠が掛かっている。', code: true };
     } },
@@ -209,6 +216,8 @@ export const TALKS = {
       line: '「……倉庫に庭師さんの梯子。バルコニーまで届く。危ないから、使っちゃだめって言われてる」' },
     { if: s => s.aff.red >= 45 && ch(s) >= 1 && !s.flags.b_wine, flag: 'b_wine', ask: '「今夜のワインは、旦那様がご自分で選ばれるのかな」',
       line: '「……旦那様、ワインは自分で取りに行く。いつもなかなか戻ってこない。……セラー、どこにあるのか、わたしも知らない」' },
+    { if: s => s.aff.red >= 40 && s.chapter >= 2 && !s.flags.back_gate, flag: 'back_gate', ask: '「庭師さんは、どこから出入りしているのかな」',
+      line: '「……バラ園の奥に、庭師さんの通用口。夜は内側の閂だけ。……わたしも、夜中に裏の小道でゴミを出すとき使う」' },
     { if: s => s.aff.red >= 70, line: '「……執事さんが何をしてても、わたしは見てないことにする。……あの人には、悪い意味で借りがあるから」' },
     { line: '「……（ぼーっとしている）……あ、お昼もうできてます」' },
   ],

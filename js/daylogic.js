@@ -106,7 +106,44 @@ export function investigate(s, spot, seen, room) {
 export function tryCode(s, code) {
   if (code !== PASSCODE) return false;
   setFlag(s, 'key_hidden');
+  s.flags.key_out = true;   // 鍵を持ち出している（使い終わったら引き出しに戻す）
   return true;
+}
+
+// ---- 痕跡：屋敷で探ったあとに元に戻さなかった物 ----
+// 本棚の隠し扉・持ち出した机の鍵・資料室の敷物（床の扉）。業務を終える時に残っていると、気づかれて疑われる
+// 協力者は戻しておいてくれる（書斎の物は雫、資料室の物は協力者のメイド）。決行の夜は数えない
+export function traces(s) {
+  const out = [];
+  if (s.flags.hidden_open) out.push('shelf');
+  if (s.flags.key_out) out.push('key');
+  if (s.flags.hatch_open) out.push('hatch');
+  return out;
+}
+export const TRACE_NAME = { shelf: '書斎の本棚が開いたまま', key: '隠し部屋の鍵を持ち出したまま', hatch: '資料室の敷物がめくれたまま' };
+export function settleTraces(s) {
+  const notes = [], home = fatherHome(s);
+  const sisterCovers = joined(s) && !(s.sister && s.sister.sulk);
+  const maidCovers = ['red', 'blue', 'white'].some(m => isAlly(s, m));
+  for (const tr of traces(s)) {
+    if (tr === 'shelf') {
+      s.flags.hidden_open = false;
+      if (sisterCovers) notes.push('（書斎の本棚は、雫がこっそり元に戻しておいてくれた）');
+      else if (home) notes.push('旦那様が、書斎の本棚のずれに気づいたらしい。夕食の間じゅう、こちらを見ていた。' + fxNote(applyFx(s, { susp: 20 })));
+      else notes.push('（噂）掃除に入ったメイドが、書斎の本棚がずれていたと話していた。' + fxNote(applyFx(s, { susp: 8 })));
+    }
+    if (tr === 'key') {
+      if (sisterCovers) { s.flags.key_out = false; notes.push('（隠し部屋の鍵は、雫が机の引き出しに戻しておいてくれた）'); }
+      else if (home) notes.push('旦那様が机の引き出しを開け、顔色を変えた。……鍵を戻しておかなければ。' + fxNote(applyFx(s, { susp: 15 })));
+    }
+    if (tr === 'hatch') {
+      s.flags.hatch_open = false;
+      if (maidCovers) notes.push('（資料室の敷物は、協力者のメイドが直しておいてくれた）');
+      else if (home) { s.flags.b_key = false; s.flags.b_key_lost = true; notes.push('旦那様が、資料室の床の扉に気づいた。錠が新しい物に付け替えられた。' + fxNote(applyFx(s, { susp: 8 }))); }
+      else notes.push('（噂）資料室の敷物がめくれていた、とメイドが首をかしげていた。' + fxNote(applyFx(s, { susp: 8 })));
+    }
+  }
+  return notes;
 }
 
 // 会話。その日の最初の会話だけ好感度が上がる。{ msg, forgery } を返す
@@ -167,6 +204,7 @@ export function openHatch(s, seen) {
   if (!s.flags.b_light) return '扉を少し持ち上げてみたが、下は真っ暗で何も見えない。明かりが要る。';
   if (seen.length) return '人の目がある。今は降りられない。';
   setFlag(s, 'b_found');
+  s.flags.hatch_open = true;   // 敷物をめくり、床の扉を開けたまま（上がったあとに戻す）
   return null;
 }
 

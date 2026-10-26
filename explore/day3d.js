@@ -6,7 +6,7 @@ import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, ROOMS, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
 import { richNodes } from '../js/richtext.js';
-import { whereIs, isAlly, fatherHome, dateLabel, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded } from '../js/state.js';
+import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
@@ -480,7 +480,7 @@ function act() {
   if (t.night) return t.night();
   if (st.mode === 'night') return nightAct(t);
   if (t.meeting) return startMeeting();
-  if (t.rest) { if (confirm('今日の業務を終えて休みますか？')) finish(); return; }
+  if (t.rest) { if (confirm(endAsk('今日の業務を終えて休みますか？'))) finish(); return; }
   // 地下から上がるとき・古井戸から降りるとき
   if (t.exit && st.mode === 'day' && cur.id === 'basement' && t.exit.area !== 'basement') return climb(t.exit);
   if (t.exit && st.mode === 'day' && cur.id === 'grounds' && t.exit.area === 'basement' && watchers().length) return say('人の目がある。今は降りられない。');
@@ -600,6 +600,19 @@ function special(kind) {
   if (kind === 'notebook') return hooks.notebook();
   if (kind === 'garage') return say(fatherHome(s) ? 'お父様の車はガレージの奥に停めてある。今日は一日、書斎にいるらしい。' : 'シャッターが半分開いている。中は空っぽだ。お父様は車で会社に出かけている。');
   if (kind === 'hatch') {
+    // 床の扉を開けたまま（上がってきたところ）なら、降りるか、敷物を戻すかを選ぶ
+    if (s.flags.hatch_open && st.mode === 'day') {
+      st.busy = true;
+      return hooks.askChoice('床の扉が開いたままだ。敷物もめくれている。', [
+        { t: '石段を降りる', run: () => '', down: true },
+        { t: '扉を閉め、敷物を元に戻す', run: () => '' },
+      ], (msg, o) => {
+        st.busy = false;
+        if (o.down) return travel({ area: 'basement', x: 1.0, z: 4.0 });
+        s.flags.hatch_open = false;
+        say('床の扉を閉め、敷物を元どおりに敷き直した。……これで、誰も気づかないはずだ。');
+      });
+    }
     const first = !s.flags.b_found;
     const why = DL.openHatch(s, watchers());
     if (why) return say(why);
@@ -608,7 +621,15 @@ function special(kind) {
       : '床の扉を開け、石段を降りる。');
   }
   if (kind === 'shelf') {
-    if (s.flags.hidden_open) return say('本棚の奥に、暗い小部屋が続いている。');
+    // 開けた本棚は、元に戻しておく（開けたままにすると、旦那様やメイドに気づかれる）
+    if (s.flags.hidden_open) {
+      if (watchers().length) return say('人の目がある。今は本棚を動かせない。');
+      const inRoom = roomAt(player.x, player.z);
+      if (inRoom && inRoom.key === 'hidden') return say('隠し部屋の中からは、本棚を閉められない。');
+      s.flags.hidden_open = false; syncSecret();
+      return say('赤い本を押し戻すと、本棚が音もなく元の位置に収まった。');
+    }
+    if (s.flags.red_book && s.flags.key_hidden && !s.flags.key_out) return say('隠し部屋の鍵は、机の引き出しに戻してある。……先に取ってこよう。');
     if (s.flags.red_book && s.flags.key_hidden) {
       const why = DL.openHidden(s, watchers());
       if (why) return say(why);
@@ -767,7 +788,7 @@ function nightThings() {
     N.carry = null; N.ladderUp = true;
     say('バルコニーの手すりに、そっと梯子を掛けた。');
   } });
-  if (cur.id === 'grounds' && N.ladderUp && !N.carry) list.push({ name: '梯子', at: at(...below), label: '梯子を登る', night: () => {
+  if (cur.id === 'grounds' && N.ladderUp && !N.carry && !N.paintAtWall) list.push({ name: '梯子', at: at(...below), label: '梯子を登る', night: () => {
     if (!s.flags.balcony_open) return say('登ってみたが、バルコニーのガラス戸には鍵が掛かっていた。こじ開ければ音が出る……別の道を探すしかない。');
     travel({ area: 'f2', x: 24, z: 16.4 });
   } });
@@ -780,11 +801,19 @@ function nightThings() {
     afterMsg = startCarry;
     say('お嬢様の寝息を確かめ、クローゼットの奥に本物をそっと隠した。', '……あとは朝、運び屋が偽物を運び出す騒ぎにまぎれて、本物を持ち出すだけだ。');
   } });
-  if (cur.id === 'grounds' && N.route === 'night' && N.carry === 'painting') list.push({ name: '正門', at: at(38, 56.6), label: '屋敷を去る', night: () => {
-    caption('脱出', `深夜 ${nightClock()}`);
-    afterMsg = () => endNight('night');
-    say('門の鍵を外し、夜の街へ出た。腕の中の額縁が、月明かりを受けて鈍く光った。');
+  if (cur.id === 'grounds' && N.route === 'night' && N.carry === 'painting') list.push({ name: '正門', at: at(38, 56.6), label: '調べる', night: () =>
+    say('正門には閂が下ろされ、巡回員が行き来している。……怪盗が正面から出ていくわけにはいかない。', '（裏庭の通用口か、古井戸の搬入路か。……梯子があれば、塀を越える手もある）') });
+  // 上級：絵を塀の陰に置き、バルコニーの梯子を外して運び、塀に掛けて越える
+  const WALL = [90.6, 44];
+  if (cur.id === 'grounds' && N.route === 'night' && N.carry === 'painting' && N.ladderUp) list.push({ name: '東の塀', at: at(...WALL), label: '絵を塀の陰に置く', night: () => {
+    N.carry = null; N.paintAtWall = true;
+    say('絵を塀の陰にそっと寝かせた。……バルコニーの梯子を外して、ここまで運んでこよう。');
   } });
+  if (cur.id === 'grounds' && N.paintAtWall && N.ladderUp && !N.carry) list.push({ name: '梯子', at: at(...below), label: '梯子を外す', night: () => {
+    N.ladderUp = false; N.carry = 'ladder';
+    say('バルコニーから梯子を外し、肩に担いだ。……東の塀まで、もう一度。');
+  } });
+  if (cur.id === 'grounds' && N.paintAtWall && N.carry === 'ladder') list.push({ name: '東の塀', at: at(...WALL), label: '梯子で塀を越える', night: () => escape('wall') });
   return list;
 }
 // 25日の朝：クローゼットから本物を取り出し、洗濯かごに隠して、使用人棟の自室まで運ぶ
@@ -845,8 +874,23 @@ function takePainting() {
   });
 }
 const nightClock = () => { const m = Math.floor(st.night.min); return `${1 + Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
+// 屋敷を抜け出す（一夜で持ち去るルート）。逃げ道は通用口・搬入路・塀
+function escape(how) {
+  const N = st.night;
+  N.exit = how;
+  caption('脱出', `深夜 ${nightClock()}`);
+  afterMsg = () => endNight('night');
+  say(how === 'back' ? 'バラ園の奥の木戸の閂を、音を立てずに外した。裏の小道に、人の気配はない。'
+    : how === 'tunnel' ? '古井戸の搬入路を抜けると、塀の外の水路に出た。……屋敷の誰の目にも触れずに。'
+    : '梯子を塀に掛け、絵を抱えて登る。塀の向こうに梯子を下ろし、夜の街へ降り立った。',
+  '腕の中の額縁が、月明かりを受けて鈍く光った。');
+}
 function nightAct(t) {
   const N = st.night;
+  // 裏庭の通用口と、古井戸の搬入路から抜け出す
+  if (t.spot && t.spot[1] === 'backgate') return N.route === 'night' && N.carry === 'painting' ? escape('back')
+    : say('裏の小道へ出られる、庭師の木戸だ。……絵を手に入れたら、ここから抜けられる。');
+  if (t.exit && cur.id === 'basement' && t.exit.area === 'grounds' && N.route === 'night' && N.carry === 'painting') return escape('tunnel');
   if (t.exit) {
     if (/玄関/.test(t.name) && !N.morning) return say('玄関は内側から閂が掛けられている。');
     if (N.carry === 'ladder' && t.exit.area !== 'grounds' && cur.id === 'grounds') return say('梯子を担いだままでは、屋敷の中を通れない。');
@@ -872,7 +916,9 @@ function nightGoal() {
   const N = st.night;
   if (N.morning) return N.carry === 'painting' ? '本物を、使用人棟の執事の部屋まで運ぶ（旦那様と警備員に見られないように）'
     : 'お嬢様の部屋のクローゼットから、本物を取り出す（運び屋が発つ10時まで）。1階の廊下に旦那様、2階の廊下に木箱を運ぶ警備員';
-  if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す' : '絵を抱えて、正門から屋敷を出る';
+  if (N.paintAtWall) return N.carry === 'ladder' ? '梯子を東の塀に掛けて、越える' : 'バルコニーの梯子を外して、東の塀まで運ぶ';
+  if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す'
+    : `絵を抱えて屋敷を抜け出す（正門は閂と巡回員。${s.flags.back_gate ? 'バラ園の奥の通用口' : '裏庭のどこかに出口は……'}${s.flags.b_grate ? '、古井戸の搬入路' : ''}${N.ladderUp ? '、梯子で東の塀を越える手も' : ''}）`;
   if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
   if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
   return '2階の書斎へ。夜は倉庫から奥への扉に鍵。勝手口の先には赤メイド、大広間は雫、2階の廊下には巡回員';
@@ -880,7 +926,7 @@ function nightGoal() {
 function endNight(id) {
   // 盗み出せたときは、手際（かかった時間・ニアミス・カード）を残してエンディングで見せる
   const N = st.night;
-  if (N && (id === 'night' || id === 'swap')) s.heist = { min: Math.round(N.min + (N.nightMin || 0)), near: N.near || 0, card: !!N.card, route: id };
+  if (N && (id === 'night' || id === 'swap')) s.heist = { min: Math.round(N.min + (N.nightMin || 0)), near: N.near || 0, card: !!N.card, route: id, exit: N.exit || null };
   running = false;
   root.classList.add('hidden');
   setLights(false);
@@ -990,7 +1036,9 @@ view.addEventListener('pointerup', endStick);
 view.addEventListener('pointercancel', endStick);
 view.addEventListener('lostpointercapture', endStick);
 $('nb3d').addEventListener('click', () => { if (!st.busy) hooks.notebook(); });
-$('end3d').addEventListener('click', () => { if (!st.busy && st.mode === 'day' && confirm('今日の業務を終えますか？')) finish(); });
+$('end3d').addEventListener('click', () => { if (!st.busy && st.mode === 'day' && confirm(endAsk('今日の業務を終えますか？'))) finish(); });
+// 業務を終えるときに痕跡が残っていれば、一度引き留める
+const endAsk = q => { const tr = DL.traces(s); return tr.length ? `まだ元に戻していない物があります（${tr.map(x => DL.TRACE_NAME[x]).join('、')}）。\nこのままだと、気づかれて疑われるかもしれません。\n${q}` : q; };
 
 // ---- 手前の壁・建物を低くする ----
 const tmpV = new THREE.Vector3();
@@ -1087,13 +1135,16 @@ function drawHud(room) {
     clock = st.night.morning ? `12月25日　朝 ${h}:${String(m % 60).padStart(2, '0')}` : `12月24日 イブ　深夜 ${h}:${String(m % 60).padStart(2, '0')}`;
     text = '目的：' + nightGoal();
   } else {
-    clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}`;
+    clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}${eveCountdown(s) ? `　${eveCountdown(s)}` : ''}`;
     if (st.wine) clock += `　旦那様が降りてくる！ あと${Math.ceil(st.wine.left)}秒`;
     else if (cur.id === 'basement' && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) clock += '　（17時ごろ旦那様が降りてくる）';
     const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${withPerson(c.id) && !c.done ? `（任意・${PEOPLE[withPerson(c.id)].name}に話しかける）` : CHORES[c.id].after && !c.done && t.hour < CHORES[c.id].after ? `（任意・${CHORES[c.id].after}時から）` : CHORES[c.id].optional ? '（任意）' : ''}`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
       : st.tut && TUT[st.tut.step] ? `【青に教える ${st.tut.step + 1}/3】${typeof TUT[st.tut.step].goal === 'function' ? TUT[st.tut.step].goal() : TUT[st.tut.step].goal}`
       : todo.length ? todo.join('　') : '執事の担当なし';
+    // 痕跡が残っていれば、目立つように知らせる
+    const tr = st.mode === 'day' ? DL.traces(s) : [];
+    if (tr.length) text += `　⚠ 痕跡：${tr.map(x => DL.TRACE_NAME[x]).join('、')}`;
   }
   $('clock3d').textContent = clock;
   // まだ来ていないメイドの部屋は「空き部屋」と表示する
@@ -1107,6 +1158,7 @@ function drawHud(room) {
 
 // ---- 1日の流れ ----
 function finish() {
+  s.today.traceNotes = DL.settleTraces(s);
   running = false;
   root.classList.add('hidden');
   hooks.endDay();

@@ -221,7 +221,7 @@ export const WEEKENDS = [
 
 // ---- 第3章の初日：新しいメイドの正体は、主人公の妹・雫 ----
 export const ARRIVAL = [
-  [N, '12月最初の月曜。朝礼の前に、旦那様が一人の女性を共用室へ連れてきた。'],
+  [N, '11月29日、月曜の朝。12月を前に、旦那様が一人の女性を共用室へ連れてきた。'],
   [F, '「今日から働いてもらう。執事、面倒を見てやれ」'],
   [K, '「黒と申します。至らぬ点があれば、遠慮なくご指導ください」'],
   [B, '（……雫！？ なぜ、ここに）'],
@@ -245,10 +245,14 @@ export const ARRIVAL = [
 export const ROUTES = [
   { id: 'night', name: 'ルート1：一夜で持ち去る',
     desc: '誰にも見つからず、正しい道順で絵を持ち去る。',
-    ok: s => s.flags.found_painting },
+    ok: s => s.flags.found_painting,
+    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない'] },
   { id: 'swap', name: 'ルート2：贋作とすり替える',
     desc: '青の模写とすり替え、本物はお嬢様の部屋に隠す。25日の朝、運び屋が偽物を梱包している間に、本物を運び出す。',
-    ok: s => s.flags.found_painting && s.flags.forgery_ready && s.flags.hide_ok },
+    ok: s => s.flags.found_painting && s.flags.forgery_ready && s.flags.hide_ok,
+    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない',
+      !s.flags.forgery_start && '青に模写を頼んでいない', s.flags.forgery_start && !s.flags.forgery_ready && '青の模写が完成していない',
+      !s.flags.hide_ok && '本物を隠しておける場所がない'] },
 ];
 
 // 地下の仕入れ帳の写真を持っていれば、最後にその扱いを選ぶ（主人公と雫の目的は、あくまで「月下の庭」だけ）
@@ -298,6 +302,7 @@ const sendOff = { if: s => s.flags.shizuku && ['red', 'blue', 'white'].every(m =
 
 export const ENDINGS = {
   night: { title: 'ENDING 1　月下の怪盗執事', good: true, lines: [
+    { if: s => s.heist && s.heist.exit === 'wall', then: [[N, '東の塀の外に、一本の梯子だけが残されていた。']] },
     [N, '翌朝、鷹宮家から執事の姿が消えていた。隠し部屋の額縁は空っぽだった。'],
     [N, '警察は動かなかった。もともと盗品だった絵の被害届など、出せるはずもない。'],
     { if: s => s.heist && s.heist.card, then: [
@@ -341,7 +346,7 @@ export const ENDINGS = {
     [B, '（あと一歩、だったのに……）'],
   ] },
   timeup: { title: 'BAD END　海の向こうへ', good: false, lines: [
-    [N, '12月27日の朝。梱包された絵が、屋敷から運び出されていった。'],
+    [N, '12月25日の朝7時。梱包された絵が、運び屋のトラックで屋敷から運び出されていった。'],
     [N, '年明けのオークションで、「月下の庭」は見知らぬ富豪に落札された。'],
     [B, '（間に合わなかった……）'],
   ] },

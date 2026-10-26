@@ -1,6 +1,6 @@
 // ゲーム進行と画面描画
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY, BASEMENT_HINTS } from './data.js';
-import { castNeeded, newState, save, load, clearSave, listSlots, copySlot, markCleared, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
+import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdown, newState, save, load, clearSave, listSlots, copySlot, markCleared, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
@@ -60,7 +60,7 @@ function meter(label, value, cls) {
 function statusBar() {
   const hour = s.phase === 'day' ? `　${s.today.hour}:${String(Math.floor(s.today.min || 0)).padStart(2, '0')}` : '';
   return el('header', { class: 'status' },
-    el('div', { class: 'date' }, dateLabel(s) + hour),
+    el('div', { class: 'date' }, dateLabel(s) + hour, s.phase !== 'execution' && s.phase !== 'ending' && eveCountdown(s) ? el('small', { class: 'countdown' }, eveCountdown(s)) : null),
     meter('心象', s.trust, 'trust'), meter('疑惑', s.susp, 'susp'),
     el('button', { class: 'ghost', onclick: () => openNotebook() }, 'メニュー'));
 }
@@ -445,7 +445,7 @@ async function startWeekday() {
   s.phase = 'meeting';
   if (!s.today || s.today.dayIndex !== dayIndex(s)) {
     s.today = { dayIndex: dayIndex(s), chores: generateChores(s), hour: START_HOUR, min: 0, loc: 'servants', talked: {}, log: [], plan: {}, escort: null };
-    s.today.notices = [...morningAfter(s), ...morningEvents(s)];
+    s.today.notices = [...morningCalendar(s), ...morningAfter(s), ...morningEvents(s)];
   }
   if (checkFatal()) return;
   save(s);
@@ -750,6 +750,7 @@ function endDay() {
     el('h2', {}, '本日の業務報告'),
     el('ul', { class: 'report' }, lines.map(l => el('li', {}, l))),
     el('p', { class: 'hint' }, richNodes(fxNote(notes))),
+    (t.traceNotes || []).map(n => el('p', { class: 'notice' }, richNodes(n))),
 
     el('button', { class: 'primary', onclick: () => hasNight(s) ? night() : nextDay() }, '次へ')));
 }
@@ -770,6 +771,15 @@ function night() {
     el('p', { class: 'hint' }, '◆ は、物語の手がかりを聞き出せそうな相手。印の無い相手とは、他愛もない夜になる。')));
 }
 
+// 暦の上の出来事の朝（麗子の誕生日、イブ）
+function morningCalendar(s) {
+  const off = dayOffset(s), notes = [];
+  if (off === 2) notes.push(s.flags.p_bday ? '（今日は11月3日。……麗子の誕生日だ。旦那様は朝から、花屋に電話をかけていた）'
+    : '（今日は11月3日。旦那様は朝から、花屋に電話をかけていた。……誰への花だろう）');
+  if (isEve(s)) notes.push('今日は12月24日、クリスマス・イブ。夜は仮面舞踏会だ。屋敷じゅうが、朝から準備で慌ただしい。');
+  else if (daysToEve(s) > 0 && daysToEve(s) <= 4) notes.push(`イブまで、あと${daysToEve(s)}日。`);
+  return notes;
+}
 // 前の夜を主寝室・お嬢様の部屋で過ごした朝の一言
 const BACK_FROM = { mother: '主寝室', daughter: 'お嬢様の部屋' };
 function morningAfter(s) {
@@ -821,7 +831,7 @@ function execution() {
     render(el('div', { class: 'panel' }, statusBar(),
       el('h2', {}, '作戦を選ぶ'),
       ROUTES.map(r => el('button', { class: 'route', disabled: !r.ok(s), onclick: () => runRoute(r.id) },
-        el('b', {}, r.name), el('small', {}, r.ok(s) ? r.desc : '条件が揃っていない')))));
+        el('b', {}, r.name), el('small', {}, r.ok(s) ? r.desc : `足りないもの：${(r.need ? r.need(s).filter(Boolean) : []).join('／') || '条件が揃っていない'}`)))));
   });
 }
 
@@ -900,7 +910,9 @@ function ending(id) {
     const retry = load();
     // 盗み出せた夜の手際（かかった時間・ニアミス）
     const h = e.good && s.heist && s.heist.route === id ? s.heist : null;
-    const rank = h && (h.near === 0 && h.min <= 90 ? '月下の怪盗' : h.near <= 2 ? '影の執事' : '危うい綱渡り');
+    // 梯子で塀を越えたときは、ニアミスを2回分おまけする（上級の逃げ道）
+    const near = h ? Math.max(0, h.near - (h.exit === 'wall' ? 2 : 0)) : 0;
+    const rank = h && (near === 0 && h.min <= 90 ? '月下の怪盗' : near <= 2 ? '影の執事' : '危うい綱渡り');
     render(el('div', { class: 'card end' },
       el('h2', {}, e.title),
       el('p', {}, e.good ? 'CLEAR' : ''),
@@ -925,6 +937,14 @@ function openNotebook(tab = 'note') {
   body.append(...({ note: noteTab, people: peopleTab, story: storyTab, settings: settingsTab })[tab](back).filter(x => x != null && x !== false));
 }
 
+// 模写の完成を待つ目標。イブに間に合わないときは、そう知らせる
+function forgeryGoal() {
+  if (!s.flags.forgery_start || s.flags.forgery_ready) return '青の模写の完成を待つ';
+  const left = Math.max(0, DL.FORGERY_DAYS - (dayIndex(s) - s.forgeryDay));
+  const eveIdx = (3 * WEEKS_PER_CHAPTER + WEEKS_PER_CHAPTER - 1) * 5 + 4;
+  const late = left > eveIdx - dayIndex(s);
+  return `青の模写の完成を待つ（あと${left}日）${late ? '……このままではイブに間に合わない。夜も描いてもらえれば' : ''}`;
+}
 function noteTab() {
   const got = Object.entries(CLUES).filter(([k]) => s.flags[k]);
   // 目標：[文, 見せるか, 済んだか]。済んだ目標は ✓ を付けて下に並べる
@@ -937,6 +957,10 @@ function noteTab() {
     ['人のいない時に、書斎から隠し部屋へ入る（12月以降）', f.red_book && f.key_hidden, f.found_painting],
     ['昼のうちに、バルコニーのガラス戸の鍵を外しておく', s.chapter >= 3 && f.ladder, f.balcony_open],
     ['絵の警報をどうにかする方法が要る', f.found_painting, f.white_ally],
+    // すり替え（ルート2）
+    ['青に、絵の模写を頼めるかもしれない（好感度60以上で、昼に話しかけるか、夜に共用室で）', f.found_painting, f.forgery_start],
+    [forgeryGoal(), f.forgery_start, f.forgery_ready],
+    ['本物を隠しておける場所を探す（お嬢様……？）', f.forgery_start, f.hide_ok],
     ['白メイドに見られたことは、週末に旦那様へ報告される（仲良くなれば、伏せてくれるかもしれない）', whiteActive(s), whiteCovers(s)],
     ['地下があるらしい。資料室の床を調べる', s.chapter >= 2 && hints >= 2, f.b_hatch],
     ['床の扉の鍵を手に入れる（旦那様が出かける日の、食料庫あたり？）', f.b_hatch && !f.b_key_lost, f.b_key],
@@ -952,8 +976,19 @@ function noteTab() {
       todo.map(([g]) => el('li', {}, g)),
       done.map(([g]) => el('li', { class: 'done' }, '✓ ', g))),
     !todo.length ? el('p', { class: 'hint' }, s.chapter >= 3 ? '準備は整った。あとは、イブの夜を待つだけだ。' : '今わかっている目標は、すべて済ませた。屋敷を調べて、次の手がかりを探そう。') : null);
+  // 予定：分かっている日付（今日より前は薄く）
+  const plan = [
+    [2, '麗子の誕生日', f.p_bday],
+    [EVE_OFFSET, 'クリスマス・イブ　仮面舞踏会', true],
+    [EVE_OFFSET + 1, '朝7時、運び屋が絵を運び出す', f.shizuku_courier],
+  ].filter(([, , known]) => known);
+  const planList = el('div', {}, el('h4', {}, `予定（今日は ${dateLabel(s)}）`),
+    el('ul', { class: 'plan' }, plan.map(([off, text]) => { const d = dateOf(off);
+      return el('li', { class: off < dayOffset(s) ? 'past' : '' }, el('b', {}, `${d.m}月${d.d}日（${d.w}）`), `　${text}`); }),
+      !f.shizuku_courier && f.c_red ? el('li', {}, el('b', {}, '年明け'), '　絵が海外へ運ばれる（いつ屋敷を出るのかは、まだ分からない）') : null));
   return [
     goalList,
+    planList,
     el('h4', {}, '手がかり'),
     got.length ? el('ul', { class: 'clues' }, got.map(([, c]) => el('li', {}, c.text))) : el('p', {}, 'まだ何もない。'),
     el('h4', {}, '好感度'), affList(),

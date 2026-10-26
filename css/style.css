@@ -253,3 +253,8 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .card.end .heist { margin: 4px 0 16px; text-align: center; }
 .card.end .heist b { display: block; color: var(--gold); font-size: 1.3rem; letter-spacing: .2em; }
 .card.end .heist small { color: var(--muted); }
+.status .date .countdown { margin-left: 8px; padding: 0 6px; border-radius: 4px; background: rgba(227, 192, 111, .15); color: var(--gold); font-size: .75rem; font-weight: normal; }
+.plan { list-style: none; padding: 0; margin: 0; font-size: .9rem; }
+.plan b { color: var(--gold); }
+.plan li.past { color: var(--muted); }
+.plan li.past b { color: var(--muted); }

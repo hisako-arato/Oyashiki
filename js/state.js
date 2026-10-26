@@ -239,12 +239,26 @@ export function peopleIn(s, room, hour = s.today.hour) {
 
 export function hoursLeft(s) { return END_HOUR - s.today.hour; }
 
-export function dateLabel(s) {
-  // 11月前半・後半、12月前半・後半が各章
-  const month = 11 + Math.floor(s.chapter / 2);
-  const week = (s.chapter % 2) * WEEKS_PER_CHAPTER + s.week + 1;
-  const days = ['月', '火', '水', '木', '金'];
-  if (s.phase === 'execution' || (s.phase === 'ending' && s.chapter === 3 && s.week === WEEKS_PER_CHAPTER - 1 && s.day >= 5)) return '12月24日 クリスマス・イブ';
-  const day = s.phase === 'weekend' || s.day >= 5 ? '土・日' : days[s.day] + '曜';
-  return `${month}月 第${week}週 ${day}`;
+// ---- 暦 ----
+// 11月1日を月曜とし、週の月〜金が平日、土日が週末。最後の週の金曜（12月24日）がクリスマス・イブ
+// 8週目の月曜が12月20日なので、イブの翌日の25日（土）の朝に運び屋が来る
+export const EVE_OFFSET = 53;   // 11月1日から数えて何日目がイブか（0 始まり）
+const DOW = ['月', '火', '水', '木', '金', '土', '日'];
+export const dayOffset = s => (s.chapter * WEEKS_PER_CHAPTER + s.week) * 7 + Math.min(s.day, 5);
+export function dateOf(offset) {
+  const n = 1 + offset;
+  return n <= 30 ? { m: 11, d: n, w: DOW[offset % 7] } : { m: 12, d: n - 30, w: DOW[offset % 7] };
 }
+export const isEve = s => dayOffset(s) === EVE_OFFSET;
+export const daysToEve = s => EVE_OFFSET - dayOffset(s);
+export function dateLabel(s) {
+  if (s.phase === 'execution' || s.phase === 'ending' && dayOffset(s) >= EVE_OFFSET) return '12月24日（金）クリスマス・イブ';
+  if (s.phase === 'weekend' || s.day >= 5) {
+    const a = dateOf(dayOffset(s)), b = dateOf(dayOffset(s) + 1);
+    return a.m === b.m ? `${a.m}月${a.d}日（土）・${b.d}日（日）` : `${a.m}月${a.d}日（土）・${b.m}月${b.d}日（日）`;
+  }
+  const d = dateOf(dayOffset(s));
+  return `${d.m}月${d.d}日（${d.w}）${isEve(s) ? 'クリスマス・イブ' : ''}`;
+}
+// 状況表示に添える、イブまでの日数
+export const eveCountdown = s => { const n = daysToEve(s); return n > 0 ? `イブまで あと${n}日` : n === 0 ? '今日はイブ' : ''; };
