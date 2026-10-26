@@ -180,12 +180,16 @@ GitHub Pages などの静的ホスティングにそのまま置ける。
 
 元のファイルを差し替えたら、次のコマンドで作り直す（要 Python と Pillow）。
 ```
-for id in butler butler2 father mother mother2 daughter daughter2 red blue white black black2 black3 guard; do
+for id in butler butler2 father mother mother2 daughter daughter2 daughter3 red blue white black black2 black3 guard reiko dealer caterer; do
   python3 tools/vrm_lite.py assets/vrm/$id.vrm assets/vrm/view/$id.vrm --tex 1024
   python3 tools/vrm_lite.py assets/vrm/$id.vrm assets/vrm/lite/$id.vrm --tex 512 --no-morph-normals
 done
 ```
-VRM は、一度読み込むとオフライン用に端末へ保存する。設定の「キャラクターを端末に保存」で、屋敷・会話用（約58MB）と人物照会用（約97MB）を先に落としておける。
+VRM は、一度読み込むとオフライン用に端末へ保存する。設定の「キャラクターを端末に保存」で、屋敷・会話用（約88MB。舞踏会の一般客を含む）と人物照会用（約130MB）を先に落としておける。
+
+舞踏会の夜だけ、麗子・担当者・仕出し屋・お嬢様のドレス・一般客4体を読み込む（`js/state.js` の `BALL_CAST`）。一般客は、4体を形と画像を共有したまま複製して大勢に見せる（`explore/guests.js`。骨だけを複製ごとに持ち、毎フレーム元の VRM に姿勢をつけて写す）。
+
+**仮面**：舞踏会の仮面はゲームの中で作る（`explore/masks.js`）。ベネチア風の半仮面で、人物ごとに色・縁取り・飾り（羽根・宝石・レース）が違う。頭の骨に付け、顔の正面から光線を当てて顔の表面に沿わせる。0時の仮面外しでは、仮面を右手まで下ろして持たせる。床に落ちた仮面の切れ端も作れる。
 
 顔アイコンは人物照会用の VRM から撮って作る。VRM を入れ替えたり服を変えたりしたら作り直す：
 

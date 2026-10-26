@@ -17,6 +17,10 @@ export const PEOPLE = {
   // 黒メイドの正体は主人公の妹。二人きりの場面だけ「雫」として話す（好感度は持たない）
   shizuku: { name: '雫',       color: '#222222' },
   guard:   { name: '巡回員',   color: '#41608f' },
+  // イブの仮面舞踏会だけに来る人
+  reiko:   { name: '麗子',     color: '#a01a2a' },   // 旦那様の愛人
+  dealer:  { name: '担当者',   color: '#55565e' },   // オークション会社の担当者（夜中に勝手口から来る「絵の業者」）
+  caterer: { name: '仕出し屋', color: '#8a5cc0' },   // 雫の昔の知り合い。料理を運ぶ車で、外から来て外へ帰る
 };
 export const SISTER = 'black';
 

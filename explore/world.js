@@ -535,7 +535,11 @@ export const LOOKS = {
   mother: { name: 'お母様' },
   daughter: { name: 'お嬢様' },
   guard: { name: '巡回員' },   // 決行の夜だけ現れる警備会社の巡回員（2階の廊下）
-  guard2: { name: '巡回員', nightOnly: true },   // もう一人の巡回員（屋敷の外を回る）。VRM は guard と同じ物を、いるエリアに合わせて付け替える
+  guard2: { name: '巡回員', nightOnly: true },
+  // 仮面舞踏会の夜だけ来る人（ballOnly：舞踏会のほかは屋敷にいない）
+  reiko: { name: '麗子', ballOnly: true },
+  dealer: { name: '担当者', ballOnly: true },
+  caterer: { name: '仕出し屋', ballOnly: true },   // もう一人の巡回員（屋敷の外を回る）。VRM は guard と同じ物を、いるエリアに合わせて付け替える
 };
 
 // ---- 調べられる場所・出入口 ----

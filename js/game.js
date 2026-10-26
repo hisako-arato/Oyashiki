@@ -13,7 +13,7 @@ import { PROFILES, profileOf, STORY, storyText, chapterProgress } from './profil
 import { faceOf } from './faces.js';
 import { richNodes } from './richtext.js';
 import { VERSION, VERSION_DATE } from './version.js';
-import { KINDS, VRM_IDS, savedCount, saveKind, keepStorage } from './vrmstore.js';
+import { KINDS, countOf, savedCount, saveKind, keepStorage } from './vrmstore.js';
 import * as music from './music.js';
 import { PRESETS, WHEN, testState } from './evetest.js';
 
@@ -198,8 +198,9 @@ function storeBox() {
     const btn = el('button', { class: 'ghost' }, `保存する（${k.size}）`);
     const show = n => {
       if (n == null) { status.textContent = 'この端末では保存できない'; btn.disabled = true; return; }
-      status.textContent = n >= VRM_IDS.length ? '保存済み' : `${Math.floor(n / VRM_IDS.length * 100)}% 保存済み`;
-      btn.disabled = n >= VRM_IDS.length; btn.textContent = n >= VRM_IDS.length ? '保存済み' : `保存する（${k.size}）`;
+      const all = countOf(kind);
+      status.textContent = n >= all ? '保存済み' : `${Math.floor(n / all * 100)}% 保存済み`;
+      btn.disabled = n >= all; btn.textContent = n >= all ? '保存済み' : `保存する（${k.size}）`;
     };
     btn.onclick = async () => {
       btn.disabled = true; keepStorage();

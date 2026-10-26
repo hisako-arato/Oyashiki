@@ -71,15 +71,19 @@ function pose(vrm, walk, amt, t = 0, extra = {}) {
 
 // 毎フレーム呼ぶ。moving：歩いているか
 // 会話の顔（portrait.js）は同じ VRM を借りて描くので、屋敷で動かした時刻を覚えておき、二重に動かさないようにする
-export function driveVRM(vrm, moving, dt, extra = {}) {
-  const m = vrm.motion;
-  if (!extra.portrait) m.lastDrive = performance.now();
-  m.t += dt;
-  m.walk = moving ? m.walk + dt * 10 : 0;
+// 姿勢だけをつける（m：動きの状態。舞踏会の客の複製は、それぞれの状態で同じ型の VRM を動かす）
+export function poseWith(vrm, m, moving, dt, extra = {}) {
+  m.t = (m.t || 0) + dt;
+  m.walk = moving ? (m.walk || 0) + dt * 10 : 0;
   m.amt = smooth(m.amt || 0, moving ? 1 : 0, dt * 8);
   m.bow = smooth(m.bow || 0, extra.pose === 'bow' ? 1 : 0, dt * 4);
   m.wave = smooth(m.wave || 0, extra.pose === 'wave' ? 1 : 0, dt * 5);
   pose(vrm, m.walk, m.amt, m.t, { bow: m.bow, wave: m.wave });
+}
+export function driveVRM(vrm, moving, dt, extra = {}) {
+  const m = vrm.motion;
+  if (!extra.portrait) m.lastDrive = performance.now();
+  poseWith(vrm, m, moving, dt, extra);
   // まばたき（表情を作っている間は控えめに）
   m.blink -= dt;
   let b = 0;
@@ -120,14 +124,16 @@ export function attachVRM(ch, vrm) {
 // 端末のメモリを節約するため、まだ来ていないメイドや、最終章だけの巡回員は、要るときまで読み込まない
 // 二人きりの雫の部屋着（black2）は会話の顔だけで使うので、ファイルを端末に落とすだけにする（会話で初めて使うときに読み込む）
 // onProgress(0〜1, 読み込み済みの人数, 全員の人数)
-export const loaded = (id, kind = 'lite') => cache.has(`${kind}/${id}`);
+// 舞踏会の一般客（guest_*）は assets/vrm/guest/ にある軽い版
+export const kindOf = id => id.startsWith('guest_') ? 'guest' : 'lite';
+export const loaded = (id, kind = kindOf(id)) => cache.has(`${kind}/${id}`);
 export async function preloadCast(onProgress, want = CAST) {
   const ids = [...want, ...(want.includes('black') ? ['black2'] : [])], n = ids.length;
   for (let i = 0; i < n; i++) {
     const tell = f => onProgress && onProgress((i + f) / n, i, n);
     tell(0);
     if (ids[i] === 'black2') await fetchOnly(new URL('../assets/vrm/lite/black2.vrm', import.meta.url).href);
-    else await loadVRM(ids[i], 'lite', tell);
+    else await loadVRM(ids[i], kindOf(ids[i]), tell);
   }
   onProgress && onProgress(1, n, n);
 }

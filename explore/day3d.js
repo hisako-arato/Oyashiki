@@ -336,14 +336,14 @@ function sight(p) {
 // 朝礼前の使用人棟：赤はお茶を淹れ、黒は先に席で待ち、青と白は身支度中。家族は母屋にいる
 const MORNING = { red: 'c_kettle', blue: 'c_blue', black: 'servants', white: 'c_white' };
 function wantedKey(p) {
-  if (LOOKS[p.id].nightOnly) return null;   // 夜だけの人（外の巡回員）は、昼は屋敷にいない
+  if (LOOKS[p.id].nightOnly || LOOKS[p.id].ballOnly) return null;   // 夜だけの人（外の巡回員）と舞踏会の客は、昼は屋敷にいない
   if (st.mode === 'morning') return st.tutPending && p.id === 'blue' ? 'servants' : MORNING[p.id] && whereIs(s, p.id, 9) ? MORNING[p.id] : null;
   return whereIs(s, p.id, s.today.hour);
 }
 function updatePerson(p, dt) {
   let moving = false;
   // 夜だけの人（外を回る巡回員）は、昼は屋敷にいない
-  if (LOOKS[p.id].nightOnly && st.mode !== 'night') { p.area = null; p.g.visible = false; p.cone.visible = false; p.seeing = false; return; }
+  if ((LOOKS[p.id].nightOnly && st.mode !== 'night') || (LOOKS[p.id].ballOnly && st.mode !== 'ball')) { p.area = null; p.g.visible = false; p.cone.visible = false; p.seeing = false; return; }
   if (st.mode === 'night') moving = nightPerson(p, dt);
   else if (st.tut && p.id === 'blue') moving = tutorGuide(p, dt);
   else {
