@@ -144,6 +144,11 @@ GitHub Pages などの静的ホスティングにそのまま置ける。
 | `assets/vrm/butler2.vrm` | 執事の決行の服。イブの夜の屋敷（3D）と、その夜の会話の顔・その夜に終わる結末で使う |
 | `assets/vrm/mother2.vrm` | お母様の部屋着。主寝室の夜の会話の顔と、人物照会（深い仲になった後）で使う |
 | `assets/vrm/daughter2.vrm` | お嬢様の部屋着。お嬢様の部屋の夜の会話の顔と、人物照会（深い仲になった後）で使う |
+| `assets/vrm/daughter3.vrm` | お嬢様のドレス（イブの仮面舞踏会。これから組み込む） |
+| `assets/vrm/reiko.vrm` | 麗子（舞踏会の客。これから組み込む） |
+| `assets/vrm/dealer.vrm` | オークション会社の担当者（舞踏会の客。蝶ネクタイを消し、ネクタイをベストの中に納めた：`tools/vrm_fix_tie.py`） |
+| `assets/vrm/caterer.vrm` | 仕出し屋（雫の知人。3つの結末すべてで絵を外へ運ぶ。これから組み込む） |
+| `assets/vrm/guest/guest_*.vrm` | 舞踏会の一般客。担当者・麗子・お嬢様のドレスから `tools/vrm_guest.py` で色を変え、画像256px・表情と揺れものなしにした軽い版（2〜3MB） |
 | `assets/vrm/view/` | 人物照会用（テクスチャ1024px、表情に使わない顔のモーフを除去）。約6〜8MB |
 | `assets/vrm/lite/` | 屋敷の中用（テクスチャ512px、モーフの法線も除去）。約4MB |
 
