@@ -85,3 +85,48 @@ document.addEventListener('pointerdown', unlock, { capture: true });
 document.addEventListener('keydown', unlock, { capture: true });
 // 別のアプリに切り替えたら止め、戻ったら続ける
 document.addEventListener('visibilitychange', () => { if (ctx) document.hidden ? ctx.suspend() : ctx.resume(); });
+
+// ---- 効果音（録音ファイルを使わず、その場で合成する）：足音・扉・警報・停電・鐘・食器・タップ ----
+const SFX_KEY = 'oyashiki-sfx-vol';
+export function sfxVolume() {
+  try { const v = localStorage.getItem(SFX_KEY); return v == null ? 60 : Math.max(0, Math.min(100, +v)); } catch (e) { return 60; }
+}
+export function setSfxVolume(v) { try { localStorage.setItem(SFX_KEY, String(v)); } catch (e) { /* noop */ } }
+let noiseBuf = null;
+function noise() {
+  if (!noiseBuf) {
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const n = ctx.createBufferSource(); n.buffer = noiseBuf; return n;
+}
+// 音の一つ：type 波形、f 周波数（[始め, 終わり]）、t0 始まり（秒後）、dur 長さ、g 大きさ
+function tone(out, { type = 'sine', f = 440, t0 = 0, dur = 0.2, g = 0.3, filter }) {
+  const now = ctx.currentTime + t0, gn = ctx.createGain();
+  const src = type === 'noise' ? noise() : ctx.createOscillator();
+  if (type !== 'noise') { src.type = type; const [a, b] = [].concat(f); src.frequency.setValueAtTime(a, now); if (b) src.frequency.exponentialRampToValueAtTime(b, now + dur); }
+  gn.gain.setValueAtTime(0, now); gn.gain.linearRampToValueAtTime(g, now + 0.005); gn.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+  let node = src;
+  if (filter) { const fl = ctx.createBiquadFilter(); fl.type = filter[0]; fl.frequency.value = filter[1]; node.connect(fl); node = fl; }
+  node.connect(gn).connect(out);
+  src.start(now); src.stop(now + dur + 0.05);
+}
+const SFX = {
+  step: o => tone(o, { type: 'noise', dur: 0.05, g: 0.12, filter: ['lowpass', 650] }),
+  door: o => { tone(o, { type: 'noise', dur: 0.18, g: 0.18, filter: ['bandpass', 420] }); tone(o, { f: [95, 60], t0: 0.12, dur: 0.25, g: 0.35 }); },
+  alarm: o => { for (let i = 0; i < 8; i++) tone(o, { type: 'square', f: i % 2 ? 660 : 880, t0: i * 0.2, dur: 0.19, g: 0.12 }); },
+  blackout: o => { tone(o, { f: [70, 35], dur: 0.6, g: 0.5 }); tone(o, { type: 'noise', t0: 0.05, dur: 1.2, g: 0.12, filter: ['lowpass', 900] }); tone(o, { type: 'sawtooth', f: [120, 40], dur: 0.5, g: 0.06, filter: ['lowpass', 400] }); },
+  bell: o => { for (let k = 0; k < 3; k++) for (const [m, g] of [[1, 0.25], [2.76, 0.1], [5.4, 0.05]]) tone(o, { f: 392 * m, t0: k * 0.9, dur: 2.4, g }); },
+  clink: o => { tone(o, { f: 2400, dur: 0.18, g: 0.12 }); tone(o, { f: 3300, t0: 0.03, dur: 0.15, g: 0.08 }); },
+  tap: o => tone(o, { f: 990, dur: 0.07, g: 0.15 }),
+  miss: o => tone(o, { type: 'triangle', f: [300, 180], dur: 0.15, g: 0.12 }),
+};
+export function sfx(name) {
+  if (!unlocked || !ctx || !SFX[name] || document.hidden) return;
+  const v = sfxVolume();
+  if (!v) return;
+  const out = ctx.createGain(); out.gain.value = (v / 100) ** 2; out.connect(ctx.destination);
+  SFX[name](out);
+  setTimeout(() => out.disconnect(), 4000);
+}

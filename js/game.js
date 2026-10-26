@@ -224,8 +224,13 @@ function musicBox() {
   const val = el('b', {}, `${music.volume()}`);
   const range = el('input', { type: 'range', min: 0, max: 100, step: 5, value: music.volume() });
   range.oninput = () => { val.textContent = range.value; music.setVolume(+range.value); };
+  const sval = el('b', {}, `${music.sfxVolume()}`);
+  const srange = el('input', { type: 'range', min: 0, max: 100, step: 5, value: music.sfxVolume() });
+  srange.oninput = () => { sval.textContent = srange.value; music.setSfxVolume(+srange.value); };
+  srange.onchange = () => music.sfx('clink');
   return [el('div', { class: 'volume' }, el('span', {}, '音楽'), range, val),
-    el('p', { class: 'hint' }, '0 にすると音楽を鳴らさない。iPhone では、消音（マナー）モードのときは鳴らない。')];
+    el('div', { class: 'volume' }, el('span', {}, '効果音'), srange, sval),
+    el('p', { class: 'hint' }, '0 にすると鳴らさない。iPhone では、消音（マナー）モードのときは鳴らない。')];
 }
 // トップ画面の設定
 function titleSettings() {

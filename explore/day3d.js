@@ -148,7 +148,7 @@ function fade(text, mid, ms = 280) {
   fadeEl.classList.add('on');
   setTimeout(() => { mid(); fadeEl.classList.remove('on'); }, ms);
 }
-const travel = (to, then) => fade('', () => { enter(to.area, to.x, to.z); st.busy = false; if (then) then(); });
+const travel = (to, then) => (music.sfx('door'), fade('', () => { enter(to.area, to.x, to.z); st.busy = false; if (then) then(); }));
 // 地下から地上（資料室・庭の古井戸）へ上がる。上に人がいれば気配で分かる。上がった瞬間を見られたら言い訳
 function climb(to) {
   const room = to.area === 'f1' ? 'archive' : 'garden';
@@ -887,7 +887,7 @@ function startCarry() {
 function takePainting() {
   const N = st.night;
   if (N.carry) return say('両手がふさがっている。梯子はどこかに置いてこよう。');
-  if (!N.alarmOff) { afterMsg = () => endNight('caught'); return say('額縁に手をかけた瞬間、甲高い警報が屋敷中に鳴り響いた！'); }
+  if (!N.alarmOff) { music.sfx('alarm'); afterMsg = () => endNight('caught'); return say('額縁に手をかけた瞬間、甲高い警報が屋敷中に鳴り響いた！'); }
   N.taken = true; N.carry = 'painting';
   areas.f2.secret.objs[0].visible = false;
   recall(s, 'stamp');
@@ -987,6 +987,7 @@ function nightTick(dt) {
   seenTime = seers.length ? seenTime + dt : 0;
   if (seenTime > 0.3 && !st.busy && !N.caught) {
     N.caught = true;
+    music.sfx('alarm');
     const p = seers[0];
     if (N.morning) {
       afterMsg = () => endNight('caught25');
@@ -1258,6 +1259,9 @@ function tick(now) {
     ix += stick.x; iy -= stick.y;
   }
   const il = Math.hypot(ix, iy), moving = il > 0.15 && !st.lying;
+  // 足音（歩いている間、0.36秒ごと。地下と屋外は少し間をあける）
+  st.stepT = moving ? (st.stepT || 0) - rawDt : 0;
+  if (moving && st.stepT <= 0) { music.sfx('step'); st.stepT = AREA_INFO[cur.id].outdoor ? 0.42 : 0.36; }
   if (moving) {
     const speed = night && st.night.carry === 'ladder' ? 3.0 : night && st.night.carry === 'painting' ? 4.0 : WALK_SPEED;
     const sp = speed * Math.min(1, il) / il;
@@ -1625,6 +1629,7 @@ function ballTick(dt) {
     if (s.flags.plan_blackout) return startBlackout();
     if (cur.id !== 'f1') travel({ area: 'f1', x: 24, z: 13.6 });
     // 鐘に合わせて、仮面を右手へ下ろす（少しずつずらす）
+    music.sfx('bell');
     let k = 0;
     for (const id of ['father', 'mother', 'daughter', 'reiko', 'dealer']) {
       const v = people[id].vrm; if (!v || !v.mask) continue;
@@ -1665,6 +1670,7 @@ function danceTap() {
   if (mi < 1 || mi > MEASURES || D.hits[mi] != null) return;
   const pt = off <= 0.12 ? 2 : off <= 0.25 ? 1 : 0;
   D.hits[mi] = pt; D.pts += pt;
+  music.sfx(pt ? 'tap' : 'miss');
   const msg = D.ui.querySelector('.dance-msg');
   msg.textContent = pt === 2 ? 'ぴったり！' : pt === 1 ? 'いいね' : 'ずれた……';
   msg.className = `dance-msg hit${pt}`;
@@ -1714,6 +1720,8 @@ let darkProps = null;
 function startBlackout() {
   const B = st.ball;
   if (cur.id !== 'f1') enter('f1', 24, 13.6);
+  music.sfx('bell');
+  setTimeout(() => { music.sfx('blackout'); music.stop(); }, 2600);
   afterMsg = () => {
     recall(s, 'storm');
     B.dark = { left: DARK_SEC, stage: 'take', spot: null, back: false, frag: null };
@@ -1766,7 +1774,9 @@ function darkEnd(how) {
   D.over = true;
   carried.painting.visible = false;
   setDark(false);
+  music.play('ball');
   s.dark = { spot: D.spot, back: D.back, frag: D.frag, left: Math.max(0, Math.round(D.left)) };
+  if (how === 'caught') music.sfx('alarm');
   if (how === 'caught') {
     s.flags.dark_caught = true;
     afterMsg = endBall;
@@ -1825,6 +1835,7 @@ function ballThings() {
     B.tray = false;
     B.reqs.splice(B.reqs.indexOf(r), 1);
     s.ballStats.served++;
+    music.sfx('clink');
     // 運んだ先で、まだ聞いていない話が一つ聞こえる
     const g = BALL.GOSSIP.find(x => !s.flags[x.id]);
     if (g) {
