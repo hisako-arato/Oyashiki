@@ -239,12 +239,45 @@ function titleSettings() {
     el('button', { class: 'primary', onclick: title }, 'タイトルに戻る')));
 }
 
+// 冒頭に、イブの夜の一場面を数秒だけ見せる（暗い大広間・0時の仮面外し・額縁に伸びる手袋の手）
+const COLD_OPEN = [
+  ['ball', '12月24日　クリスマス・イブ'],
+  ['ball', '鷹宮家の仮面舞踏会。シャンデリアの下で、百の仮面が揺れている。'],
+  ['bell', '深夜0時。仮面を外す時刻を告げる鐘が、鳴り始めた――'],
+  ['dark', 'その瞬間、屋敷じゅうの明かりが消えた。'],
+  ['glove', '暗闇の中、白い手袋の手が、一枚の絵の額縁へ伸びる。'],
+  ['before', '――その、2か月前。'],
+];
+function coldOpen(done) {
+  let i = 0, over = false;
+  const text = el('p', { class: 'co-text' });
+  const scene = el('div', { class: 'coldopen' },
+    el('div', { class: 'co-hall' },
+      el('div', { class: 'co-chandelier' }, ...Array.from({ length: 7 }, () => el('i'))),
+      el('div', { class: 'co-masks' }, ...Array.from({ length: 9 }, (_, k) => el('i', { style: `--k:${k}` }))),
+      el('div', { class: 'co-frame' }, el('div', { class: 'co-moon' }))),
+    el('div', { class: 'co-glove' }),
+    text,
+    el('button', { class: 'co-skip', onclick: e => { e.stopPropagation(); finish(); } }, 'スキップ'));
+  const finish = () => { if (over) return; over = true; scene.classList.add('out'); setTimeout(() => { scene.remove(); done(); }, 900); };
+  const show = () => {
+    if (i >= COLD_OPEN.length) return finish();
+    const [mode, line] = COLD_OPEN[i++];
+    scene.dataset.mode = mode;
+    text.classList.remove('in'); void text.offsetWidth;
+    text.textContent = line; text.classList.add('in');
+  };
+  scene.addEventListener('click', show);
+  document.body.append(scene);
+  show();
+}
+
 function startNew(n) {
   useSlot(n);
   s = newState();
   preloadCast(() => {
     loadPortrait();
-    playScript(PROLOGUE, () => chapterIntro());
+    coldOpen(() => playScript(PROLOGUE, () => chapterIntro()));
   });
 }
 
@@ -874,7 +907,7 @@ function execution() {
   const intro = [
     // 四人全員が協力者なら、決行の前に決起会
     ...(rallyDue(s) ? rallyScene(s) : []),
-    ['n', '12月24日、クリスマス・イブの深夜。パーティーの客も帰り、屋敷は寝静まった。'],
+    ['n', '12月24日、クリスマス・イブの深夜。仮面舞踏会の客も帰り、絵は隠し部屋に戻され、屋敷は寝静まった。'],
     ['butler', '（今夜しかない。明日の朝には、絵は梱包されて運び出される）'],
   ];
   playScript(intro, () => {
