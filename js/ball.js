@@ -3,6 +3,11 @@
 // 3Dの屋敷（explore/day3d.js の startBall）が時刻に合わせて呼ぶ。台詞は [表示名, 文] か地の文
 import { setFlag, isAlly, clamp } from './state.js';
 
+// 新しい操作の長い説明は、初めてのときだけ出す（端末に覚える）
+export function firstTime(key) {
+  try { const k = `oyashiki-tip-${key}`; if (localStorage.getItem(k)) return false; localStorage.setItem(k, '1'); return true; } catch (e) { return true; }
+}
+
 export const BALL_START = 19, BALL_END = 24.5;   // 時刻（時）
 // 出来事の時刻（19:00 からの分）
 export const AT = { serve: 30, reiko: 120, dance: 180, serve2: 195, lastCall: 290, unmask: 300, close: 330 };
@@ -23,7 +28,7 @@ export function openingLines(s) {
     [F, '「それから、娘を紹介しよう。美術史を学んでいる自慢の娘だ」'],
     s.flags.d_secret ? [D, '「……どうも。美術史を、学んでいる娘です」'] : [D, '「……よろしくお願いします」'],
     s.flags.d_secret ? [B, '（お嬢様は、もう大学を辞めている。……その笑顔は、仮面より固い）'] : null,
-    '【配膳】キッチンのワゴンで、銀のお盆にシャンパングラスを4本受け取り、頭の上に「！」が出た客へ1本ずつ配ろう。4本配り終えたら、キッチンへ戻って次の4本を。客の話から、何か聞けるかもしれない。',
+    firstTime('serve') ? '【配膳】キッチンのワゴンで、銀のお盆にシャンパングラスを4本受け取り、頭の上に「！」が出た客へ1本ずつ配ろう。4本配り終えたら、キッチンへ戻って次の4本を。客の話から、何か聞けるかもしれない。' : null,
   ].filter(Boolean);
 }
 

@@ -981,7 +981,8 @@ function nightGoal() {
     : `絵を抱えて、屋敷の中を1階へ降り、勝手口から庭へ出て、${s.flags.back_gate ? 'バラ園の奥の通用口' : '裏庭のどこかの出口'}から抜け出す（梯子と井戸は絵を傷める。玄関には警報${isAlly(s, 'red') ? '' : '。勝手口の前の赤メイドは、1時半ごろに休む'}）`;
   if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
   if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
-  return '2階の書斎へ。夜は倉庫から奥への扉に鍵。勝手口の先には赤メイド、大広間は雫、2階の廊下には巡回員';
+  const hall = people.black.sleep ? '大広間は眠れない旦那様が歩き回っている' : '大広間は雫（見逃してくれる）';
+  return `2階の書斎へ。夜は倉庫から奥への扉に鍵。勝手口の先には赤メイド（1時半に休む）、${hall}、2階の廊下には巡回員`;
 }
 function endNight(id) {
   // 盗み出せたときは、手際（かかった時間・ニアミス・カード）を残してエンディングで見せる
@@ -1024,7 +1025,7 @@ function nightTick(dt) {
       say([p.name, p.id === 'father' ? '「……執事。その洗濯かごの中身は何だ」' : '「ちょっと。そのかご、中を見せてもらえますか」'], 'シーツの端から、額縁の角が覗いていた。');
     } else {
       afterMsg = () => endNight('caught');
-      say([p.name, /^guard/.test(p.id) ? '「誰だ！ そこで何をしている！」' : '「……誰？ ……執事さん？」'], '懐中電灯の光が、執事の顔を照らした。');
+      say([p.name, /^guard/.test(p.id) ? '「誰だ！ そこで何をしている！」' : p.id === 'father' ? '「……執事か。こんな夜中に、どこへ行くつもりだ」' : '「……誰？ ……執事さん？」'], p.id === 'father' ? 'ブランデーのグラスを置いた旦那様の目が、まっすぐ執事を射抜いた。' : '懐中電灯の光が、執事の顔を照らした。');
     }
   }
   // ニアミス：見張りの視界のすぐ外を抜けた（華麗さの採点に使う）
@@ -1485,6 +1486,9 @@ export function startNight(state, route, h) {
   const withS = !withD && s.flags.dance === 'shizuku';
   if (withS) {
     sleepInBed(black, BEDS.butler);
+    // 雫の代わりに、眠れない旦那様が大広間をゆっくり歩き回る（絵を手放す前の夜。見つかれば失敗）
+    Object.assign(people.father, { area: 'f1', x: 22, z: 10.5, range: 6.5, wait: 0, look: 0,
+      nightRole: { i: 0, path: [[22, 10.5, 3], [26, 10.5, 2], [26.5, 6, 2.5], [21.5, 6, 3]] } });
     Object.assign(player, { x: 2.8, z: 13.4 }); st.lying = true; st.lyingY = 0.06;
     afterMsg = () => { st.lying = false; st.lyingY = null; player.g.rotation.set(0, Math.PI / 2, 0); };
   }
@@ -1495,6 +1499,7 @@ export function startNight(state, route, h) {
     withD && '隣で、お嬢様が小さな寝息を立てている。',
     withS && '床の上で目を覚ました。……背中が痛い。ベッドでは、雫がすやすやと眠っている。',
     withS && ['執事', '（起こさないでおこう。……行ってくる）'],
+    withS && ['執事', '（雫が眠っている今夜は、大広間の見回りがいない。……いや、大広間の明かりが一つ点いている。旦那様が、眠れずに歩き回っているらしい）'],
     withD && ['お嬢様', '「（寝言）……執事さん……」'],
     eve && ['執事', withD ? '（起こさないように、そっとベッドを抜け出した。ここは2階だ。書斎は近い）' : `（${eve[3]}の寝息を確かめ、そっとベッドを抜け出した。ここは2階だ。書斎は近い）`],
     s.flags.white_ally ? ['執事', '（白は約束どおり、警報の系統を落としてくれたはずだ）'] : ['執事', '（警報はまだ生きている。絵に触れれば鳴るだろう……）'],
@@ -1758,7 +1763,8 @@ async function startDance(id) {
   Object.assign(p, { area: c.area, dancing: true });
   const ui = document.createElement('div');
   ui.className = 'dance3d';
-  ui.innerHTML = '<div class="dance-target"></div><div class="dance-ring"></div><p class="dance-msg">輪が重なった瞬間にタップ（1小節に1回）</p><p class="dance-score"></p>';
+  ui.innerHTML = '<div class="dance-target"></div><div class="dance-ring"></div><p class="dance-msg"></p><p class="dance-score"></p>';
+  ui.querySelector('.dance-msg').textContent = BALL.firstTime('dance') ? '縮んでくる白い輪が、金色の輪に重なった瞬間にタップ（1小節に1回。ぴったりほど高得点）' : '輪が重なった瞬間にタップ';
   ui.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); danceTap(); });
   root.append(ui);
   st.busy = true;
@@ -1844,7 +1850,7 @@ function startBlackout() {
     '――その瞬間、屋敷じゅうの明かりが消えた。',
     '悲鳴と、グラスの割れる音。暗闇の中で、客たちのスマートフォンの灯りが、小さな影のように揺れる。',
     ['執事', '（白が、約束どおり電源を落とした。……明かりが戻るまで、90秒）'],
-    '【暗闇】壁の「月下の庭」からキャンバスを外し、昇降機・配膳車・ピアノのどれかに隠して、明かりが戻る前に大広間の真ん中へ戻ろう。巡回員の懐中電灯に気をつけて。');
+    BALL.firstTime('dark') && '【暗闇】壁の「月下の庭」からキャンバスを外し、昇降機・配膳車・ピアノのどれかに隠して、明かりが戻る前に大広間の真ん中へ戻ろう。巡回員の懐中電灯に気をつけて。');
 }
 function setDark(on) {
   for (const l of LIGHTS) l.o.intensity = on ? 0 : l.base;
