@@ -924,6 +924,11 @@ function afterWeekend() {
 function execution() {
   s.phase = 'execution';
   music.play('heist');
+  // ルート2：イブの昼にすり替えてあれば、25日の朝に本物を運び出すだけ
+  if (s.flags.swap_hidden) return playScript([
+    ['n', '12月24日、深夜。仮面舞踏会の客も帰り、絵は隠し部屋に戻された。……中身は、青の模写だ。'],
+    ['butler', '（本物は、お嬢様のクローゼットの奥で眠っている。あとは25日の朝、運び屋と入れ違いに運び出すだけだ）'],
+  ], () => runRoute('swap'));
   const avail = ROUTES.filter(r => r.ok(s));
   const intro = [
     // 四人全員が協力者なら、決行の前に決起会
@@ -945,6 +950,11 @@ async function runRoute(id) {
   if (castMissing()) return preloadCast(() => runRoute(id));
   app().replaceChildren();
   if (await load3D()) return day3d.startNight(s, id, { ending, notebook: openNotebook, toast, askChoice });
+  // 2D（?2d の確認用）のルート2：25日の朝に運び出すところだけ
+  if (id === 'swap') return playScript([
+    ['n', '12月25日の朝。運び屋が偽物を梱包している間に、お嬢様のクローゼットから本物を洗濯かごに移した。'],
+    ['n', s.flags.caterer_friend ? '勝手口の外で、仕出し屋の白いバンが空の料理箱を積んでいた。一番下の箱に、本物をそっと寝かせた。' : '使用人棟の自室に戻り、ベッドの下のトランクに本物を収めた。'],
+  ], () => ending('swap'));
   let alarmOff = false;
   const fail = text => playScript([['n', text]], () => ending('caught'));
   const toPainting = () => playScript([

@@ -7,7 +7,7 @@ const BASE = ['tutorial_done', 'white_arrived', 'white_spy', 'shizuku', 'strict_
 // 屋敷の調べ物は一通り終えている
 const INFO = ['c_import', 'c_red', 'c_daughter', 'c_study', 'h_window', 'h_blueprint', 'hidden_room', 'hint_redbook', 'red_book',
   'desk_lock', 'p_lover', 'p_bday', 'n_codehint', 'key_hidden', 'found_painting', 'breaker_seen', 'white_elec', 'ladder', 'balcony_open',
-  'hall_patrol', 'shizuku_reunion', 'shizuku_diary', 'shizuku_courier', 'guard_known', 'guard_info', 'back_gate',
+  'hall_patrol', 'shizuku_reunion', 'shizuku_diary', 'shizuku_courier', 'guard_known', 'guard_info', 'back_gate', 'caterer_friend', 'eve_display',
   'b_well', 'b_plan', 'b_hatch', 'b_key', 'b_light', 'b_tool', 'b_found', 'b_vault', 'b_tunnel', 'b_grate'];
 const FORGERY = ['forgery_start', 'forgery_ready', 'hide_ok'];
 
@@ -29,6 +29,8 @@ export function testState(presetId, when) {
   for (const f of [...BASE, ...p.flags]) setFlag(s, f);
   Object.assign(s.aff, { black: 100 }, p.aff);
   if (s.flags.forgery_start) s.forgeryDay = dayIndex(s) - 10;
+  // 深夜から始めるときは、ENDING 2 のすり替え（イブの昼）も済ませておく
+  if (presetId === 'e2' && when === 'night') { setFlag(s, 'swapped'); setFlag(s, 'swap_hidden'); }
   s.testPreset = presetId; s.testWhen = when;
   return s;
 }

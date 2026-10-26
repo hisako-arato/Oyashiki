@@ -6,7 +6,7 @@ import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, ROOMS, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
 import { richNodes } from '../js/richtext.js';
-import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded } from '../js/state.js';
+import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded, isEve } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
@@ -479,6 +479,7 @@ function findTarget() {
   for (const t of cottageThings()) consider(t, 0.8);
   for (const t of nightThings()) consider(t, 0.8);   // 夜だけの操作を、同じ場所の昼の調べものや出入口より優先する
   for (const t of ballThings()) consider(t, 0.6);
+  for (const t of eveThings()) consider(t, 0.8);
   if (st.mode !== 'night') for (const p of Object.values(people)) if (p.area === cur.id && !guiding(p)) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p });
   return best;
 }
@@ -492,6 +493,7 @@ function act() {
   if (t.night) return t.night();
   if (st.mode === 'night') return nightAct(t);
   if (st.mode === 'ball') return ballAct(t);
+  if (t.night) return t.night();
   if (t.meeting) return startMeeting();
   if (t.rest) { if (confirm(endAsk('今日の業務を終えて休みますか？'))) finish(); return; }
   // 地下から上がるとき・古井戸から降りるとき
@@ -758,6 +760,8 @@ function makeLadder(parent) {
   return g;
 }
 const carried = { ladder: null, painting: null };
+const VAN = [HOUSE.x + 47.5, HOUSE.z - 3.6];   // 25日の朝、仕出し屋のバンが停まる所（勝手口の外の小道）
+let van = null;
 let wallLadder = null;
 function setupNightProps() {
   if (!carried.ladder) {
@@ -769,6 +773,15 @@ function setupNightProps() {
     wallLadder.position.set(HOUSE.x + 24, 0, HOUSE.z + 18.45); wallLadder.rotation.x = -0.18;
   }
   carried.ladder.visible = false; carried.painting.visible = false; wallLadder.visible = false;
+  if (!van) {
+    van = new THREE.Group(); areas.grounds.group.add(van);
+    box(van, 4.2, 1.9, 1.9, M.white, VAN[0] + 1.2, 0.35, VAN[1] - 1.2);
+    for (const [dx, dz] of [[-0.3, -0.9], [-0.3, 0.9], [2.7, -0.9], [2.7, 0.9]]) {
+      const w = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.25, 12), M.black); w.rotation.x = Math.PI / 2;
+      w.position.set(VAN[0] - 0.3 + dx, 0.35, VAN[1] - 1.2 + dz); van.add(w);
+    }
+  }
+  van.visible = false;
 }
 function nightPerson(p, dt) {
   const n = p.nightRole;
@@ -827,6 +840,15 @@ function morningThings(N, list, at) {
     say(s.flags.d_close ? ['お嬢様', '「……持っていって。私は、何も見てない」'] : 'お嬢様は朝食に下りている。部屋には誰もいない。',
       '洗濯かごの底に本物を寝かせ、上からシーツをかぶせた。……見られても、ただの洗濯物に見えるはずだ。旦那様と警備員を除けば。');
   } });
+  // 雫の知人の仕出し屋が、勝手口の外の小道に白いバンを停めている。空の料理箱に紛れ込ませれば、そのまま屋敷の外へ
+  if (cur.id === 'grounds' && N.carry === 'painting' && s.flags.caterer_friend) list.push({ name: '仕出し屋の白いバン', at: at(...VAN), label: '料理箱に紛れ込ませる', night: () => {
+    N.carry = null; N.exit = 'van';
+    caption('持ち出し完了', `朝 ${7 + Math.floor(N.min / 60)}:${String(Math.floor(N.min) % 60).padStart(2, '0')}`);
+    afterMsg = () => endNight('swap');
+    say(['仕出し屋', '「おはようございます、空き箱の回収です。……一番下の箱、空けておきました」'],
+      '洗濯かごから本物を移し、空の料理箱の底に寝かせた。上に、汚れたテーブルクロスを重ねる。',
+      '白いバンは、偽物を積んだトラックより一足先に、裏の小道を出ていった。……誰も、何も気づいていない。');
+  } });
   if (cur.id === 'cottage' && N.carry === 'painting') list.push({ name: '執事の部屋のベッド', at: at(2.4, 12.5), label: '本物を隠す', night: () => {
     N.carry = null;
     caption('持ち出し完了', `朝 ${7 + Math.floor(N.min / 60)}:${String(Math.floor(N.min) % 60).padStart(2, '0')}`);
@@ -840,6 +862,7 @@ function startCarry() {
   const N = st.night;
   fade('夜が明けた――12月25日の朝', () => {
     Object.assign(N, { morning: true, nightMin: N.min, min: 0, carry: null, dawn: false, caught: false, ladderUp: false });
+    if (van) van.visible = !!s.flags.caterer_friend;
     setLights(false);
     dressPlayer(false);
     Object.assign(areas.f1.nightDoor.box, { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
@@ -853,7 +876,8 @@ function startCarry() {
     st.busy = false;
     say('12月25日、朝7時。正門に、オークション会社のトラックが着いた。',
       '旦那様は1階の廊下で梱包を見張り、警備員が2階の書斎から木箱を運び出している。',
-      '（運び屋が発つのは10時。それまでに、お嬢様の部屋のクローゼットから本物を取り出し、この部屋まで運ぶ）');
+      s.flags.caterer_friend ? '（運び屋が発つのは10時。それまでに、お嬢様の部屋のクローゼットから本物を取り出し、勝手口の外に停まった仕出し屋のバンまで運ぶ）'
+        : '（運び屋が発つのは10時。それまでに、お嬢様の部屋のクローゼットから本物を取り出し、この部屋まで運ぶ）');
     setTimeout(() => caption('持ち出し', '12月25日　朝 7:00'), 300);
   }, 1600);
 }
@@ -917,7 +941,7 @@ function nightAct(t) {
 }
 function nightGoal() {
   const N = st.night;
-  if (N.morning) return N.carry === 'painting' ? '本物を、使用人棟の執事の部屋まで運ぶ（旦那様と警備員に見られないように）'
+  if (N.morning) return N.carry === 'painting' ? (s.flags.caterer_friend ? '本物を、勝手口の外の仕出し屋のバンへ運ぶ（旦那様と警備員に見られないように）' : '本物を、使用人棟の執事の部屋まで運ぶ（旦那様と警備員に見られないように）')
     : 'お嬢様の部屋のクローゼットから、本物を取り出す（運び屋が発つ10時まで）。1階の廊下に旦那様、2階の廊下に木箱を運ぶ警備員';
   if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す'
     : `絵を抱えて、屋敷の中を1階へ降り、勝手口から庭へ出て、${s.flags.back_gate ? 'バラ園の奥の通用口' : '裏庭のどこかの出口'}から抜け出す（梯子と井戸は絵を傷める。玄関には警報${isAlly(s, 'red') ? '' : '。勝手口の前の赤メイドは、1時半ごろに休む'}）`;
@@ -1045,7 +1069,7 @@ view.addEventListener('lostpointercapture', endStick);
 $('nb3d').addEventListener('click', () => { if (!st.busy) hooks.notebook(); });
 $('end3d').addEventListener('click', () => { if (!st.busy && st.mode === 'day' && confirm(endAsk('今日の業務を終えますか？'))) finish(); });
 // 業務を終えるときに痕跡が残っていれば、一度引き留める
-const endAsk = q => { const tr = DL.traces(s); return tr.length ? `まだ元に戻していない物があります（${tr.map(x => DL.TRACE_NAME[x]).join('、')}）。\nこのままだと、気づかれて疑われるかもしれません。\n${q}` : q; };
+const endAsk = q => { if (st.dayCarry) return `本物の絵を抱えたままです。お嬢様の部屋のクローゼットに隠してから終えましょう。\n${q}`; const tr = DL.traces(s); return tr.length ? `まだ元に戻していない物があります（${tr.map(x => DL.TRACE_NAME[x]).join('、')}）。\nこのままだと、気づかれて疑われるかもしれません。\n${q}` : q; };
 
 // ---- 手前の壁・建物を低くする ----
 const tmpV = new THREE.Vector3();
@@ -1170,6 +1194,8 @@ function drawHud(room) {
 // ---- 1日の流れ ----
 function finish() {
   s.today.traceNotes = DL.settleTraces(s);
+  // 本物を抱えたまま18時になったら、慌ててクローゼットへ押し込む（見られていたかもしれない）
+  if (st.dayCarry) { st.dayCarry = null; setFlag(s, 'swap_hidden'); s.susp = clamp(s.susp + 15); s.today.traceNotes.push('18時の鐘に追われ、本物をクローゼットへ押し込んだ。……誰かに見られていなければいいが（疑惑+15）'); }
   running = false;
   root.classList.add('hidden');
   hooks.endDay();
@@ -1264,9 +1290,14 @@ function tick(now) {
   const inPrivate = !night && !ball && !!(room && room.private) && !choreHere(key);
   for (const p of Object.values(people)) p.coneMat.color.set(isAlly(s, p.id) ? '#8ad0a0' : (night || inPrivate) && p.seeing ? '#ff5a4a' : night ? '#fff2b0' : '#ffe08a');
   updateMasks(dt);
+  syncHallArt();
   if (night) nightTick(dt);
   else if (ball) ballTick(dt);
   else {
+    if (st.dayCarry && !st.busy) {
+      carried.painting && (carried.painting.visible = true);
+      for (const id of watchers()) if (!st.carrySeen[id]) { st.carrySeen[id] = true; s.susp = clamp(s.susp + 20); hooks.toast(`${people[id].name}に、布で包んだ大きな荷物を見られた（疑惑 +20）`); }
+    } else if (carried.painting && st.mode === 'day') carried.painting.visible = false;
     if (!st.busy && watchers().length && inPrivate) {
       s.susp = clamp(s.susp + 8 * dt);
       // 白に私室にいるところを見られたら、その部屋につき一度だけ報告の種になる
@@ -1336,7 +1367,8 @@ function prepare(state, h) {
   syncUnder();
   Object.assign(areas.f1.nightDoor.box, { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
   areas.f1.nightDoor.g.visible = false;
-  ending = false; st.busy = false; st.shelfAnim = 0; st.tut = null; st.tutPending = false; st.night = null; st.wine = null; msgQueue = []; afterMsg = null;
+  ending = false; st.busy = false; st.shelfAnim = 0; st.tut = null; st.tutPending = false; st.night = null; st.wine = null; st.dayCarry = null; st.carrySeen = {}; msgQueue = []; afterMsg = null;
+  setupNightProps();
 }
 function run() {
   running = true;
@@ -1383,6 +1415,8 @@ export function startNight(state, route, h) {
   setLights(true);
   setupNightProps();
   refreshMarkers();
+  // ルート2はイブの昼にすり替えてあるので、25日の朝から始める
+  if (route === 'swap') { enter('cottage', 2.4, 12.5); run(); return startCarry(); }
   Object.assign(areas.f1.nightDoor.box, { minX: 5.86, maxX: 6.14, minZ: 3, maxZ: 5 });
   areas.f1.nightDoor.g.visible = true;
   // 夜の見張り：黒メイド（雫）は大広間と玄関ホールを見回るが、兄を見逃す。赤メイドはキッチン裏で仕込み
@@ -1431,10 +1465,6 @@ function setupBallProps() {
   }
   if (!ballGroup) {
     ballGroup = new THREE.Group(); areas.f1.group.add(ballGroup);
-    // 大広間の北の壁（大階段の東）に飾る「月下の庭」と、照らすスポットライト
-    box(ballGroup, 1.75, 1.3, 0.05, M.gold, 28, 1.25, 0.1);
-    box(ballGroup, 1.5, 1.05, 0.06, mat('#ffffff', { map: TEX.painting }), 28, 1.37, 0.14);
-    const spot = new THREE.PointLight('#ffe7b0', 14, 4, 1.6); spot.position.set(28, 2.9, 1.2); spot.userData.keepNight = true; ballGroup.add(spot);
     // 料理のワゴン（キッチン）
     box(ballGroup, 1.1, 0.8, 0.6, M.metal, WAGON[0], 0, WAGON[1] - 0.45);
     for (const dx of [-0.3, 0, 0.3]) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), M.metal); d.position.set(WAGON[0] + dx, 0.8, WAGON[1] - 0.45); ballGroup.add(d); }
@@ -1442,6 +1472,42 @@ function setupBallProps() {
   }
   ballGroup.visible = true;
 }
+// イブの日だけ、大広間の北の壁（大階段の東）に「月下の庭」が飾られる（昼の13時から、舞踏会の終わりまで）
+let hallArt = null;
+function syncHallArt() {
+  if (!hallArt) {
+    hallArt = new THREE.Group(); areas.f1.group.add(hallArt);
+    box(hallArt, 1.75, 1.3, 0.05, M.gold, 28, 1.25, 0.1);
+    box(hallArt, 1.5, 1.05, 0.06, mat('#ffffff', { map: TEX.painting }), 28, 1.37, 0.14);
+    const spot = new THREE.PointLight('#ffe7b0', 14, 4, 1.6); spot.position.set(28, 2.9, 1.2); spot.userData.keepNight = true; hallArt.add(spot);
+    hallArt.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  }
+  hallArt.visible = st.mode === 'ball' || (st.mode === 'day' && isEve(s) && s.today.hour >= EVE_HANG);
+}
+const EVE_HANG = 13;   // イブの昼、旦那様が自ら絵を大広間に掛ける時刻
+// ルート2（すり替え）：イブの昼、大広間に飾られた絵を青の模写とすり替え、本物をお嬢様のクローゼットへ
+// 見張りの目（協力者は数えない）があるとすり替えられない。本物を抱えて運ぶ間に見られると、疑われる
+function eveThings() {
+  if (st.mode !== 'day' || !isEve(s) || s.today.hour < EVE_HANG) return [];
+  const list = [];
+  if (cur.id === 'f1' && !s.flags.swapped) list.push({ name: '月下の庭', at: () => [28, 1.0], label: s.flags.forgery_ready && s.flags.hide_ok ? 'すり替える' : '絵を見る', night: () => {
+    if (!s.flags.forgery_ready || !s.flags.hide_ok) return say('大広間の壁に、「月下の庭」が掛けられていた。旦那様が自ら掛けたらしい。', '（今夜、客の前に出す絵だ。……青の模写と、隠し場所があれば）');
+    if (watchers().length) return say('人の目がある。……今は手を出せない。');
+    if (!confirm('青の模写とすり替えますか？（本物は、お嬢様の部屋のクローゼットへ運ぶ）')) return;
+    setFlag(s, 'swapped');
+    st.dayCarry = 'painting';
+    say('青の模写を額に収め、本物をテーブルクロスで包む。壁の絵は、何ひとつ変わらないように見えた。',
+      s.flags.shizuku ? ['執事', '（雫が、旦那様を書斎に引き止めてくれている。……今のうちだ）'] : null,
+      '本物を、2階のお嬢様の部屋のクローゼットへ運ぼう。人に見られないように。');
+  } });
+  if (cur.id === 'f2' && st.dayCarry === 'painting') list.push({ name: 'クローゼット', at: () => [41.3, 14], label: '本物を隠す', night: () => {
+    st.dayCarry = null;
+    setFlag(s, 'swap_hidden');
+    say('クローゼットの奥、ドレスの陰に本物を寝かせた。', '（あとは今夜、旦那様が偽物を自慢するのを見届けて……25日の朝、運び出すだけだ）');
+  } });
+  return list;
+}
+
 // 舞踏会の人の立ち位置（nightPerson で動かす：path は巡回、yaw はその場で辺りを見る）
 function placeBallCast() {
   const at = (id, x, z, role) => Object.assign(people[id], { area: 'f1', x, z, wait: 0, look: Math.random() * 3, nightRole: { i: 0, ...role } });
@@ -1645,7 +1711,9 @@ function ballThings() {
     if (g) { s.flags[g.id] = true; return say(g.line); }
     say(BALL.SERVE_THANKS[s.ballStats.served % BALL.SERVE_THANKS.length]);
   } });
-  list.push({ name: '月下の庭', at: () => [28, 1.0], label: '絵を見る', night: () => say('壁に飾られた「月下の庭」。月明かりの下、白い花が咲く庭。……母が一番好きだった絵だ。', '（今夜は、客と旦那様の目がある。……手は出せない）') });
+  list.push({ name: '月下の庭', at: () => [28, 1.0], label: '絵を見る', night: () => s.flags.swapped
+    ? say('壁に飾られた「月下の庭」。……青の模写だ。客たちは、うっとりと見入っている。', '（本物は、お嬢様のクローゼットの奥で眠っている）')
+    : say('壁に飾られた「月下の庭」。月明かりの下、白い花が咲く庭。……母が一番好きだった絵だ。', '（今夜は、客と旦那様の目がある。……手は出せない）') });
   return list;
 }
 function ballAct(t) {

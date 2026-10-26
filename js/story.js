@@ -260,14 +260,16 @@ export const ARRIVAL = [
 export const ROUTES = [
   { id: 'night', name: 'ルート1：一夜で持ち去る',
     desc: '誰にも見つからず、正しい道順で絵を持ち去る。',
-    ok: s => s.flags.found_painting && s.flags.back_gate,
-    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない', !s.flags.back_gate && '絵を傷めずに運び出せる出口が分からない'] },
+    ok: s => s.flags.found_painting && s.flags.back_gate && !s.flags.swap_hidden,
+    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない', !s.flags.back_gate && '絵を傷めずに運び出せる出口が分からない',
+      s.flags.swap_hidden && '隠し部屋に戻されたのは、青の模写だ'] },
   { id: 'swap', name: 'ルート2：贋作とすり替える',
-    desc: '青の模写とすり替え、本物はお嬢様の部屋に隠す。25日の朝、運び屋が偽物を梱包している間に、本物を運び出す。',
-    ok: s => s.flags.found_painting && s.flags.forgery_ready && s.flags.hide_ok,
+    desc: 'イブの昼、大広間に飾られた絵を青の模写とすり替え、本物はお嬢様の部屋に隠してある。25日の朝、運び屋が偽物を梱包している間に、本物を運び出す。',
+    ok: s => !!s.flags.swap_hidden,
     need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない',
       !s.flags.forgery_start && '青に模写を頼んでいない', s.flags.forgery_start && !s.flags.forgery_ready && '青の模写が完成していない',
-      !s.flags.hide_ok && '本物を隠しておける場所がない'] },
+      !s.flags.hide_ok && '本物を隠しておける場所がない',
+      s.flags.forgery_ready && s.flags.hide_ok && !s.flags.swap_hidden && 'イブの昼（13時から）、大広間の絵をすり替えていない'] },
 ];
 
 // 地下の仕入れ帳の写真を持っていれば、最後にその扱いを選ぶ（主人公と雫の目的は、あくまで「月下の庭」だけ）
@@ -336,6 +338,8 @@ export const ENDINGS = {
     ledgerEnd,
   ] },
   swap: { title: 'ENDING 2　誰も知らない月', good: true, lines: [
+    [N, 'イブの夜、旦那様が客の前で誇らしげに見せびらかした絵は、青の筆による模写だった。誰一人、気づかなかった。'],
+    { if: s => s.flags.caterer_friend, then: [[N, '25日の朝。仕出し屋の白いバンは、空の料理箱を積んで屋敷を出ていった。一番下の箱だけが、少し重かった。']] },
     [N, '年明け、海外のオークション会場。出品された「月下の庭」は、精巧な模写だった。'],
     [N, '贋作騒ぎで旦那様の信用は地に落ちた。だが、本物がどこへ消えたのかは誰にも分からない。'],
     [N, '春。ある小さな墓前に、一枚の絵が立てかけられていた。'],
