@@ -12,7 +12,7 @@ import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
 import * as BALL from '../js/ball.js';
 import * as music from '../js/music.js';
-import { maskVRM, unmaskVRM, liftMask, updateMasks, styleOf } from './masks.js';
+import { maskVRM, unmaskVRM, liftMask, updateMasks, styleOf, maskFragment } from './masks.js';
 
 const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か（昼）
 const NIGHT_SEC_PER_HOUR = 75; // 決行の夜
@@ -364,7 +364,7 @@ function updatePerson(p, dt) {
   p.g.position.set(p.x, 0, p.z);
   driveSeen(p, moving && !st.busy, dt);
   // 舞踏会では、誰に見られても怪しまれない（視線の扇は出さない）
-  if (st.mode === 'ball') { p.cone.visible = false; p.seeing = false; return; }
+  if (st.mode === 'ball' && !(st.ball.dark && p.id === 'guard')) { p.cone.visible = false; p.seeing = false; return; }
   sight(p);
 }
 // 今こちらを見ている人（協力者は数えない）
@@ -1612,8 +1612,10 @@ function ballTick(dt) {
       say(...BALL.danceIntro(s, o.id));
     });
   }
+  if (B.dark) return darkTick(dt);
   if (at(BALL.AT.unmask) && once('unmask')) {
     B.reqs = []; B.tray = false;
+    if (s.flags.plan_blackout) return startBlackout();
     if (cur.id !== 'f1') travel({ area: 'f1', x: 24, z: 13.6 });
     // 鐘に合わせて、仮面を右手へ下ろす（少しずつずらす）
     let k = 0;
@@ -1692,9 +1694,116 @@ function endDance() {
   say(`（ワルツの出来：${Math.round(ratio * 100)}点）`, ...BALL.danceResult(s, D.id, tier));
 }
 
+// ---- ENDING 3 の停電劇：0時の仮面外しの瞬間、白が屋敷の電気を落とす。暗闇は90秒 ----
+// 壁の絵からキャンバスを外し、昇降機・配膳車・ピアノのどれかに隠して、明かりが戻る前に大広間の元の場所（真ん中）へ戻る
+// 停電の間だけ、増やされた巡回員が懐中電灯で大広間を回る。絵を抱えているところを照らされたら失敗
+const DARK_SEC = 90, HOME = [24, 8];
+const HIDE = {
+  dumbwaiter: { name: '料理の昇降機', at: [30.6, 3.2], label: '昇降機に隠す', line: 'キッチンの壁の昇降機に、キャンバスを丸めずに滑り込ませた。扉を閉める。' },
+  cart: { name: '仕出し屋の配膳車', at: [36, 5.9], label: '配膳車に隠す', line: '配膳車の空の料理箱に、キャンバスを寝かせた。上に、汚れたテーブルクロスをかぶせる。' },
+  piano: { name: '応接室のピアノ', at: [14.6, 10.0], label: 'ピアノの中に隠す', line: '応接室のピアノの蓋を開け、弦の上にキャンバスをそっと寝かせた。' },
+};
+let darkProps = null;
+function startBlackout() {
+  const B = st.ball;
+  if (cur.id !== 'f1') enter('f1', 24, 13.6);
+  afterMsg = () => {
+    B.dark = { left: DARK_SEC, stage: 'take', spot: null, back: false, frag: null };
+    setDark(true);
+    hooks.toast('【暗闇】残り90秒。絵を外して隠し、大広間の真ん中へ戻れ');
+  };
+  say('深夜0時。大時計の鐘が鳴り始めた。',
+    ['お父様', '「皆さん、時間だ。……仮面を――」'],
+    '――その瞬間、屋敷じゅうの明かりが消えた。',
+    '悲鳴と、グラスの割れる音。暗闇の中で、客たちのスマートフォンの灯りが、小さな影のように揺れる。',
+    ['執事', '（白が、約束どおり電源を落とした。……明かりが戻るまで、90秒）'],
+    '【暗闇】壁の「月下の庭」からキャンバスを外し、昇降機・配膳車・ピアノのどれかに隠して、明かりが戻る前に大広間の真ん中へ戻ろう。巡回員の懐中電灯に気をつけて。');
+}
+function setDark(on) {
+  for (const l of LIGHTS) l.o.intensity = on ? 0 : l.base;
+  if (hallArt) hallArt.children[2].intensity = on ? 0 : 14;
+  hemi.intensity = on ? 0.07 : 0.95; sun.intensity = on ? 0.03 : 0.7;
+  lantern.intensity = on ? 1.6 : 0;
+  scene.background = on ? new THREE.Color('#020204') : NIGHT_SKY;
+  if (!darkProps) {
+    darkProps = new THREE.Group(); ballGroup.add(darkProps);
+    // 客のスマートフォンの灯り（光源は増やさず、光る点だけ）
+    const glowMat = new THREE.MeshBasicMaterial({ color: '#cfe6ff' });
+    for (const [x, z] of GUEST_SPOTS.slice(0, 8)) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), glowMat); b.position.set(x + 0.25, 1.25, z + 0.1); b.userData.bob = Math.random() * 6; darkProps.add(b); }
+    // 昇降機の扉（キッチンの西の壁）
+    box(darkProps, 0.08, 0.75, 0.75, M.darkWood, 30.08, 0.8, 3.2);
+  }
+  darkProps.visible = true;
+  for (const b of darkProps.children) if (b.userData.bob != null) b.visible = on;
+  // 増やされた巡回員：大広間を懐中電灯で回る
+  const g = people.guard;
+  if (on) Object.assign(g, { area: 'f1', x: 24, z: 12, range: 6, wait: 0, look: 0, nightRole: { i: 0, path: [[22, 10.5, 1], [26, 10.5, 1], [26.6, 5.6, 1.5], [21.4, 5.6, 1.5]] } });
+  else Object.assign(g, { x: 24, z: 16.9, nightRole: { i: 0, yaw: Math.PI } });
+}
+function darkTick(dt) {
+  const D = st.ball.dark;
+  if (D.over) return;
+  D.left -= dt;
+  carried.painting.visible = D.stage === 'carry';
+  for (const b of darkProps.children) if (b.userData.bob != null) { b.userData.bob += dt * 2; b.position.y = 1.2 + Math.sin(b.userData.bob) * 0.08; }
+  // 絵を抱えているところを、懐中電灯に照らされた
+  if (D.stage === 'carry' && people.guard.seeing && people.guard.area === cur.id) return darkEnd('caught');
+  // 隠し終えて、大広間の真ん中へ戻った
+  if (D.stage === 'hidden' && cur.id === 'f1' && Math.hypot(player.x - HOME[0], player.z - HOME[1]) < 1.6) { D.back = true; return darkEnd('done'); }
+  if (D.left <= 0) darkEnd(D.stage === 'carry' ? 'caught' : D.stage === 'take' ? 'missed' : 'done');
+}
+// 明かりが戻る
+function darkEnd(how) {
+  const D = st.ball.dark;
+  D.over = true;
+  carried.painting.visible = false;
+  setDark(false);
+  s.dark = { spot: D.spot, back: D.back, frag: D.frag, left: Math.max(0, Math.round(D.left)) };
+  if (how === 'caught') {
+    s.flags.dark_caught = true;
+    afterMsg = endBall;
+    return say('パッ、と明かりが戻った。', '大広間じゅうの目が、布を抱えた執事に集まった。旦那様の顔が、みるみる赤くなっていく。', ['お父様', '「……貴様か！」']);
+  }
+  if (how === 'missed') {
+    // 絵に手が届かなかった：停電は「ただの故障」で終わり、舞踏会はそのまま閉宴へ
+    s.flags.plan_blackout = false;
+    afterMsg = () => { st.ball.dark = null; st.ball.min = BALL.AT.close; };
+    return say('パッ、と明かりが戻った。壁の「月下の庭」は、元のまま掛かっている。', ['お父様', '「……ただの停電か。驚かせおって」'], ['執事', '（間に合わなかった。……今夜のうちに、別の手を考えるしかない）']);
+  }
+  s.flags.blackout_done = true;
+  afterMsg = endBall;
+  say('パッ、と明かりが戻った。', '壁の額縁は、空っぽだった。', ['お父様', '「……な、なんだと！ 絵が……『月下の庭』が！」'],
+    D.back ? ['執事', '（間に合った。……何も知らない顔で、ここに立っていればいい）'] : ['執事', '（まずい……元の場所に戻れなかった）']);
+}
+function darkThings() {
+  const D = st.ball.dark, list = [];
+  if (!D || D.over) return list;
+  if (cur.id === 'f1' && D.stage === 'take') list.push({ name: '月下の庭', at: () => [28, 1.0], label: 'キャンバスを外す', night: () => {
+    D.stage = 'carry';
+    hallArt.children[1].visible = false;
+    st.busy = true;
+    hooks.askChoice('額縁からキャンバスを外した。……青が作った、仮面の切れ端を落としていくか？', [
+      { t: '麗子の深紅の仮面の切れ端を落とす', id: 'reiko', run: () => '' },
+      { t: '担当者の灰色の仮面の切れ端を落とす', id: 'dealer', run: () => '' },
+      { t: '何も落とさない', id: null, run: () => '' },
+    ], (msg, o) => {
+      st.busy = false;
+      D.frag = o.id;
+      if (o.id) { const f = maskFragment(styleOf(o.id)); f.position.set(27.6, 0.02, 1.5); f.userData.frag = true; darkProps.add(f); }
+      say(o.id ? '額縁の下に、仮面の切れ端をそっと落とした。' : '何も残さず、額縁の前を離れた。', '（昇降機か、配膳車か、ピアノか。……急げ）');
+    });
+  } });
+  if (D.stage === 'carry') for (const [id, h] of Object.entries(HIDE)) if (cur.id === 'f1') list.push({ name: h.name, at: () => h.at, label: h.label, night: () => {
+    D.stage = 'hidden'; D.spot = id;
+    say(h.line, '（大広間の真ん中へ戻れ。明かりが戻る前に）');
+  } });
+  return list;
+}
+
 function ballThings() {
   if (st.mode !== 'ball' || cur.id !== 'f1') return [];
   const B = st.ball, list = [];
+  if (B.dark) return darkThings();
   list.push({ name: '料理のワゴン', at: () => WAGON, label: B.tray ? '料理を持っている' : '料理を受け取る', night: () => {
     if (B.tray) return say('もう料理を持っている。「！」の客へ運ぼう。');
     if (!B.reqs.length) return say('今は、料理を待っている客はいないようだ。');
@@ -1727,11 +1836,19 @@ function ballAct(t) {
 }
 function ballLabels(labels) {
   if (cur.id !== 'f1') return;
+  const D = st.ball.dark;
+  if (D && !D.over) {
+    if (D.stage === 'take') labels.push({ x: 28, y: 1.6, z: 1.0, text: '絵', cls: 'work' });
+    if (D.stage === 'carry') for (const h of Object.values(HIDE)) labels.push({ x: h.at[0], y: 1.2, z: h.at[1], text: h.name, cls: 'work' });
+    if (D.stage === 'hidden') labels.push({ x: HOME[0], y: 0.6, z: HOME[1], text: '元の場所', cls: 'work' });
+    return;
+  }
   for (const r of st.ball.reqs) labels.push({ x: r.g.x, y: 2.2, z: r.g.z, text: '！料理', cls: 'alert' });
   if (st.ball.reqs.length && !st.ball.tray) labels.push({ x: WAGON[0], y: 1.2, z: WAGON[1], text: 'ワゴン', cls: 'work' });
 }
 function ballGoal() {
   const B = st.ball, m = B.min, st2 = s.ballStats;
+  if (B.dark && !B.dark.over) return `【暗闇　残り${Math.max(0, Math.ceil(B.dark.left))}秒】${{ take: '壁の「月下の庭」からキャンバスを外す', carry: '昇降機・配膳車・ピアノのどれかに隠す（懐中電灯に照らされるな）', hidden: '大広間の真ん中へ戻る' }[B.dark.stage]}`;
   const score = `（運んだ料理 ${st2.served}皿${st2.missed ? `・待たせた客 ${st2.missed}人` : ''}）`;
   if (m < BALL.AT.serve) return '開宴。旦那様の乾杯を見届けよう';
   if (m >= BALL.AT.lastCall) return '0時の鐘を待つ';
@@ -1748,6 +1865,10 @@ async function endBall() {
   ballGuests = [];
   if (ballGroup) ballGroup.visible = false;
   if (carried.tray) carried.tray.visible = false;
+  // 停電劇の片付け：外したキャンバスを額に戻し（次に遊ぶとき用）、落とした切れ端を拾う
+  if (hallArt) hallArt.children[1].visible = true;
+  if (darkProps) { darkProps.visible = false; for (const c of [...darkProps.children]) if (c.userData.frag) darkProps.remove(c); }
+  if (B.dark && !B.dark.over) setDark(false);
   if (!TEST) {
     const V = await import('./vrm.js');
     if (B.daughterBase) { unmaskVRM(people.daughter.vrm); V.attachVRM(people.daughter, B.daughterBase); }

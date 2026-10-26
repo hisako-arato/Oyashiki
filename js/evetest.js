@@ -16,7 +16,7 @@ export const PRESETS = [
     flags: [...INFO, 'white_ally'], aff: { white: 75 } },
   { id: 'e2', name: 'ENDING 2 の条件', desc: 'ENDING 1 の条件に加えて、青の模写が完成し、お嬢様のクローゼットに隠せる',
     flags: [...INFO, 'white_ally', ...FORGERY], aff: { white: 75, blue: 75, daughter: 75 } },
-  { id: 'e3', name: 'ENDING 3 の条件', desc: '4人全員が協力者（雫とのことも、全員に打ち明けてある）',
+  { id: 'e3', name: 'ENDING 3 の条件', desc: '4人全員が協力者で、23日の夜に予告状を出すと決めてある（朝から始めると、0時の仮面外しで停電劇）',
     flags: [...INFO, 'white_ally', 'white_turned', ...FORGERY, 'told_red', 'told_blue', 'told_white'], aff: { red: 75, blue: 75, white: 75, daughter: 75 } },
   { id: 'bad', name: '何もそろっていない', desc: '調べ物も協力者も無い。BAD END の確認用', flags: [], aff: {} },
 ];
@@ -29,6 +29,8 @@ export function testState(presetId, when) {
   for (const f of [...BASE, ...p.flags]) setFlag(s, f);
   Object.assign(s.aff, { black: 100 }, p.aff);
   if (s.flags.forgery_start) s.forgeryDay = dayIndex(s) - 10;
+  // ENDING 3：23日の夜の決起会で、予告状を出すと決めてある（朝から始めると、0時に停電劇になる）
+  if (presetId === 'e3') { setFlag(s, 'plan_blackout'); setFlag(s, 'rally_done'); }
   // 深夜から始めるときは、ENDING 2 のすり替え（イブの昼）も済ませておく
   if (presetId === 'e2' && when === 'night') { setFlag(s, 'swapped'); setFlag(s, 'swap_hidden'); }
   s.testPreset = presetId; s.testWhen = when;

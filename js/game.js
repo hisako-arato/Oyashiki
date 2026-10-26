@@ -5,7 +5,7 @@ import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdo
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
 import * as DL from './daylogic.js';
-import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ARRIVAL } from './story.js';
+import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ARRIVAL, interrogation } from './story.js';
 import { WHITE_ARRIVAL, whiteReport, strictDue, strictScene, whiteActive, whiteCovers } from './white.js';
 import { hasNight, nightOptions, nightScene, nightChoices, markNightSeen, REST, rallyDue, rallyScene } from './night.js';
 import { morningEvents, joined } from './sister.js';
@@ -854,6 +854,14 @@ function ball() {
 function afterBall(d) {
   s.phase = 'day';
   if (d) toast(`舞踏会の給仕：旦那様の心象 ${d > 0 ? '+' : ''}${d}`);
+  // ENDING 3：停電劇。照らされたら失敗、隠しおおせたら取り調べ
+  if (s.flags.dark_caught) return ending('caught_dark');
+  if (s.flags.blackout_done) {
+    s.phase = 'execution';
+    const dk = s.dark || {};
+    s.heist = { route: 'blackout', left: dk.left || 0, near: 0, card: true };
+    return playScript(interrogation(s), () => { s.heist.doubt = s.counters.doubt || 0; ending(s.counters.doubt >= 4 ? 'seen_through' : 'blackout'); });
+  }
   nextDay();
 }
 
@@ -880,6 +888,8 @@ function morningCalendar(s) {
   if (off === 2) notes.push(s.flags.p_bday ? '（今日は11月3日。……麗子の誕生日だ。旦那様は朝から、花屋に電話をかけていた）'
     : '（今日は11月3日。旦那様は朝から、花屋に電話をかけていた。……誰への花だろう）');
   if (isEve(s)) notes.push('今日は12月24日、クリスマス・イブ。夜は仮面舞踏会だ。屋敷じゅうが、朝から準備で慌ただしい。');
+  // ENDING 3：雫が書斎の机に置いた予告状。旦那様は意地になり、絵を大広間に飾ったまま警備を増やす
+  if (isEve(s) && s.flags.plan_blackout) notes.push('朝、書斎の机に一枚のカードが置かれていた。『仮面が外れる時刻に、月をいただく』――旦那様は顔を真っ赤にして、警備会社に電話をかけた。「巡回員を増やせ。絵は大広間に飾ったままにする。盗めるものなら、盗んでみろ」');
   else if (daysToEve(s) > 0 && daysToEve(s) <= 4) notes.push(`イブまで、あと${daysToEve(s)}日。`);
   return notes;
 }
@@ -1025,7 +1035,9 @@ function ending(id) {
     if (e.good) markCleared(s, id);
     const retry = isTesting() ? null : load();
     // 盗み出せた夜の手際（かかった時間・ニアミス）
-    const h = e.good && s.heist && s.heist.route === id ? s.heist : null;
+    const h = e.good && s.heist && s.heist.route === id && id !== 'blackout' ? s.heist : null;
+    // ENDING 3 の称号：明かりが戻る前の残り時間と、取り調べで残った疑い
+    const dark = id === 'blackout' && s.heist && s.heist.route === 'blackout' ? s.heist : null;
     const near = h ? h.near : 0;
     const rank = h && (near === 0 && h.min <= 90 ? '月下の怪盗' : near <= 2 ? '影の執事' : '危うい綱渡り');
     render(el('div', { class: 'card end' },
@@ -1033,6 +1045,8 @@ function ending(id) {
       el('p', {}, e.good ? 'CLEAR' : ''),
       h ? el('div', { class: 'heist' }, el('b', {}, `「${rank}」`),
         el('small', {}, `所要時間 ${Math.floor(h.min / 60)}時間${h.min % 60}分　／　ニアミス ${h.near}回${h.card ? '　／　カードを残した' : ''}`)) : null,
+      dark ? el('div', { class: 'heist' }, el('b', {}, `「${dark.doubt <= 0 && dark.left >= 30 ? '月下の怪盗' : dark.doubt <= 1 ? '影の執事' : '危うい綱渡り'}」`),
+        el('small', {}, `明かりが戻るまで残り ${dark.left}秒　／　取り調べの疑い ${Math.max(0, dark.doubt)}`)) : null,
       el('div', { class: 'menu' },
         retry ? el('button', { onclick: () => resume(retry) }, e.good ? '最後のセーブから、別の結末を探す' : '直前のセーブからやり直す') : null,
         isTesting() ? el('button', { onclick: () => startTest(s.testPreset, s.testWhen) }, 'テストのはじめに戻る') : null,

@@ -2,7 +2,7 @@
 // 選べるようになるまでは、選択肢そのものを出さない（選べる相手がいない夜は、夜の画面を出さずに休む）
 // 表現は、性的な描写はせず、大人が読めば分かる程度にとどめる（暗転・翌朝の様子で示す）
 import { PEOPLE, CLUES } from './data.js';
-import { activeMaids, fatherHome, rng, dayIndex, isAlly, WEEKS_PER_CHAPTER, applyFx, afterNight } from './state.js';
+import { activeMaids, fatherHome, rng, dayIndex, isAlly, WEEKS_PER_CHAPTER, applyFx, afterNight, dayOffset, EVE_OFFSET } from './state.js';
 import { joined, told, sulking, sis, afterSisterNight, afterMaidNight, afterRoomNight, tell } from './sister.js';
 import { whiteSaw } from './white.js';
 import { startForgery } from './daylogic.js';
@@ -27,7 +27,8 @@ export function nightOptions(s) {
     if (m === K) opts.push({ id: m, label: '自室に雫（黒メイド）を呼ぶ', ok: true });
     else if (s.aff[m] >= NEED[m]) opts.push({ id: m, label: `共用室で${PEOPLE[m].name}に声をかける`, ok: true });
   }
-  if (allTold(s)) opts.push({ id: 'all', label: '共用室で、みんなと集まる', ok: true });
+  if (rally23(s)) opts.push({ id: 'rally', label: '共用室で、決起会を開く（イブの作戦を決める）', ok: true });
+  else if (allTold(s)) opts.push({ id: 'all', label: '共用室で、みんなと集まる', ok: true });
   if (s.aff.mother >= NEED.mother && !fatherHome(s)) opts.push({ id: 'mother', label: 'お母様の部屋（主寝室）を訪ねる', ok: true });
   if (s.aff.daughter >= NEED.daughter) opts.push({ id: 'daughter', label: 'お嬢様の部屋を訪ねる', ok: true });
   for (const o of opts) {
@@ -120,6 +121,7 @@ const CLASH = [
 
 export function nightScene(s, id) {
   if (id === 'rest') return REST;
+  if (id === 'rally') return rallyPlan(s);
   if (id === 'all') return [{ place: '22:00　使用人棟　共用室' }, { cast: ['red', 'blue', 'white', 'shizuku'] }, ...groupScene(s), gossip(K), count('all'), { cast: null }];
   if (id === 'mother') return motherScene(s);
   if (id === 'daughter') return daughterScene(s);
@@ -512,7 +514,32 @@ function chatterScene(s) {
   return CHATTER[(n - 1 + CHATTER.length) % CHATTER.length];
 }
 // 決起会：決行の夜の前、四人全員が協力者のときだけ。役割を確かめて、乾杯する（効果は無い）
-export const rallyDue = s => allTold(s) && ['red', 'blue', 'white'].every(m => isAlly(s, m));
+export const rallyDue = s => allTold(s) && ['red', 'blue', 'white'].every(m => isAlly(s, m)) && !s.flags.rally_done;
+// 12月23日の夜：四人全員が協力者なら、共用室で決起会を開き、イブの作戦を決める（予告状を出せば ENDING 3 の停電劇）
+export const rally23 = s => rallyDue(s) && dayOffset(s) === EVE_OFFSET - 1;
+export function rallyPlan(s) {
+  return [{ place: '22:00　使用人棟　共用室' }, { cast: ['red', 'blue', 'white', 'shizuku'] },
+    [N, '12月23日の夜。明かりを落とした共用室に、五人が集まった。'],
+    [S, '「明日は、イブ。……旦那様は舞踏会で、あの絵を大広間に飾る。客にも、担当者にも見せびらかすために」'],
+    [W, '「0時の仮面外しの瞬間、屋敷じゅうの目が互いの顔に向きます。……その瞬間なら、私は屋敷の電気を全部落とせます」'],
+    [BL, '「暗くなったら、何も見えませんよね。……あ、わたし、仮面の絵付けの余りで、麗子さんと担当者さんの仮面の切れ端、作れます！」'],
+    [R, '「……停電でも、キッチンは分かる。昇降機も、配膳車も」'],
+    [S, '「仕出し屋の彼も、手伝ってくれるって。……どうする、お兄ちゃん？」'],
+    { choice: [
+      { t: '予告状を出す――「仮面が外れる時刻に、月をいただく」', fx: { flag: 'plan_blackout' }, then: [
+        [S, '「……分かった。予告状は、明日の朝いちばんに、私が書斎の机に置いておく。掃除の担当だもの」'],
+        [W, '「旦那様は、意地になって絵を大広間に飾ったままにするはずです。……盗めるものなら盗んでみろ、って」'],
+        [R, '「……みんなで、やる。前のメイドさんの分も」'],
+        [B, '「明かりが消えている間に、絵を隠す。明かりが戻ったら、何も知らない顔で立っている。……みんな、頼む」'],
+      ] },
+      { t: 'いつもの手はずで、静かにやる（決行は舞踏会の後）', then: [
+        [S, '「……うん。お兄ちゃんがそう決めたなら」'],
+      ] },
+    ] },
+    [R, '「……乾杯、する？ お茶だけど」'],
+    [N, '五つのカップが、静かに触れ合った。窓の外で、月が雲を抜けた。'],
+    { fx: { flag: 'rally_done' } }, { cast: null }];
+}
 export function rallyScene(s) {
   const f = s.flags;
   return [{ cast: ['red', 'blue', 'white', 'shizuku'] },
