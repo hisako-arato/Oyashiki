@@ -1,6 +1,6 @@
 // ゲーム進行と画面描画
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY, BASEMENT_HINTS } from './data.js';
-import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdown, newState, save, load, clearSave, listSlots, copySlot, markCleared, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
+import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdown, newState, save, load, clearSave, listSlots, copySlot, markCleared, isTesting, setTesting, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
@@ -15,6 +15,7 @@ import { richNodes } from './richtext.js';
 import { VERSION, VERSION_DATE } from './version.js';
 import { KINDS, VRM_IDS, savedCount, saveKind, keepStorage } from './vrmstore.js';
 import * as music from './music.js';
+import { PRESETS, WHEN, testState } from './evetest.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -90,6 +91,7 @@ function toast(text) {
 // ---- タイトル ----
 export function title() {
   music.play('title');
+  setTesting(false); testBadge();
   // ゲームの途中から戻ったときは、3Dの屋敷・人物照会・朝礼の重ね表示を閉じる
   if (day3d) day3d.leave();
   document.querySelectorAll('.viewer, .modal-back').forEach(e => e.remove());
@@ -110,13 +112,46 @@ export function title() {
       any ? el('button', { onclick: () => slotScreen('continue') }, 'つづきから') : null,
       el('button', { onclick: () => slotScreen('new') }, 'はじめから'),
       el('button', { class: 'ghost', onclick: titleSettings }, '設定')),
-    el('p', { class: 'note' }, versionLabel())));
+    el('p', { class: 'note', onclick: secretTap }, versionLabel())));
   // 新しい版で初めて起動したときに、一度だけ知らせる
   try {
     const seen = localStorage.getItem('oyashiki-version');
     if (seen && seen !== VERSION) toast(`バージョン ${VERSION} に更新しました`);
     localStorage.setItem('oyashiki-version', VERSION);
   } catch (e) { /* noop */ }
+}
+
+// ---- 24日のテストプレイ（バージョン表示を5回続けてタップすると出る。セーブはしない） ----
+let taps = [];
+function secretTap() {
+  const now = Date.now();
+  taps = [...taps.filter(t => now - t < 3000), now];
+  if (taps.length >= 5) { taps = []; testScreen(); }
+}
+function testScreen() {
+  let when = 'morning';
+  const whenRow = el('div', { class: 'row' });
+  const showWhen = () => whenRow.replaceChildren(...WHEN.map(([id, label]) =>
+    el('button', { class: id === when ? 'primary' : 'ghost', onclick: () => { when = id; showWhen(); } }, label)));
+  showWhen();
+  render(el('div', { class: 'panel settings' },
+    el('h2', {}, '24日のテストプレイ'),
+    el('p', { class: 'hint' }, 'テスト用。どのセーブ枠にも保存しない。'),
+    el('h4', {}, '始める時点'), whenRow,
+    el('h4', {}, '条件のひな形'),
+    PRESETS.map(p => el('button', { class: 'route', onclick: () => startTest(p.id, when) }, el('b', {}, p.name), el('small', {}, p.desc))),
+    el('button', { class: 'ghost', onclick: title }, 'タイトルに戻る')));
+}
+function startTest(preset, when) {
+  setTesting(true);
+  s = testState(preset, when);
+  testBadge();
+  preloadCast(() => { loadPortrait(); when === 'night' ? startWeekend() : startWeekday(); });
+}
+// テストプレイの間は、画面の上に「テストプレイ」と出す（3Dの屋敷の上にも）
+function testBadge() {
+  document.querySelector('.testbadge')?.remove();
+  if (isTesting()) document.body.append(el('div', { class: 'testbadge' }, 'テストプレイ'));
 }
 
 // ---- バージョンと更新 ----
@@ -924,7 +959,7 @@ function ending(id) {
   playScript(e.lines, () => {
     // クリアしてもセーブは消さない（枠に「クリア済み」と記す。消すのはプレイヤーが手で）
     if (e.good) markCleared(s, id);
-    const retry = load();
+    const retry = isTesting() ? null : load();
     // 盗み出せた夜の手際（かかった時間・ニアミス）
     const h = e.good && s.heist && s.heist.route === id ? s.heist : null;
     // 梯子で塀を越えたときは、ニアミスを2回分おまけする（上級の逃げ道）
@@ -937,6 +972,8 @@ function ending(id) {
         el('small', {}, `所要時間 ${Math.floor(h.min / 60)}時間${h.min % 60}分　／　ニアミス ${h.near}回${h.card ? '　／　カードを残した' : ''}`)) : null,
       el('div', { class: 'menu' },
         retry ? el('button', { onclick: () => resume(retry) }, e.good ? '最後のセーブから、別の結末を探す' : '直前のセーブからやり直す') : null,
+        isTesting() ? el('button', { onclick: () => startTest(s.testPreset, s.testWhen) }, 'テストのはじめに戻る') : null,
+        isTesting() ? el('button', { onclick: testScreen }, '別の条件でテストする') : null,
         el('button', { onclick: title }, 'タイトルへ'))));
   });
 }

@@ -24,7 +24,11 @@ export const SLOTS = 5;
 const slotKey = n => `oyashiki-save-v2-${n}`;
 let slot = 1;                       // いま遊んでいる枠
 export const currentSlot = () => slot;
-export function useSlot(n) { slot = n; }
+export function useSlot(n) { slot = n; testing = false; }
+// テストプレイ（タイトルの隠し入口から）：どの枠にも保存しない
+let testing = false;
+export const isTesting = () => testing;
+export function setTesting(on) { testing = on; }
 // 以前の1つだけのセーブは、枠1に移す
 function migrate() {
   try {
@@ -35,6 +39,7 @@ function migrate() {
   } catch (e) { /* noop */ }
 }
 export function save(s, n = slot) {
+  if (testing) return;
   s.savedAt = Date.now();
   try { localStorage.setItem(slotKey(n), JSON.stringify(s)); } catch (e) { /* 保存できない環境でも続行 */ }
 }
@@ -56,6 +61,7 @@ export function copySlot(from, to) {
 }
 // クリアした結末を、枠のセーブ（最後に保存した日の朝）に書き足す。セーブ自体は消さない
 export function markCleared(s, id, n = slot) {
+  if (testing) return;
   const d = load(n) || s;
   const add = list => [...new Set([...(list || []), id])];
   d.cleared = add(d.cleared);

@@ -261,3 +261,5 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .volume { display: flex; align-items: center; gap: 10px; }
 .volume input { flex: 1; accent-color: var(--gold); touch-action: pan-y; }
 .volume b { min-width: 2.5em; text-align: right; }
+.testbadge { position: fixed; top: 6px; left: 50%; transform: translateX(-50%); z-index: 9999; pointer-events: none;
+  background: #a33; color: #fff; font-size: .72rem; padding: 2px 10px; border-radius: 10px; opacity: .85; }
