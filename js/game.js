@@ -14,6 +14,7 @@ import { faceOf } from './faces.js';
 import { richNodes } from './richtext.js';
 import { VERSION, VERSION_DATE } from './version.js';
 import { KINDS, VRM_IDS, savedCount, saveKind, keepStorage } from './vrmstore.js';
+import * as music from './music.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -88,6 +89,7 @@ function toast(text) {
 
 // ---- タイトル ----
 export function title() {
+  music.play('title');
   // ゲームの途中から戻ったときは、3Dの屋敷・人物照会・朝礼の重ね表示を閉じる
   if (day3d) day3d.leave();
   document.querySelectorAll('.viewer, .modal-back').forEach(e => e.remove());
@@ -178,6 +180,14 @@ function storeBox() {
     el('p', { class: 'hint' }, 'Wi-Fi のときに保存しておくと、ゲームの開始が速くなり、電波の弱い所でも遊べる。屋敷・会話用は、保存していなくてもゲームの開始時に読み込む。'),
   ];
 }
+// 音楽の音量（0 で鳴らさない）
+function musicBox() {
+  const val = el('b', {}, `${music.volume()}`);
+  const range = el('input', { type: 'range', min: 0, max: 100, step: 5, value: music.volume() });
+  range.oninput = () => { val.textContent = range.value; music.setVolume(+range.value); };
+  return [el('div', { class: 'volume' }, el('span', {}, '音楽'), range, val),
+    el('p', { class: 'hint' }, '0 にすると音楽を鳴らさない。iPhone では、消音（マナー）モードのときは鳴らない。')];
+}
 // トップ画面の設定
 function titleSettings() {
   render(el('div', { class: 'panel settings' },
@@ -185,6 +195,8 @@ function titleSettings() {
     el('h4', {}, 'バージョン'),
     el('p', {}, versionLabel()),
     updateBox(),
+    el('h4', {}, '音量'),
+    ...musicBox(),
     el('h4', {}, 'キャラクターを端末に保存'),
     ...storeBox(),
     el('h4', {}, 'セーブの書き出し・読み込み'),
@@ -431,6 +443,7 @@ function chapterIntro() {
 }
 
 async function startWeekday() {
+  music.play('day');
   // 章が進んで新しい人が来たら、先に読み込む
   if (castMissing()) return preloadCast(startWeekday);
   // 第2章の初日は、お父様が白メイドを連れてくる（それより後から遊び始めたセーブでは、場面を飛ばして済ませる）
@@ -757,6 +770,7 @@ function endDay() {
 
 // ---- 夜（22時）：休む／メイドに声をかける／部屋を訪ねる（選べることが無い夜は、画面を出さずに休む） ----
 function night() {
+  music.stop();   // 夜は音楽を鳴らさない
   // 休む以外に選べることが無い夜は、夜の画面を出さずに休む
   if (!nightChoices(s)) { s.phase = 'night'; return playScript(REST, () => checkFatal() || nextDay()); }
   const opts = nightOptions(s);
@@ -804,6 +818,7 @@ function checkFatal() {
 // ---- 週末（物語パート） ----
 function startWeekend() {
   s.phase = 'weekend';
+  music.play('title');
   save(s);
   if (s.chapter === 3 && s.week === WEEKS_PER_CHAPTER - 1) return execution();
   playScript([...whiteReport(s), ...WEEKENDS[s.chapter][s.week]], afterWeekend);
@@ -819,6 +834,7 @@ function afterWeekend() {
 // ---- 決行 ----
 function execution() {
   s.phase = 'execution';
+  music.play('heist');
   const avail = ROUTES.filter(r => r.ok(s));
   const intro = [
     // 四人全員が協力者なら、決行の前に決起会
@@ -904,6 +920,7 @@ async function runRoute(id) {
 function ending(id) {
   const e = ENDINGS[id];
   s.phase = 'ending'; s.endingId = id;
+  e.good ? music.play('title') : music.stop();
   playScript(e.lines, () => {
     // クリアしてもセーブは消さない（枠に「クリア済み」と記す。消すのはプレイヤーが手で）
     if (e.good) markCleared(s, id);
@@ -1026,6 +1043,8 @@ function storyTab() {
 
 function settingsTab(back) {
   return [
+    el('h4', {}, '音量'),
+    ...musicBox(),
     el('h4', {}, 'キャラクターを端末に保存'),
     ...storeBox(),
     el('h4', {}, 'バージョン'),

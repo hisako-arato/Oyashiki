@@ -258,3 +258,6 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .plan b { color: var(--gold); }
 .plan li.past { color: var(--muted); }
 .plan li.past b { color: var(--muted); }
+.volume { display: flex; align-items: center; gap: 10px; }
+.volume input { flex: 1; accent-color: var(--gold); touch-action: pan-y; }
+.volume b { min-width: 2.5em; text-align: right; }
