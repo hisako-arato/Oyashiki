@@ -197,9 +197,15 @@ function rayDist(x, z, dx, dz, max) {
 // 本編の予定表どおりの部屋へ、扉・廊下・階段を歩いて移る。着いたら部屋の中を歩き回る
 const people = {};
 const coneMat = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
+// 人物の足元の丸い影（人物は影を落とさない）
+const blobMat = new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.32, depthWrite: false });
+const blobGeo = new THREE.CircleGeometry(0.32, 16).rotateX(-Math.PI / 2);
+function blob() { const b = new THREE.Mesh(blobGeo, blobMat); b.position.y = 0.015; b.renderOrder = -1; return b; }
 function makePeople() {
+  player.blob = blob(); player.g.add(player.blob);
   for (const [slot, id] of Object.keys(LOOKS).entries()) {
     const ch = { ...makeChar(scene), slot };
+    ch.g.add(blob());
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((CONE_RAYS + 2) * 3), 3));
     geo.setIndex(Array.from({ length: CONE_RAYS }, (_, i) => [0, i + 1, i + 2]).flat());
@@ -1270,6 +1276,7 @@ function tick(now) {
     moveBy(player, dx, dz, player.r);
     player.g.rotation.y = Math.atan2(dx, dz);
   }
+  if (player.blob) player.blob.visible = !st.lying;   // ベッドに寝ている間は、足元の影を出さない
   if (st.lying) { player.g.position.set(player.x, 0.62, player.z); player.g.rotation.set(-Math.PI / 2, 0, 0); }
   else if (st.dance) danceTick(rawDt);
   else { player.g.position.set(player.x, 0, player.z); animate(player, moving, dt); }
@@ -1563,20 +1570,11 @@ async function dressBall() {
     Object.assign(slot, { g: gu.g, update: gu.update, unmask: gu.unmask, dispose: gu.dispose });
   });
 }
-// ---- 舞踏会の軽い描き方：人数は減らさず、小さく映るので見えない所の計算を省く ----
-// 揺れもの（髪・スカート）を止める／輪郭線を省く／影を落とさず、足元に丸い影を置く（explore/vrm.js の setCrowd）
-const blobMat = new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.32, depthWrite: false });
-const blobGeo = new THREE.CircleGeometry(0.32, 16).rotateX(-Math.PI / 2);
-function blob() { const b = new THREE.Mesh(blobGeo, blobMat); b.position.y = 0.015; b.userData.blob = true; return b; }
+// ---- 舞踏会の軽い描き方：人数は減らさず、太陽の影（家具や建物の影）も舞踏会の間は落とさない ----
+// 人物はいつも、揺れものを止め、輪郭線を省き、足元に丸い影を置いている（explore/vrm.js の attachVRM と、makePeople の blob）
 function crowdLook(V, on) {
   V.setCrowd(on);
   sun.castShadow = !on;
-  for (const ch of [player, ...Object.values(people)]) {
-    if (ch.vrm) V.setOutline(ch.vrm.scene, !on);
-    const b = ch.g.children.find(o => o.userData.blob);
-    if (on && !b) ch.g.add(blob());
-    if (!on && b) ch.g.remove(b);
-  }
 }
 // 客の立ち位置（見た目は dressBall で入れる。?test では見た目なしで動く）
 const guestSlots = () => GUEST_SPOTS.map(([x, z, yaw], i) => ({ x, z, yaw, i, g: null, update() {}, unmask() {}, dispose() {} }));

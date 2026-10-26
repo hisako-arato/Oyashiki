@@ -107,8 +107,8 @@ function draw(vrm, w, h) {
   const y = cur.head;
   camera.position.set(0, y + 0.04, 1.5);
   camera.lookAt(0, y - 0.01, 0);
-  const crowd = crowdMode();
-  if (crowd) setOutline(s, true);   // 舞踏会で省いている輪郭線を、顔を描く間だけ戻す
+  const lite = !!vrm.scene.userData.mansion;
+  if (lite) setOutline(s, true);   // 屋敷で省いている輪郭線を、顔を描く間だけ戻す
   const prevTarget = renderer.getRenderTarget(), alpha = renderer.getClearAlpha();
   renderer.getClearColor(clearColor);
   renderer.setRenderTarget(rt);
@@ -118,7 +118,7 @@ function draw(vrm, w, h) {
   renderer.readRenderTargetPixels(rt, 0, 0, w, h, buf);
   renderer.setRenderTarget(prevTarget);
   renderer.setClearColor(clearColor, alpha);
-  if (crowd) setOutline(s, false);
+  if (lite) setOutline(s, false);
   // 屋敷の元の場所へ戻す
   if (home) home.add(s); else scene.remove(s);
   s.position.copy(pos); s.quaternion.copy(rot); s.visible = vis;
