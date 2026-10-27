@@ -373,6 +373,15 @@ function updatePerson(p, dt) {
   }
   // ワルツの相手は、ダンスの間 danceTick が動かす
   if (p.dancing) { p.g.visible = p.area === cur.id; p.cone.visible = false; p.seeing = false; return; }
+  // イブ（ルート2）：準備を終えてからすり替えまで、旦那様は大広間で雫に引き止められている
+  if ((p.id === 'father' || p.id === 'black') && fatherHeld()) {
+    const [x, z, yaw] = p.id === 'father' ? [27, 4.2, -Math.PI / 2] : [25.8, 4.2, Math.PI / 2];
+    Object.assign(p, { area: 'f1', x, z, route: null, key: 'held' });
+    const here = cur.id === 'f1';
+    p.g.visible = here; p.cone.visible = here;
+    if (here) { p.g.position.set(x, 0, z); p.g.rotation.y = yaw; driveSeen(p, false, dt); sight(p); } else p.seeing = false;
+    return;
+  }
   // 11月5日：仕出し屋は、勝手口の外の白いバンの横で待っている
   if (p.id === 'caterer' && delivering()) {
     Object.assign(p, { area: 'grounds', x: VAN[0] - 0.9, z: VAN[1] + 0.7 });
@@ -391,7 +400,7 @@ function updatePerson(p, dt) {
     if (!st.busy && p.area) moving = p.route ? walkLegs(p, dt) : p.still ? false : wander(p, dt);
   }
   const here = p.area === cur.id;
-  p.g.visible = here; p.cone.visible = here;
+  p.g.visible = here; p.cone.visible = here && st.mode !== 'morning';   // 朝礼の前と朝礼の間は、視界の扇を出さない
   if (!here) { p.seeing = false; return; }
   p.g.position.set(p.x, 0, p.z);
   driveSeen(p, moving && !st.busy, dt);
@@ -481,7 +490,7 @@ function syncDeco() {
   for (const [id, a] of Object.entries(areas)) {
     let changed = false;
     for (const [key, d] of Object.entries(a.deco)) {
-      const on = !!s.flags[`deco_${key}`];
+      const on = d.when ? !!d.when(s) : !!s.flags[`deco_${key}`];
       if (d.g.visible !== on) changed = true;
       d.g.visible = on;
       for (const b of d.boxes) Object.assign(b, on ? b.at : { minX: -999, maxX: -998, minZ: -999, maxZ: -998 });
@@ -1578,7 +1587,7 @@ function setupBallProps() {
   }
   ballGroup.visible = true;
 }
-// イブの日だけ、大広間の北の壁（大階段の東）に「月下の庭」が飾られる（昼の13時から、舞踏会の終わりまで）
+// イブの舞踏会の間だけ、大広間の北の壁（大階段の東）に「月下の庭」が飾られる（18時ごろ、旦那様が隠し部屋から運ぶ）
 let hallArt = null;
 function syncHallArt() {
   if (!hallArt) {
@@ -1588,15 +1597,15 @@ function syncHallArt() {
     const spot = new THREE.PointLight('#ffe7b0', 14, 4, 1.6); spot.position.set(28, 2.9, 1.2); spot.userData.keepNight = true; hallArt.add(spot);
     hallArt.traverse(o => { if (o.isMesh) o.castShadow = false; });
   }
-  hallArt.visible = st.mode === 'ball' || (st.mode === 'day' && isEve(s) && artHung());
+  hallArt.visible = st.mode === 'ball';
   if (shards) shards.visible = st.mode === 'ball';
   syncForgery();
 }
-const EVE_HANG = 13;   // イブの昼、旦那様が自ら絵を大広間に掛ける時刻
-// 模写を運ぶ日は、舞踏会の準備を終えたところで旦那様が絵を掛けに来る
+// イブの絵は、18時ごろに旦那様が自ら隠し部屋から大広間へ運ぶ。すり替えは、それまでに隠し部屋で
 const prepDone = () => !!(s.today && (s.today.chores.find(c => c.id === 'evePrep') || {}).done);
-const artHung = () => mission() ? prepDone() : s.today.hour >= EVE_HANG;
-// ルート2（すり替え）：イブの昼、大広間に飾られた絵を青島の模写とすり替え、本物をお嬢様のクローゼットへ
+// 舞踏会の準備を終えたあと、すり替えが済むまで、雫が大広間で旦那様を引き止めている
+const fatherHeld = () => st.mode === 'day' && isEve(s) && !!mission() && prepDone() && !s.flags.swapped;
+// ルート2（すり替え）：イブの昼、隠し部屋の絵を青島の模写とすり替え、本物をお嬢様のクローゼットへ
 // 見張りの目（協力者は数えない）があるとすり替えられない。本物を抱えて運ぶ間に見られると、疑われる
 function eveThings() {
   if (st.mode !== 'day' || !isEve(s)) return [];
@@ -1610,28 +1619,20 @@ function eveThings() {
   }
   // 舞踏会の準備を済ませ、旦那様が絵を掛けたら、納戸から模写を取り出して大広間ですり替える
   const prepped = prepDone();
-  if (f.forgery_stashed && !f.swapped && cur.id === 'f2' && !st.dayCarry && prepped)
+  if (f.forgery_stashed && !f.swapped && cur.id === 'f2' && !st.dayCarry && prepped && roomAt(player.x, player.z) && roomAt(player.x, player.z).name === '納戸')
     list.push({ name: '納戸の奥', at: () => STORE_AT, label: '模写を取り出す', night: () => {
       st.dayCarry = 'forgery';
       say('屏風の裏から、模写を取り出した。', '大広間の「月下の庭」と、すり替えよう。');
     } });
-  if (artHung() && cur.id === 'f1' && !f.swapped) list.push({ name: '月下の庭', at: () => [28, 1.0], label: st.dayCarry === 'forgery' ? 'すり替える' : '絵を見る', night: () => {
-    recall(s, 'oil');
-    if (st.dayCarry !== 'forgery') {
-      const why = !f.forgery_ready || !f.hide_ok ? '（今夜、客の前に出す絵だ。……青島の模写と、隠し場所があれば）'
-        : !f.forgery_stashed ? '（青島の模写は、使用人棟の青島の部屋にある。……今朝のうちに運んでおくべきだった）'
-        : !prepped ? '（まずは舞踏会の準備を済ませよう。すり替えは、その後だ）'
-        : '（模写は2階の納戸の奥だ。取ってこよう）';
-      return say('大広間の壁に、「月下の庭」が掛けられていた。旦那様が自ら掛けたらしい。', ['執事', why]);
-    }
+  if (cur.id === 'f2' && f.hidden_open && !f.swapped && st.dayCarry === 'forgery') list.push({ name: '月下の庭', at: () => [8, 3.2], label: 'すり替える', night: () => {
     if (watchers().length) return say('人の目がある。……今は手を出せない。');
     if (!confirm('青島の模写とすり替えますか？（本物は、お嬢様の部屋のクローゼットへ運ぶ）')) return;
     setFlag(s, 'swapped');
     st.dayCarry = 'painting';
     recall(s, 'stamp');
-    say('青島の模写を額に収め、本物をテーブルクロスで包む。壁の絵は、何ひとつ変わらないように見えた。',
-      f.shizuku ? ['執事', '（雫が、旦那様を書斎に引き止めてくれている。……今のうちだ）'] : null,
-      '本物を、2階のお嬢様の部屋のクローゼットへ運ぼう。人に見られないように。');
+    say('イーゼルの本物を外し、青島の模写を代わりに据える。布を掛け直すと、何ひとつ変わらないように見えた。',
+      ['執事', '（18時、旦那様がこれを大広間へ運ぶ。……運ばれるのは、青島の模写だ）'],
+      '本物を、お嬢様の部屋のクローゼットへ運ぼう。人に見られないように。');
   } });
   if (cur.id === 'f2' && st.dayCarry === 'painting') list.push({ name: 'クローゼット', at: () => CLOSET, label: '本物を隠す', night: () => {
     st.dayCarry = null;
@@ -1648,7 +1649,7 @@ function eveThings() {
 }
 // 朝礼で「模写を運ぶ」を引き受けた日の、その仕事
 const mission = () => s.today && s.today.chores.find(c => c.id === 'eveForgery' && c.assignee === 'butler');
-const BLUE_FORGERY = [14.6, 3.6], STORE_AT = [46.6, 16.8], CLOSET = [40.9, 14.4];
+const BLUE_FORGERY = [10.6, 11.2], STORE_AT = [46.6, 16.8], CLOSET = [40.9, 14.4];
 // 本物を抱えているところをお嬢様に見られたとき
 const DAUGHTER_SECRET = [
   ['お嬢様', '「……それが、例の“贈り物の絵”？」'],
@@ -1720,19 +1721,24 @@ const EVE_MOTHER = [
   ['執事', '（……気づかれていない）'],
   ['お母様', '「そうだわ、執事さん。ちょうどいいところに。一緒に来てちょうだい」'],
 ];
+// 準備を終えると旦那様が大広間を見に来る。絵はまだ飾らず、言いつけだけを残す。雫が旦那様を大広間に引き止める
 const EVE_HANG_LINES = [
-  'そこへ旦那様が、布に包んだ額を抱えて現れた。',
-  ['お父様', '「どけ。これは私が掛ける」'],
-  '旦那様は自ら「月下の庭」を大広間の壁に掛け、満足そうに書斎へ戻っていった。',
-  ['執事', '（……今だ。納戸から模写を取ってきて、すり替えよう）'],
+  'そこへ旦那様が、大広間の様子を見にやって来た。',
+  ['お父様', '「この壁には、18時ごろに絵を飾る。周りには何も置くな」'],
+  ['お父様', '「あの絵は、私が自分で運ぶ。誰も触るな」'],
+  ['黒メイド', '「旦那様、客席の配置で、ご判断いただきたいことがございます。少しお時間を」'],
+  ['お父様', '「……ふん。見せてみろ」'],
+  '雫が、旦那様を大広間に引き止めてくれている。',
+  ['執事', '（絵は、まだ書斎の奥の隠し部屋だ。……納戸から模写を取ってきて、18時までにすり替えよう）'],
 ];
 const missionGoal = () => {
   const f = s.flags;
   if (!f.forgery_stashed) return st.dayCarry === 'forgery' ? '模写を、勝手口から裏階段で2階へ（人に見られないように）' : '使用人棟の青島の部屋から、模写を持ち出す';
   const prep = s.today.chores.find(c => c.id === 'evePrep');
-  if (prep && !prep.done) return '大広間で、舞踏会の準備をする（終われば、旦那様が絵を掛けに来る）';
+  if (prep && !prep.done) return '大広間で、舞踏会の準備をする';
   if (f.swapped) return f.swap_hidden ? '' : '本物を、お嬢様の部屋のクローゼットへ';
-  return st.dayCarry === 'forgery' ? '大広間の「月下の庭」と、すり替える' : '2階の納戸から模写を取り出し、大広間ですり替える';
+  if (st.dayCarry !== 'forgery') return '2階の納戸から模写を取り出す（18時まで。雫が旦那様を大広間に引き止めている）';
+  return f.hidden_open ? '隠し部屋の「月下の庭」と、すり替える（18時まで）' : '書斎の机の鍵で本棚を開け、隠し部屋へ（18時まで）';
 };
 
 // 11月5日：仕出し屋の搬入。白いバンの荷台から、木箱を3つ、キッチンの食料庫まで運ぶ（運ぶ間は誰に見られても構わない）
@@ -1851,6 +1857,7 @@ export function startBall(state, h) {
   st.ball.done.open = true;
   afterMsg = () => { st.ball.phase = 'serve'; for (const k of ['oil', 'dropout', 'ledger', 'masks']) recall(s, k); };
   say(...BALL.openingLines(s));
+  recall(s, 'oil');
   run();
 }
 const ballMin = () => st.ball.min;
@@ -2270,4 +2277,4 @@ export function suspend() { if (!running) return; running = false; suspended = t
 export function resume() { if (suspended) { suspended = false; run(); } }
 
 // テスト用
-window.__day3d = { get state() { return s; }, st, player, people, areas, enter, act, planRoute, ROOM_OF, GATE, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r) };
+window.__day3d = { get state() { return s; }, st, player, people, areas, enter, act, planRoute, ROOM_OF, GATE, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r), get target() { return target && target.name; } };

@@ -334,6 +334,12 @@ function deco(id, build, solids = []) {
   const boxes = solids.map(([x1, x2, z1, z2]) => Object.assign(solid(-999, -998, -999, -998, 'furniture'), { at: { minX: x1, maxX: x2, minZ: z1, maxZ: z2 } }));
   A.deco[id] = { g, boxes };
 }
+function variant(id, when, build) {
+  const g = new THREE.Group(), keep = A.group, n0 = A.solids.length;
+  A.group.add(g); A.group = g; build(); A.group = keep;
+  const boxes = A.solids.slice(n0).map(b => Object.assign(b, { at: { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ } }));
+  A.deco[id] = { g, boxes, when };
+}
 function xmasTree(g, x, z) {
   const t = new THREE.Group(); t.position.set(x, 0, z); g.add(t);
   box(t, 0.7, 0.4, 0.7, mat('#8a2a2a'), 0, 0, 0);
@@ -575,9 +581,9 @@ AREAS.cottage = {
   rooms: [
     { name: '執事の部屋', x: 0, z: 0, w: 7, d: 15, key: 'c_butler' },
     { name: '赤羽の部屋', owner: 'red', x: 7, z: 0, w: 4, d: 5, key: 'c_red' },
-    { name: '青島の部屋', owner: 'blue', x: 11, z: 0, w: 4, d: 5, key: 'c_blue' },
+    { name: '黒の部屋', owner: 'black', x: 11, z: 0, w: 4, d: 5, key: 'c_black' },
     { name: '共用室', x: 7, z: 5, w: 8, d: 5, key: 'servants' },
-    { name: '黒の部屋', owner: 'black', x: 7, z: 10, w: 4, d: 5, key: 'c_black' },
+    { name: '青島の部屋', owner: 'blue', x: 7, z: 10, w: 4, d: 5, key: 'c_blue' },
     { name: '白井の部屋', owner: 'white', x: 11, z: 10, w: 4, d: 5, key: 'c_white' },
     { name: '浴室', x: 15, z: 0, w: 5, d: 5, floor: 'tile', wall: 'tile' },
     { name: '給湯室', x: 15, z: 5, w: 5, d: 5, floor: 'tile', wall: 'tile', key: 'c_kettle' },
@@ -593,11 +599,21 @@ AREAS.cottage = {
     F.bed(1.2, 12.5, 0, '#2a3a5a');
     F.rug(3.6, 7, 4, 4, TEX.carpet);
     F.armchair(5.6, 12.5, 3, '#4a5a6a');
-    // メイドの部屋
-    for (const [x0, z0, c, flip] of [[7, 0, '#c8362d', 0], [11, 0, '#2f6fd0', 0], [7, 10, '#222230', 1], [11, 10, '#c8ccd2', 1]]) {
+    // メイドの部屋（北：赤羽・黒、南：青島・白井）。まだ来ていないメイドの部屋は、来るまで物置（木箱と古い毛布）
+    const maidRoom = (x0, z0, c, flip) => {
       F.bed(x0 + 2.85, flip ? z0 + 3.85 : z0 + 1.15, flip ? 2 : 0, c, 0.9, 1.9);
       F.cabinet(x0 + 0.5, flip ? z0 + 4.7 : z0 + 0.3, flip ? 2 : 0, 0.6, 0.8);
-    }
+    };
+    const storeRoom = (x0, z0, flip) => {
+      const z = d => flip ? z0 + 5 - d : z0 + d;
+      F.crate(x0 + 3.3, z(0.6)); F.crate(x0 + 2.4, z(0.55), 0.6); F.crate(x0 + 3.4, z(1.5), 0.7);
+      F.linen(x0 + 0.35, z(1.6), 1, 1.4); F.crate(x0 + 0.6, z(0.5), 0.5);
+    };
+    maidRoom(7, 0, '#c8362d', 0); maidRoom(7, 10, '#2f6fd0', 1);
+    variant('room_black', s => maidAvailable(s, 'black'), () => maidRoom(11, 0, '#222230', 0));
+    variant('store_black', s => !maidAvailable(s, 'black'), () => storeRoom(11, 0, 0));
+    variant('room_white', s => maidAvailable(s, 'white'), () => maidRoom(11, 10, '#c8ccd2', 1));
+    variant('store_white', s => !maidAvailable(s, 'white'), () => storeRoom(11, 10, 1));
     // 共用室：朝礼のテーブル
     F.table(11, 7.5, 3, 1.4);
     for (const [x, z, r] of [[10, 6.55, 0], [12, 6.55, 0], [10, 8.45, 2], [12, 8.45, 2], [9.05, 7.5, 1], [12.95, 7.5, 3]]) F.chair(x, z, r);
@@ -617,10 +633,10 @@ AREAS.cottage = {
     flavor('窓', 0.8, 4, '窓の向こうに、屋敷の北側の壁が見える。');
     flavor('朝礼のテーブル', 11, 9.0, '毎朝ここで朝礼を開き、メイドたちに仕事を割り振る。');
     flavor('赤羽の部屋', 8.5, 3, 'きちんと片付いている。枕元に料理の本が積まれている。');
-    flavor('青島の部屋', 12.5, 3, '壁一面にスケッチが貼られている。どれも上手い。');
-    // まだ来ていないメイドの部屋は、空き部屋として見せる（加入前のネタバレを避ける）
-    const empty = '誰も使っていない空き部屋。ベッドと棚だけが、新しい住人を待っている。';
-    flavor('黒の部屋', 8.5, 12, s => maidAvailable(s, 'black') ? '物がほとんどない。机の上に聖書が一冊。' : empty);
+    flavor('青島の部屋', 8.5, 12, '壁一面にスケッチが貼られている。どれも上手い。');
+    // まだ来ていないメイドの部屋は、物置として見せる（加入前のネタバレを避ける）
+    const empty = '物置になっている部屋。古い木箱や、季節外れの毛布が積まれている。';
+    flavor('黒の部屋', 12.5, 3, s => maidAvailable(s, 'black') ? '物がほとんどない。机の上に聖書が一冊。' : empty);
     flavor('白井の部屋', 12.5, 12, s => maidAvailable(s, 'white') ? '工具箱と電気工学の教科書が置いてある。' : empty);
     flavor('古いトランク', 0.6, 2.9, 'この屋敷に持ってきた、ただ一つの私物。底には、母と撮った写真が一枚だけ入っている。');
     flavor('読書灯', 2.6, 14.0, '眠る前に、少しだけ本を読む。最近はページが進まない。');

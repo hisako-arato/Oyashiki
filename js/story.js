@@ -275,12 +275,12 @@ export const ROUTES = [
     need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない', !(s.flags.back_gate || (s.flags.b_exit && s.flags.b_key)) && '絵を傷めずに運び出せる出口が分からない（裏庭の通用口／地下の非常口）',
       s.flags.swap_hidden && '隠し部屋に戻されたのは、青島の模写だ'] },
   { id: 'swap', name: 'ルート2：贋作とすり替える',
-    desc: 'イブの昼、大広間に飾られた絵を青島の模写とすり替え、本物はお嬢様の部屋に隠してある。25日の朝、運び屋が偽物を梱包している間に、本物を運び出す。',
+    desc: 'イブの昼、隠し部屋の絵を青島の模写とすり替え、本物はお嬢様の部屋に隠してある。25日の朝、運び屋が偽物を梱包している間に、本物を運び出す。',
     ok: s => !!s.flags.swap_hidden,
     need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない',
       !s.flags.forgery_start && '青島に模写を頼んでいない', s.flags.forgery_start && !s.flags.forgery_ready && '青島の模写が完成していない',
       !s.flags.hide_ok && '本物を隠しておける場所がない',
-      s.flags.forgery_ready && s.flags.hide_ok && !s.flags.swap_hidden && 'イブの昼（13時から）、大広間の絵をすり替えていない'] },
+      s.flags.forgery_ready && s.flags.hide_ok && !s.flags.swap_hidden && 'イブの昼（18時まで）、隠し部屋の絵をすり替えていない'] },
 ];
 
 // 地下の仕入れ帳の写真を持っていれば、最後にその扱いを選ぶ（主人公と雫の目的は、あくまで「月下の庭」だけ）
@@ -384,7 +384,7 @@ export function interrogation(s) {
 // エンディング一覧で、まだ見ていない結末に出す条件のヒント
 export const ENDING_HINTS = {
   night: '絵の隠し場所、警報の止め方、そして絵を傷めずに運び出せる出口を見つけて、イブの深夜に。',
-  swap: '青島の模写と、本物を預けられる場所。イブの昼、大広間で……。',
+  swap: '青島の模写と、本物を預けられる場所。イブの昼、旦那様が絵を運び出す前に……。',
   blackout: '4人のメイド全員を味方にして、雫とのことも打ち明ける。12月23日の夜、みんなで。',
   seen_through: '停電劇の後の取り調べで、疑いを残しすぎる。',
   caught_dark: '暗闇の中、キャンバスを抱えたまま懐中電灯に照らされる。',

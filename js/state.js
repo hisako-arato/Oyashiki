@@ -192,7 +192,7 @@ export function generateChores(s) {
   // イブの朝、青島の模写が仕上がっていて本物の隠し場所もあれば、模写を運ぶ仕事を朝礼で選べる
   if (isEve(s) && s.flags.forgery_ready && s.flags.hide_ok && !s.flags.swapped) ids.push('eveForgery', 'evePrep');
   if (s.day % 2 === 1 || s.chapter >= 2) ids.push('tutorD');
-  return ids.map(id => ({ id, assignee: id.startsWith('escort') || id === 'tutorD' ? 'butler' : null, progress: 0, done: false, failed: false }));
+  return ids.map(id => ({ id, assignee: id.startsWith('escort') || id === 'tutorD' || id === 'eveForgery' || id === 'evePrep' ? 'butler' : null, progress: 0, done: false, failed: false }));
 }
 
 export function maidHours(m, chore) {

@@ -7,7 +7,7 @@ const KEY = 'oyashiki-recall';
 // clue：伏線になる手がかり（どれか一つ）、date：手がかりの無い出来事の日付（11月の何日か）、text：伏線の一文、pay：回収のされ方
 export const FORESHADOW = [
   { key: 'code', clue: ['p_bday', 'n_codehint'], title: '麗子の誕生日', pay: '隠し部屋の鍵の番号は、麗子の誕生日（1103）だった。' },
-  { key: 'oil', clue: ['c_study'], title: '書斎の油絵具の匂い', pay: 'イブの昼、旦那様は自ら「月下の庭」を大広間の壁に掛けた。あの絵だけは、誰にも触らせない。' },
+  { key: 'oil', clue: ['c_study'], title: '書斎の油絵具の匂い', pay: '舞踏会の前、旦那様は自ら「月下の庭」を大広間へ運び、壁に掛けた。あの絵だけは、誰にも触らせない。' },
   { key: 'dropout', clue: ['d_secret'], title: 'お嬢様の秘密', pay: '舞踏会で、旦那様はお嬢様を「美術史を学ぶ娘」と紹介した。' },
   { key: 'ledger', clue: ['b_ledger'], title: '地下の仕入れ帳', pay: '仕入れ帳の符丁の向こうにいたのは、今夜の仮面の客たちだった。' },
   { key: 'dealer', clue: ['r_parcel', 'm_dealer'], title: '夜中に来る絵の業者', pay: '眼鏡の客――オークション会社の担当者は、夜中に額縁の荷物を運んでくる男と同じ顔だった。' },
