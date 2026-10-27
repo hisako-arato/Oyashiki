@@ -6,6 +6,7 @@ import { activeMaids, fatherHome, rng, dayIndex, isAlly, WEEKS_PER_CHAPTER, appl
 import { joined, told, sulking, sis, afterSisterNight, afterMaidNight, afterRoomNight, tell } from './sister.js';
 import { whiteSaw } from './white.js';
 import { startForgery } from './daylogic.js';
+import { welcomeDue, WELCOME_LABEL, WELCOME_WHITE, WELCOME_BLACK } from './events.js';
 
 const N = 'n', B = 'butler', M = 'mother', D = 'daughter';
 const R = 'red', BL = 'blue', K = 'black', W = 'white', S = 'shizuku';
@@ -22,6 +23,9 @@ export function hasNight(s) {
 export function nightOptions(s) {
   // 雫が来た日の夜は、必ず雫を呼び出す
   if (joined(s) && !s.flags.shizuku_reunion) return [{ id: K, label: '黒メイド――雫を、自室に呼び出す', ok: true }];
+  // 新しいメイドが来た夜（白井は来た日、雫は再会の翌日）は、共用室で歓迎会
+  const w = welcomeDue(s);
+  if (w) return [{ id: w, label: WELCOME_LABEL[w], ok: true }];
   const opts = [{ id: 'rest', label: '休む', ok: true }];
   for (const m of activeMaids(s)) {
     if (m === K) opts.push({ id: m, label: '自室に雫（黒メイド）を呼ぶ', ok: true });
@@ -112,6 +116,8 @@ const count = who => ({ call: s => {
 export function nightScene(s, id) {
   if (id === 'rest') return REST;
   if (id === 'rally') return rallyPlan(s);
+  if (id === 'welcome_w') return WELCOME_WHITE;
+  if (id === 'welcome_k') return WELCOME_BLACK;
   if (id === 'all') return [{ place: '22:00　使用人棟　共用室' }, { cast: ['red', 'blue', 'white', 'shizuku'] }, ...groupScene(s), gossip(K), count('all'), { cast: null }];
   if (id === 'mother') return motherScene(s);
   if (id === 'daughter') return daughterScene(s);

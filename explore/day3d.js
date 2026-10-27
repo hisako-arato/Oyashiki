@@ -6,13 +6,14 @@ import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, ROOMS, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
 import { richNodes } from '../js/richtext.js';
-import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded, isEve } from '../js/state.js';
+import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded, isEve, applyFx, fxNote } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
 import * as BALL from '../js/ball.js';
 import * as music from '../js/music.js';
 import { recall } from '../js/recall.js';
+import * as EV from '../js/events.js';
 import { maskVRM, unmaskVRM, liftMask, updateMasks, styleOf, maskFragment } from './masks.js';
 
 const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か（昼）
@@ -372,6 +373,14 @@ function updatePerson(p, dt) {
   }
   // ワルツの相手は、ダンスの間 danceTick が動かす
   if (p.dancing) { p.g.visible = p.area === cur.id; p.cone.visible = false; p.seeing = false; return; }
+  // 11月5日：仕出し屋は、勝手口の外の白いバンの横で待っている
+  if (p.id === 'caterer' && delivering()) {
+    Object.assign(p, { area: 'grounds', x: VAN[0] - 0.9, z: VAN[1] + 0.7 });
+    const here = cur.id === 'grounds';
+    p.g.visible = here; p.cone.visible = false; p.seeing = false;
+    if (here) { p.g.position.set(p.x, 0, p.z); p.g.rotation.y = Math.atan2(player.x - p.x, player.z - p.z); driveSeen(p, false, dt); }
+    return;
+  }
   // 夜だけの人（外を回る巡回員）は、昼は屋敷にいない
   if ((LOOKS[p.id].nightOnly && st.mode !== 'night') || (LOOKS[p.id].ballOnly && st.mode !== 'ball')) { p.area = null; p.g.visible = false; p.cone.visible = false; p.seeing = false; return; }
   if (st.mode === 'night' || st.mode === 'ball') moving = nightPerson(p, dt);
@@ -503,6 +512,7 @@ function findTarget() {
   for (const t of nightThings()) consider(t, 0.8);   // 夜だけの操作を、同じ場所の昼の調べものや出入口より優先する
   for (const t of ballThings()) consider(t, 0.6);
   for (const t of eveThings()) consider(t, 0.8);
+  for (const t of deliveryThings()) consider(t, 1.0);
   // 舞踏会で雫を探しているときは、見つけた雫に話しかけるのを優先する
   if (st.mode !== 'night') for (const p of Object.values(people)) if (p.area === cur.id && !guiding(p)) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p }, st.mode === 'ball' && st.ball.search && p.id === 'black' ? 1.2 : 0);
   return best;
@@ -527,6 +537,7 @@ function act() {
   if (t.exit && st.mode === 'morning' && cur.id === 'cottage' && t.exit.area !== 'cottage')
     return say(['執事', '（まだ朝礼が済んでいない。まずは共用室の席に着いて、朝礼を始めよう）']);
   if (t.exit) return travel(t.exit);
+  if (t.person && t.person.id === 'caterer') return say(['仕出し屋', st.dayCarry === 'crate' ? '「それ、食料庫にお願いします！」' : '「木箱は荷台です。重いので、気をつけて！」']);
   if (t.person) return talkTo(t.person);
   if (t.chore !== undefined) return work(t.chore);
   if (t.say) {
@@ -783,7 +794,7 @@ function makeLadder(parent) {
   parent.add(g);
   return g;
 }
-const carried = { ladder: null, painting: null };
+const carried = { ladder: null, painting: null, crate: null };
 const VAN = [HOUSE.x + 47.5, HOUSE.z - 3.6];   // 25日の朝、仕出し屋のバンが停まる所（勝手口の外の小道）
 let van = null;
 let wallLadder = null;
@@ -792,11 +803,13 @@ function setupNightProps() {
     carried.ladder = makeLadder(player.g);
     carried.ladder.rotation.set(0, 0, Math.PI / 2); carried.ladder.position.set(1.6, 1.1, -0.25); carried.ladder.scale.set(1, 0.7, 1);
     carried.painting = new THREE.Group(); player.g.add(carried.painting);
+    carried.crate = new THREE.Group(); player.g.add(carried.crate);
+    box(carried.crate, 0.62, 0.42, 0.46, M.lightWood, 0, 0.72, 0.36);
     box(carried.painting, 1.0, 0.75, 0.06, mat('#ffffff', { map: TEX.painting }), 0, 0.7, 0.32);
     wallLadder = makeLadder(areas.grounds.group);
     wallLadder.position.set(HOUSE.x + 24, 0, HOUSE.z + 18.45); wallLadder.rotation.x = -0.18;
   }
-  carried.ladder.visible = false; carried.painting.visible = false; wallLadder.visible = false;
+  carried.ladder.visible = false; carried.painting.visible = false; carried.crate.visible = false; wallLadder.visible = false;
   if (!van) {
     van = new THREE.Group(); areas.grounds.group.add(van);
     box(van, 4.2, 1.9, 1.9, M.white, VAN[0] + 1.2, 0.35, VAN[1] - 1.2);
@@ -1110,7 +1123,7 @@ view.addEventListener('lostpointercapture', endStick);
 $('nb3d').addEventListener('click', () => { if (!st.busy) hooks.notebook(); });
 $('end3d').addEventListener('click', () => { if (!st.busy && st.mode === 'day' && confirm(endAsk('今日の業務を終えますか？'))) finish(); });
 // 業務を終えるときに痕跡が残っていれば、一度引き留める
-const endAsk = q => { if (st.dayCarry) return `本物の絵を抱えたままです。お嬢様の部屋のクローゼットに隠してから終えましょう。\n${q}`; const tr = DL.traces(s); return tr.length ? `まだ元に戻していない物があります（${tr.map(x => DL.TRACE_NAME[x]).join('、')}）。\nこのままだと、気づかれて疑われるかもしれません。\n${q}` : q; };
+const endAsk = q => { if (st.dayCarry === 'crate') return `木箱を抱えたままです。食料庫に置いてから終えましょう。\n${q}`; if (st.dayCarry) return `本物の絵を抱えたままです。お嬢様の部屋のクローゼットに隠してから終えましょう。\n${q}`; const tr = DL.traces(s); return tr.length ? `まだ元に戻していない物があります（${tr.map(x => DL.TRACE_NAME[x]).join('、')}）。\nこのままだと、気づかれて疑われるかもしれません。\n${q}` : q; };
 
 // ---- 手前の壁・建物を低くする ----
 const tmpV = new THREE.Vector3();
@@ -1215,6 +1228,7 @@ function drawHud(room) {
     if (st.wine) clock += `　旦那様が降りてくる！ あと${Math.ceil(st.wine.left)}秒`;
     else if (cur.id === 'basement' && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) clock += '　（17時ごろ旦那様が降りてくる）';
     const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${withPerson(c.id) && !c.done ? `（任意・${PEOPLE[withPerson(c.id)].name}に話しかける）` : CHORES[c.id].after && !c.done && t.hour < CHORES[c.id].after ? `（任意・${CHORES[c.id].after}時から）` : CHORES[c.id].optional ? '（任意）' : ''}`);
+    if (delivering()) todo.push(`・${st.dayCarry === 'crate' ? '木箱をキッチンの食料庫へ' : '勝手口の外のバンから木箱を運ぶ'}（任意・${t.crates || 0}/${EV.CRATES}）`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
       : st.tut && TUT[st.tut.step] ? `【青島に教える ${st.tut.step + 1}/3】${typeof TUT[st.tut.step].goal === 'function' ? TUT[st.tut.step].goal() : TUT[st.tut.step].goal}`
       : todo.length ? todo.join('　') : '執事の担当なし';
@@ -1236,6 +1250,7 @@ function drawHud(room) {
 function finish() {
   s.today.traceNotes = DL.settleTraces(s);
   // 本物を抱えたまま18時になったら、慌ててクローゼットへ押し込む（見られていたかもしれない）
+  if (st.dayCarry === 'crate') st.dayCarry = null;
   if (st.dayCarry) { st.dayCarry = null; setFlag(s, 'swap_hidden'); s.susp = clamp(s.susp + 15); s.today.traceNotes.push('18時の鐘に追われ、本物をクローゼットへ押し込んだ。……誰かに見られていなければいいが（疑惑+15）'); }
   running = false;
   root.classList.add('hidden');
@@ -1342,7 +1357,9 @@ function tick(now) {
   if (night) nightTick(dt);
   else if (ball) ballTick(dt);
   else {
-    if (st.dayCarry && !st.busy) {
+    if (carried.crate) carried.crate.visible = st.dayCarry === 'crate';
+    if (van && !st.night) van.visible = delivering();
+    if (st.dayCarry === 'painting' && !st.busy) {
       carried.painting && (carried.painting.visible = true);
       for (const id of watchers()) if (!st.carrySeen[id]) { st.carrySeen[id] = true; s.susp = clamp(s.susp + 20); hooks.toast(`${people[id].name}に、布で包んだ大きな荷物を見られた（疑惑 +20）`); }
     } else if (carried.painting && st.mode === 'day') carried.painting.visible = false;
@@ -1577,6 +1594,33 @@ function eveThings() {
     st.dayCarry = null;
     setFlag(s, 'swap_hidden');
     say('クローゼットの奥、ドレスの陰に本物を寝かせた。', '（あとは今夜、旦那様が偽物を自慢するのを見届けて……25日の朝、運び出すだけだ）');
+  } });
+  return list;
+}
+
+// 11月5日：仕出し屋の搬入。白いバンの荷台から、木箱を3つ、キッチンの食料庫まで運ぶ（運ぶ間は誰に見られても構わない）
+const delivering = () => st.mode === 'day' && EV.deliveryDay(s);
+const PANTRY = [39.6, 1.2];
+// js/events.js の台詞を、3Dの会話で出す（効果は会話を読み終えてから）
+function sayScript(steps) {
+  const fx = steps.filter(l => !Array.isArray(l) && l.fx).map(l => l.fx);
+  say(...steps.filter(Array.isArray).map(l => l[0] === 'n' ? l[1] : [l[0] === 'butler' ? '執事' : LOOKS[l[0]].name, l[1]]));
+  afterMsg = () => { for (const f of fx) { const notes = applyFx(s, f); if (notes.length) hooks.toast(fxNote(notes)); } };
+}
+function deliveryThings() {
+  if (!delivering()) return [];
+  const t = s.today, list = [];
+  if (cur.id === 'grounds' && !st.dayCarry) list.push({ name: '白いバンの荷台', at: () => [VAN[0] + 0.2, VAN[1] - 0.2], label: '木箱を受け取る', night: () => {
+    st.dayCarry = 'crate';
+    if (!t.crates) { t.crates = 0; return sayScript(EV.catererHello); }
+    say(`木箱を抱えた（${t.crates + 1} / ${EV.CRATES}）。キッチンの食料庫へ運ぼう。`);
+  } });
+  if (cur.id === 'f1' && st.dayCarry === 'crate') list.push({ name: '食料庫', at: () => PANTRY, label: '木箱を置く', night: () => {
+    st.dayCarry = null;
+    t.crates = (t.crates || 0) + 1;
+    DL.spendMinutes(s, ACT_MIN);
+    if (t.crates < EV.CRATES) return say(`木箱を食料庫の棚に収めた（${t.crates} / ${EV.CRATES}）。`);
+    sayScript(EV.catererBye(true));
   } });
   return list;
 }

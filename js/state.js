@@ -157,7 +157,10 @@ export const activeMaids = s => MAIDS.filter(m => maidAvailable(s, m));
 // 決行の夜は、執事が決行の服（butler2）に着替える
 // 仮面舞踏会の夜だけ来る人と、お嬢様のドレス、一般客の4体（客は形と画像を共有したまま複製する）
 export const BALL_CAST = ['reiko', 'dealer', 'caterer', 'daughter3', 'guest_m1', 'guest_m2', 'guest_f1', 'guest_f2'];
-export const castNeeded = s => ['butler', 'father', 'mother', 'daughter', ...activeMaids(s), ...(s.chapter >= 3 ? ['guard'] : []), ...(s.phase === 'execution' ? ['butler2'] : []), ...(s.phase === 'ball' ? BALL_CAST : [])];
+// 11月5日（金）は、仕出し屋が冬の食料を搬入しに来る（js/events.js）
+export const CATERER_DAY = 4;
+export const castNeeded = s => ['butler', 'father', 'mother', 'daughter', ...activeMaids(s), ...(s.chapter >= 3 ? ['guard'] : []), ...(s.phase === 'execution' ? ['butler2'] : []), ...(s.phase === 'ball' ? BALL_CAST : []),
+  ...(s.phase !== 'ball' && dayOffset(s) === CATERER_DAY && !s.flags.caterer_nov ? ['caterer'] : [])];
 // 好感度70以上のメイドは協力者。黒メイド（妹の雫）は、屋敷に来た日から味方
 // 白井は、寝返った後（white_turned）も味方
 export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.flags.shizuku : s.aff[who] >= ALLY_AFF || (who === 'white' && !!s.flags.white_turned));

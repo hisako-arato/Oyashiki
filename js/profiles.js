@@ -94,10 +94,11 @@ export const PROFILES = [
       [s => s.flags.dealer_seen, '赤羽によれば、夜中に勝手口から額縁の荷物を持ってくる車の人と同じ顔。'],
       [s => s.flags.shizuku_courier, '12月25日の朝、運び屋と一緒に絵を引き取りに来る。'],
     ] },
-  { id: 'caterer', name: '仕出し屋', age: '20代', shown: s => !!s.flags.caterer_friend,
-    text: 'イブの仮面舞踏会の料理を任された仕出し屋で働く青年。雫の昔の知り合い。',
+  { id: 'caterer', name: '仕出し屋', age: '20代', shown: s => !!(s.flags.caterer_nov || s.flags.caterer_friend),
+    text: s => s.flags.caterer_friend ? 'イブの仮面舞踏会の料理を任された仕出し屋で働く青年。雫の昔の知り合い。' : '屋敷に出入りしている仕出し屋の青年。愛想がよく、屋敷の勝手をよく知っている。',
     notes: [
-      [() => true, '料理を運ぶ白いバンで、外から来て外へ帰る。'],
+      [s => s.flags.caterer_nov, '11月5日、冬の食料を搬入しに来た。食料庫の場所も、旦那様のワインの好みも知っていた。'],
+      [s => s.flags.caterer_friend, '料理を運ぶ白いバンで、外から来て外へ帰る。'],
       [s => s.flags.caterer_met, '「裏の白いバン、片付けが済むまで停めておきます。……何か運ぶ物があれば」'],
     ] },
 ];

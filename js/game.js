@@ -18,6 +18,8 @@ import * as music from './music.js';
 import { PRESETS, WHEN, REL, testState } from './evetest.js';
 import { ball2D, settleBall, daughterNight, shizukuNight } from './ball.js';
 import { foreshadowList } from './recall.js';
+import { PIPE_DAY, CREW_DAY, PIPE_INTRO, pipeResult, PIPE_CREW, deliveryDay, catererBye, CATERER_NOTE } from './events.js';
+import { pipeGame } from './pipe.js';
 
 const CHAPTER_TITLES = ['第1章　11月前半　情報収集', '第2章　11月後半　隠し部屋', '第3章　12月前半　月下の庭', '最終章　12月後半　決行'];
 
@@ -579,6 +581,9 @@ async function startWeekday() {
   if (s.chapter >= 2 && !s.flags.shizuku) return playScript(ARRIVAL, startWeekday);
   // 最終章の初日：白井の報告が積み重なっていれば、お父様がイブの夜の巡回を厳しくする
   if (strictDue(s)) { const sc = strictScene(s); if (sc.length) return playScript(sc, startWeekday); }
+  // 12月2日の朝は水道管の破裂（ミニゲーム）、3日の朝は修繕の業者が入る
+  if (dayOffset(s) === PIPE_DAY && !s.flags.pipe_done) return eventScene(PIPE_INTRO, () => pipeGame(tier => eventScene(pipeResult(tier), startWeekday)));
+  if (dayOffset(s) === CREW_DAY && !s.flags.b_hollow) return eventScene(PIPE_CREW, startWeekday);
   s.phase = 'meeting';
   if (!s.today || s.today.dayIndex !== dayIndex(s)) {
     s.today = { dayIndex: dayIndex(s), chores: generateChores(s), hour: START_HOUR, min: 0, loc: 'servants', talked: {}, log: [], plan: {}, escort: null };
@@ -600,6 +605,12 @@ async function startWeekday() {
     });
   }
   renderMeeting(beginDay);
+}
+
+// 平日の出来事の場面（js/events.js）。場所の札と顔の並びは、終わったら片付ける
+function eventScene(steps, done) {
+  s.phase = 'event'; stagePlace = stageCast = null;
+  playScript(steps, () => { stagePlace = stageCast = null; done(); });
 }
 
 // ---- 朝礼（メイドへの仕事の割り振り） ----
@@ -860,6 +871,8 @@ function askForgery(msg, done) {
 // ---- 1日の終わり ----
 function endDay() {
   const t = s.today;
+  // 11月5日：仕出し屋の木箱を運ばずに一日を終えたら、仕出し屋が一人で運び終えている
+  if (deliveryDay(s)) return eventScene(catererBye(false), endDay);
   s.susp = Math.round(s.susp);
   const lines = [];
   let trust = 0;
@@ -939,6 +952,7 @@ function night() {
 // 暦の上の出来事の朝（麗子の誕生日、イブ）
 function morningCalendar(s) {
   const off = dayOffset(s), notes = [];
+  if (deliveryDay(s)) notes.push(CATERER_NOTE);
   if (off === 2) notes.push(s.flags.p_bday ? '（今日は11月3日。……麗子の誕生日だ。旦那様は朝から、花屋に電話をかけていた）'
     : '（今日は11月3日。旦那様は朝から、花屋に電話をかけていた。……誰への花だろう）');
   if (isEve(s)) notes.push('今日は12月24日、クリスマス・イブ。夜は仮面舞踏会だ。屋敷じゅうが、朝から準備で慌ただしい。');

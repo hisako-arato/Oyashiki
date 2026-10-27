@@ -205,6 +205,7 @@ export function openHatch(s, seen) {
   if (!s.flags.b_light) return '扉を少し持ち上げてみたが、下は真っ暗で何も見えない。明かりが要る。';
   if (seen.length) return '人の目がある。今は降りられない。';
   setFlag(s, 'b_found');
+  recall(s, 'hollow');   // 修繕業者の言っていた床下の空洞
   s.flags.hatch_open = true;   // 敷物をめくり、床の扉を開けたまま（上がったあとに戻す）
   return null;
 }
