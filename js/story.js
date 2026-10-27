@@ -25,13 +25,6 @@ export const PROLOGUE = [
   [N, '絵の盗み方は1つではない。手帳を見ながら、自分なりの方法を探そう。'],
 ];
 
-const fatherRemark = {
-  if: s => s.trust >= 70,
-  then: [[F, '「今週もよくやってくれた。君を雇って正解だった」']],
-  else: [{ if: s => s.trust >= 40,
-    then: [[F, '「……まあ、問題はない。引き続き頼む」']],
-    else: [[F, '「最近、屋敷が散らかっているようだが。次はないと思え」']] }],
-};
 
 export const WEEKENDS = [
   // ---- 第1章 11月前半：情報収集 ----
@@ -64,7 +57,7 @@ export const WEEKENDS = [
         { t: '「なぜでしょうね」と聞いてみる', fx: { aff: { daughter: 4 }, susp: 3 },
           then: [[D, '「さあ？ ママは『あの人の宝物があるのよ』って笑ってたけど」']] },
       ] },
-      fatherRemark, { report: true },
+      { report: true },
     ],
     [
       [N, '深夜のキッチン。明日の仕込みをしていると、赤羽がいつの間にか隣に立っていた。'],
@@ -83,7 +76,7 @@ export const WEEKENDS = [
         then: [[B, '（伝票、証言、書斎の匂い……間違いない。「月下の庭」はこの屋敷の中にある）'], { fx: { trust: 2 } }],
         else: [[B, '（まだ確証が足りない。だが、絵がこの屋敷にあるという噂は本当のはずだ）']] },
       [F, '「来週から、もう一人メイドを雇う。赤羽が春から休みに入るからな。腕の立つ子だそうだ。青島と一緒に、君が面倒を見てやってくれ」'],
-      fatherRemark, { report: true },
+      { report: true },
     ],
   ],
   // ---- 第2章 11月後半：隠し部屋 ----
@@ -122,7 +115,7 @@ export const WEEKENDS = [
       [B, '（警報……やはり何かを守っている。電源はキッチン裏か）'],
       [B, '（去年の冬、母は病院のベッドで言った。「もう一度だけ、あの絵が見たかった」と。20年前に美術館から盗まれた、あの絵を）'],
       [F, '「イブの舞踏会には、大事な客を招く。身重の赤羽に、夜通しの給仕はさせられん。メイドをもう一人増やすぞ」'],
-      fatherRemark, { report: true },
+      { report: true },
     ],
   ],
   // ---- 第3章 12月前半：月下の庭 ----
@@ -182,7 +175,7 @@ export const WEEKENDS = [
       { if: s => s.flags.b_vault, then: [[B, '（下の物……地下の保管庫の絵だ。あの男は、盗んだ絵をまとめて海の向こうへ流すつもりだ）']],
         else: [[B, '（下の物……？ 書斎の絵のほかにも、何かあるのか）']] },
       [B, '（決行は、12月24日。クリスマス・イブの夜しかない）'],
-      fatherRemark, { report: true },
+      { report: true },
     ],
   ],
   // ---- 最終章 12月後半：決行（2週目の週末は決行の夜） ----
@@ -270,9 +263,9 @@ export const ARRIVAL = [
 export const ROUTES = [
   { id: 'night', name: 'ルート1：一夜で持ち去る',
     desc: '誰にも見つからず、正しい道順で絵を持ち去る。',
-    // 絵を傷めずに出られる道：裏庭の通用口か、地下の非常口（床の扉の鍵が要る）
-    ok: s => s.flags.found_painting && (s.flags.back_gate || (s.flags.b_exit && s.flags.b_key)) && !s.flags.swap_hidden,
-    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない', !(s.flags.back_gate || (s.flags.b_exit && s.flags.b_key)) && '絵を傷めずに運び出せる出口が分からない（裏庭の通用口／地下の非常口）',
+    // 絵を傷めずに出られる道：地下の非常口（搬入路の鉄の扉。床の扉の鍵が要る）
+    ok: s => s.flags.found_painting && s.flags.b_exit && s.flags.b_key && !s.flags.swap_hidden,
+    need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない', !(s.flags.b_exit && s.flags.b_key) && '絵を傷めずに運び出せる出口が分からない（地下の搬入路の非常口と、資料室の床の扉の鍵）',
       s.flags.swap_hidden && '隠し部屋に戻されたのは、青島の模写だ'] },
   { id: 'swap', name: 'ルート2：贋作とすり替える',
     desc: 'イブの昼、隠し部屋の絵を青島の模写とすり替え、本物はお嬢様の部屋に隠してある。25日の朝、運び屋が偽物を梱包している間に、本物を運び出す。',

@@ -45,7 +45,9 @@ const msgEl = $('msg3d');
 let msgQueue = [], afterMsg = null, actLock = 0;
 function say(...lines) { msgQueue = lines.filter(Boolean); nextMsg(); }
 // 台詞の話し手（表示名 → 人物）。会話の顔を映し、屋敷の中の VRM の表情も変える
-const SPEAKER = { ...Object.fromEntries(Object.entries(LOOKS).map(([id, l]) => [l.name, id])), '執事': 'butler', '雫': 'black', '巡回員': 'guard' };
+const SPEAKER = { ...Object.fromEntries(Object.entries(LOOKS).map(([id, l]) => [l.name, id])), '執事': 'butler', '雫': 'black', '巡回員': 'guard', '赤羽': 'red', '青島': 'blue', '白井': 'white' };
+// 台詞の話し手の欄は「赤メイド」などで出す（台詞の中では実名で呼び合う）
+const LABEL = { 赤羽: '赤メイド', 青島: '青メイド', 白井: '白メイド' };
 let portrait = null, faced = null;
 function speakerOf(l) {
   if (Array.isArray(l)) return [SPEAKER[l[0]], l[1], l[2]];
@@ -72,6 +74,7 @@ function nextMsg() {
   const [who, text, override] = speakerOf(l);
   // 話し手の名前は太字に、効果のお知らせ（〔好感度 +5〕など）は色付きで別の行に出す
   const named = Array.isArray(l) ? [l[0], l[1]] : who ? [l.slice(0, l.length - text.length), text] : null;
+  if (named && LABEL[named[0]]) named[0] = LABEL[named[0]];
   if (named) { const b = document.createElement('b'); b.textContent = named[0]; msgEl.append(b, ...richNodes(named[1])); }
   else msgEl.append(...richNodes(l));
   // 二人きりの雫（「お兄ちゃん」と呼ぶとき）は、雫としての顔にする
@@ -886,7 +889,7 @@ function nightThings() {
     say('お嬢様の寝息を確かめ、クローゼットの奥に本物をそっと隠した。', '……あとは朝、運び屋が偽物を運び出す騒ぎにまぎれて、本物を持ち出すだけだ。');
   } });
   if (cur.id === 'grounds' && N.route === 'night' && N.carry === 'painting') list.push({ name: '正門', at: at(38, 56.6), label: '調べる', night: () =>
-    say('正門には閂が下ろされ、巡回員が行き来している。……怪盗が正面から出ていくわけにはいかない。', s.flags.back_gate ? '（バラ園の奥の、庭師の通用口へ）' : '（裏庭のどこかに、ほかの出口は……）') });
+    say('正門には閂が下ろされ、巡回員が行き来している。……怪盗が正面から出ていくわけにはいかない。', s.flags.b_exit ? '（地下の搬入路の、鉄の扉へ）' : '（屋敷のどこかに、ほかの出口は……）') });
   return list;
 }
 // 25日の朝：クローゼットから本物を取り出し、洗濯かごに隠して、使用人棟の自室まで運ぶ
@@ -964,20 +967,16 @@ function takePainting() {
   });
 }
 const nightClock = () => { const m = Math.floor(st.night.min); return `${1 + Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`; };
-// 屋敷を抜け出す（一夜で持ち去るルート）。絵を傷めずに出られるのは、裏庭の通用口だけ
+// 屋敷を抜け出す（一夜で持ち去るルート）。絵を傷めずに出られるのは、地下の搬入路の鉄の扉だけ
 function escape(how) {
   const N = st.night;
   N.exit = how;
   caption('脱出', `深夜 ${nightClock()}`);
   afterMsg = () => endNight('night');
-  say(how === 'tunnel' ? '錆びた閂を、少しずつ、音を殺して外す。……20分かかった。鉄の扉を押し開けると、塀の外の水路沿いの小道に出た。屋敷の誰の目にも触れずに。'
-      : 'バラ園の奥の木戸の閂を、音を立てずに外した。裏の小道に、人の気配はない。', '腕の中の額縁が、月明かりを受けて鈍く光った。');
+  say('錆びた閂を、少しずつ、音を殺して外す。……20分かかった。鉄の扉を押し開けると、塀の外の水路沿いの小道に出た。屋敷の誰の目にも触れずに。', '腕の中の額縁が、月明かりを受けて鈍く光った。');
 }
 function nightAct(t) {
   const N = st.night;
-  // 裏庭の通用口から抜け出す
-  if (t.spot && t.spot[1] === 'backgate') return N.route === 'night' && N.carry === 'painting' ? escape('back')
-    : say('裏の小道へ出られる、庭師の木戸だ。……絵を手に入れたら、ここから抜けられる。');
   if (t.exit) {
     // 玄関の扉には、絵とは別の警報が付いている（白井が落としたのは絵の警報だけ）
     if (/玄関/.test(t.name) && !N.morning) return say('玄関の扉には、絵とは別の警報が付いている。白井が落としたのは、絵の警報だけだ。……開ければ鳴る。');
@@ -1006,7 +1005,7 @@ function nightGoal() {
   if (N.morning) return N.carry === 'painting' ? (s.flags.caterer_friend ? '本物を、勝手口の外の仕出し屋のバンへ運ぶ（旦那様と警備員に見られないように）' : '本物を、使用人棟の執事の部屋まで運ぶ（旦那様と警備員に見られないように）')
     : 'お嬢様の部屋のクローゼットから、本物を取り出す（運び屋が発つ10時まで）。1階の廊下に旦那様、2階の廊下に木箱を運ぶ警備員';
   if (N.carry === 'painting') return N.route === 'swap' ? '本物を、お嬢様の部屋のクローゼットに隠す'
-    : `絵を抱えて、屋敷の中を1階へ降り、${[s.flags.back_gate && '勝手口から庭へ出てバラ園の奥の通用口', s.flags.b_exit && s.flags.b_key && '資料室の床の扉から地下へ降りて搬入路の非常口'].filter(Boolean).join('か、') || '勝手口から庭へ出て、裏庭のどこかの出口'}から抜け出す（梯子と井戸は絵を傷める。玄関には警報${isAlly(s, 'red') ? '' : '。勝手口の前の赤羽は、1時半ごろに休む'}）`;
+    : `絵を抱えて、屋敷の中を1階へ降り、${s.flags.b_exit && s.flags.b_key ? '資料室の床の扉から地下へ降りて搬入路の非常口' : '屋敷のどこかの出口'}から抜け出す（梯子と井戸は絵を傷める。玄関には警報${isAlly(s, 'red') ? '' : '。勝手口の前の赤羽は、1時半ごろに休む'}）`;
   if (N.carry === 'ladder') return '前庭に回り、バルコニーの下に梯子を掛ける';
   if (cur.id === 'f2') return '書斎の隠し部屋へ。絵に触れる前に、警報が切れているか確かめたか？';
   const hall = people.black.sleep ? '大広間は眠れない旦那様が歩き回っている' : '大広間は雫（見逃してくれる）';
@@ -1516,7 +1515,7 @@ export function startNight(state, route, h) {
   const black = people.black, red = people.red, guard = people.guard;
   // 白井の報告でお父様が巡回を厳しくさせたとき（guard_strict）は、西の端で立ち止まる時間が短く、よく見ている
   // 2階の巡回員は、西の端で立ち止まって窓の外を眺める（雫の情報）。ときどき途中で引き返す
-  // 外の巡回員は、屋敷の前庭から正門の前、西の芝生（古井戸と通用口の手前）までを回る
+  // 外の巡回員は、屋敷の前庭から正門の前、西の芝生（古井戸の手前）までを回る
   const strict = !!s.flags.guard_strict;
   Object.assign(guard, { area: 'f2', x: 30, z: 9.5, range: strict ? 8 : 7, wait: 0, look: 0,
     nightRole: { i: 0, path: [[3.2, 9.5, strict ? 2.5 : 6], [24, 9.5, 1.2], [14, 9.5], [40.5, 9.5, 1.5], [30, 9.5, 1.2]] } });

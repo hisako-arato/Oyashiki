@@ -5,7 +5,7 @@
 //  ・協力者（好感度70）になったメイドには、共用室で飲む夜に雫とのことを打ち明けられる。打ち明けたメイドは噂も妬みもしない
 //  ・雫と会わずに他のメイドと2夜続けて会う／他のメイドが協力者になる／打ち明ける と、雫がすねる
 //    すねている間は、朝礼で重い仕事を押し付けられ、次に会った夜は情報をくれない（会えば機嫌が直る）
-import { PEOPLE, CHORES, SISTER } from './data.js';
+import { PEOPLE, CHORES, SISTER, realName } from './data.js';
 import { activeMaids, applyFx, setFlag, dayIndex, isAlly } from './state.js';
 
 export const RUMOR_AFF = 30, RUMOR_SUSP = 5, RUMOR_DAYS = 2;
@@ -61,7 +61,7 @@ export function morningEvents(s) {
     if (who.length) {
       applyFx(s, { susp: RUMOR_SUSP });
       t.rumor = true;
-      notes.push(`（噂）${who.map(m => PEOPLE[m].name).join('と')}が、執事と黒メイドを見てひそひそ話している。「新人の子ばかり、夜に呼ばれてるって……」　疑惑 +${RUMOR_SUSP}`);
+      notes.push(`（噂）${who.map(realName).join('と')}が、執事と黒メイドを見てひそひそ話している。「新人の子ばかり、夜に呼ばれてるって……」　疑惑 +${RUMOR_SUSP}`);
     }
   }
   if (st.sulk) {
@@ -86,7 +86,7 @@ export function sisterTalk(s, others) {
   if (room) return `（雫は袖をつまんだまま、じっとこちらを見上げた）「……今朝、${room === 'mother' ? '主寝室' : 'お嬢様の部屋'}のほうから戻ってきたでしょ。見てたんだから。……作戦なのは、分かってるけど」`;
   // ほかのメイドと仲が良いと、ちくりと言う（2日に1度）
   const close = ['blue', 'red', 'white'].filter(m => s.aff[m] >= 60);
-  if (close.length && dayIndex(s) % 2) return `（雫は廊下の角でこちらを引き止め、頬をふくらませた）「${PEOPLE[close[dayIndex(s) % close.length]].name}と、ずいぶん楽しそうだったね。……べつに、いいけど。お兄ちゃんのこと一番知ってるの、私だから」`;
+  if (close.length && dayIndex(s) % 2) return `（雫は廊下の角でこちらを引き止め、頬をふくらませた）「${realName(close[dayIndex(s) % close.length])}さんと、ずいぶん楽しそうだったね。……べつに、いいけど。お兄ちゃんのこと一番知ってるの、私だから」`;
   const hint = !s.flags.hidden_room ? '2階の窓の数と部屋の数、合ってないよ。資料室に古い設計図があるんだって'
     : !s.flags.red_book ? '書斎の本棚にね、一冊だけ埃をかぶってない本があるの。掃除のとき気づいちゃった'
     : s.flags.desk_lock && !s.flags.key_hidden ? '麗子さんって人の誕生日、11月3日なんだって。旦那様、番号は何でもそれにしてそう'

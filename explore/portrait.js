@@ -91,7 +91,7 @@ function frame(now) {
   const faces = { happy: 0, angry: 0, sad: 0, surprised: 0, relaxed: 0 };
   if (face in faces) faces[face] = 1;
   const talk = talkLeft > 0 ? 1 : 0;
-  // 屋敷で動いている人なら、動きは屋敷に任せて口だけ動かす。そうでなければ、ここで動かす
+  // 屋敷で動いている人なら、動きは屋敷に任せて口だけ動かす。そうでなければ、ここで表情と口だけ動かす（体は止めたまま）
   if (now - (vrm.motion.lastDrive || 0) < 80) talkMouth(vrm, talk);
   else driveVRM(vrm, false, dt, { face: faces, talk, portrait: true });
   draw(vrm, w, h);

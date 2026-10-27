@@ -107,7 +107,9 @@ export function poseWith(vrm, m, moving, dt, extra = {}) {
 export function driveVRM(vrm, moving, dt, extra = {}) {
   const m = vrm.motion;
   if (!extra.portrait) m.lastDrive = performance.now();
-  poseWith(vrm, m, moving, dt, extra);
+  // 会話の顔（portrait）は、表情と口だけを動かす。体はいつも同じ姿勢で止め、髪やスカートの揺れも計算しない
+  if (extra.portrait) { m.t = (m.t || 0) + dt; pose(vrm, 0, 0, 0, {}); }
+  else poseWith(vrm, m, moving, dt, extra);
   // まばたき（表情を作っている間は控えめに）
   m.blink -= dt;
   let b = 0;
@@ -125,9 +127,9 @@ export function driveVRM(vrm, moving, dt, extra = {}) {
     // 話している間は口を動かす（extra.talk：0〜1）
     if (extra.talk != null) em.setValue('aa', extra.talk * (0.25 + 0.5 * Math.abs(Math.sin(m.t * 13))) * (1 - busy * 0.5));
   }
-  // 屋敷の中の人物は、揺れもの（髪・スカート）・視線・材質の時間の計算を省き、骨と表情だけ動かす（形は固定）
-  // とても小さく映るので、見た目はほとんど変わらない。会話の顔（portrait）と人物照会（viewer）では揺らす
-  if (vrm.scene.userData.mansion && !extra.portrait) { vrm.humanoid.update(); if (em) em.update(); }
+  // 屋敷の中の人物と会話の顔は、揺れもの（髪・スカート）・視線・材質の時間の計算を省き、骨と表情だけ動かす（形は固定）
+  // 人物照会（viewer）では揺らす
+  if (vrm.scene.userData.mansion || extra.portrait) { vrm.humanoid.update(); if (em) em.update(); }
   else vrm.update(dt);
 }
 // 人が多い場面（舞踏会）：会話の顔を描く回数も減らす（portrait.js）

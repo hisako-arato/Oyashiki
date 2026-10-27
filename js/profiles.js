@@ -9,7 +9,7 @@ export const PROFILES = [
       [() => true, '本当の目的は、この屋敷に隠された絵「月下の庭」を取り戻すこと。20年前に美術館から盗まれた、母との思い出の絵だ。'],
       [s => s.flags.shizuku_reunion, '妹の雫が、黒メイドとして屋敷に潜り込んできた。人前では他人のふりをしている。'],
     ] },
-  { id: 'father', name: 'お父様', age: '50代', shown: () => true,
+  { id: 'father', name: 'お父様', age: '51歳', shown: () => true,
     text: '鷹宮家の当主。大手企業の役員で、家族のことには無頓着。ほとんど家にいない。',
     notes: [
       [s => s.flags.c_red, '夜中に書斎で「あの絵は年明けに海外で」と電話していた。'],
@@ -25,15 +25,15 @@ export const PROFILES = [
       [s => s.flags.w_past, '会社の帳簿に載らない工事で、地下の保管庫の設備を作らせた。'],
       [s => s.flags.r_parcel, '今も年に何度か、夜中に額縁の荷物を自分で受け取っている。'],
     ] },
-  { id: 'mother', name: 'お母様', age: '40代', shown: () => true,
-    text: '40代とは思えないほど若々しく美しい。仕事はせず、エステやブティック通いが日課。若い男が好きで、執事にちょっかいをかけてくる。',
+  { id: 'mother', name: 'お母様', age: '年齢不詳', shown: () => true,
+    text: '年齢を誰も知らない。いつ見ても若々しく美しい。仕事はせず、エステやブティック通いが日課。若い男が好きで、執事にちょっかいをかけてくる。',
     notes: [
       [s => s.flags.m_secret, '【秘密】若い男に、多額の贈り物をしている。'],
       [s => s.flags.m_close, '執事と、夜を重ねる仲になった。孤独を、執事の前でだけ見せる。'],
       [s => s.flags.m_dealer, '夜中に絵の業者が来るのを、寝たふりをして聞いている。'],
     ] },
-  { id: 'daughter', name: 'お嬢様', age: '21歳', shown: () => true,
-    text: '鷹宮家の一人娘。どこにでもいる普通の大学生で、世間のことはよく知らない。執事の働きぶりに感心している。',
+  { id: 'daughter', name: 'お嬢様（桜子）', age: '21歳', shown: () => true,
+    text: '鷹宮家の一人娘、桜子（さくらこ）。どこにでもいる普通の大学生で、世間のことはよく知らない。執事の働きぶりに感心している。',
     notes: [
       [s => s.flags.hint_redbook, '子どもの頃、父の本棚の「赤い本」に触れてひどく叱られた。'],
       [s => s.flags.d_secret, '【秘密】大学を半年前にこっそり辞めている。'],
@@ -42,21 +42,21 @@ export const PROFILES = [
       [s => s.flags.hide_ok, '執事の「大事な物」を、クローゼットで預かってくれる。'],
       [s => s.flags.eve_daughter, 'イブの夜、自分の部屋に来てほしいと言っている。'],
     ] },
-  { id: 'red', name: '赤羽（赤メイド）', age: '34歳', shown: () => true,
+  { id: 'red', name: '赤メイド（赤羽）', age: '34歳', shown: () => true,
     text: '執事が来る前から6年働いている、屋敷でいちばんの古株。いつもぼーっとしていて、何を考えているのか分からない。料理がとても早い。年明けに2人目の子どもが生まれる予定で、春からは産休に入る。旦那様が新しいメイドを増やしているのは、その穴を埋めるため。',
     notes: [
       [s => s.flags.n_red_night, '夜中の1時ごろ、キッチン裏で翌日の仕込みをしている。'],
       [s => s.flags.r_past, '前のメイドが旦那様に濡れ衣を着せられて辞めた。それ以来、旦那様を信じていない。'],
       [s => s.flags.told_red, '雫とのことを打ち明けた。二人を見守ってくれている。'],
     ] },
-  { id: 'blue', name: '青島（青メイド）', age: '23歳', shown: () => true,
+  { id: 'blue', name: '青メイド（青島）', age: '23歳', shown: () => true,
     text: '11月1日に来た新人メイド。美大で油絵を学んだが、就職難で何十社も落ち、ようやく拾ってもらったのがこの屋敷だった。仕事はまだできないが、明るく活発。絵がとても上手い。',
     notes: [
       [s => s.flags.forgery_start, '「月下の庭」の模写を引き受けてくれた。'],
       [s => s.flags.forgery_ready, '模写が完成した。見分けがつかないほどの出来だ。'],
       [s => s.flags.told_blue, '雫とのことを打ち明けた。いつか兄妹の絵を描きたいらしい。'],
     ] },
-  { id: 'white', name: '白井（白メイド）', age: '26歳', shown: s => s.chapter >= 1,
+  { id: 'white', name: '白メイド（白井）', age: '26歳', shown: s => s.chapter >= 1,
     text: 'お父様の会社の電力設備部から、11月後半に屋敷付きとして移ってきた。どんな仕事もテキパキとこなす。旦那様に、屋敷の様子を報告する役目を負っている。',
     notes: [
       [s => s.flags.white_spy && !s.flags.white_turned, '週末ごとに、旦那様へ屋敷の様子を報告している。見られたことは、報告されるかもしれない。'],
@@ -77,24 +77,24 @@ export const PROFILES = [
       [s => s.flags.hall_patrol, '夜は大広間を見回る役目。兄のことは見逃してくれる。'],
       [s => s.flags.guard_info, 'イブの夜の巡回員の癖を教えてくれた。'],
     ] },
-  { id: 'guard', name: '巡回員', shown: s => !!s.flags.guard_known,
+  { id: 'guard', name: '巡回員', shown: () => false,   // 人物照会には出さない（主要人物だけ）
     text: 'イブの夜だけ、旦那様が警備会社から呼んだ巡回員。2階の廊下を見回る。',
     notes: [[s => s.flags.guard_info, '廊下の西の端（物置の前）で、必ず立ち止まって窓の外を眺める。']] },
-  { id: 'reiko', name: '麗子', age: '30代', shown: s => !!(s.flags.p_lover || s.flags.ball_seen),
+  { id: 'reiko', name: '麗子', age: '30代', shown: () => false,   // 人物照会には出さない（主要人物だけ）
     text: '旦那様の愛人。11月3日が誕生日で、旦那様は毎年花を贈っている。',
     notes: [
       [s => s.flags.n_codehint, '旦那様の金庫も鍵も、番号は全部この人の誕生日。'],
       [s => s.flags.ball_seen, 'イブの仮面舞踏会に、深紅の仮面で現れた。若い男を連れていた。'],
       [s => s.flags.ball_seen && s.flags.m_secret, '連れの若い男は、お母様が時計を贈っていた相手だった。'],
     ] },
-  { id: 'dealer', name: 'オークション会社の担当者', age: '40代', shown: s => !!(s.flags.dealer_seen || s.flags.g_dealer || s.flags.b_letter),
+  { id: 'dealer', name: 'オークション会社の担当者', age: '40代', shown: () => false,   // 人物照会には出さない（主要人物だけ）
     text: '眼鏡の男。海外のオークション会社で、旦那様の「出品」を任されている。',
     notes: [
       [s => s.flags.b_letter, '盗品の来歴を整えて売る手はずを、旦那様と手紙でやり取りしている。'],
       [s => s.flags.dealer_seen, '赤羽によれば、夜中に勝手口から額縁の荷物を持ってくる車の人と同じ顔。'],
       [s => s.flags.shizuku_courier, '12月25日の朝、運び屋と一緒に絵を引き取りに来る。'],
     ] },
-  { id: 'caterer', name: '仕出し屋', age: '20代', shown: s => !!(s.flags.caterer_nov || s.flags.caterer_friend),
+  { id: 'caterer', name: '仕出し屋', age: '20代', shown: () => false,   // 人物照会には出さない（主要人物だけ）
     text: s => s.flags.caterer_friend ? 'イブの仮面舞踏会の料理を任された仕出し屋で働く青年。雫の昔の知り合い。' : '屋敷に出入りしている仕出し屋の青年。愛想がよく、屋敷の勝手をよく知っている。',
     notes: [
       [s => s.flags.caterer_nov, '11月5日、冬の食料を搬入しに来た。食料庫の場所も、旦那様のワインの好みも知っていた。'],

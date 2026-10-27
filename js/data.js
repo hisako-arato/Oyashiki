@@ -5,15 +5,17 @@ export const END_HOUR = 18;
 export const ALLY_AFF = 70;
 export const PASSCODE = '1103';
 
+// 会話や地の文の中で呼ぶ名前（話し手の欄や一覧は name。メイドは「赤メイド」などで、実名は real）
+export const realName = id => PEOPLE[id].real || PEOPLE[id].name;
 export const PEOPLE = {
   butler:  { name: '執事',     color: '#2b2b3a' },
   father:  { name: 'お父様',   color: '#6b5640' },
   mother:  { name: 'お母様',   color: '#b8436f' },
   daughter:{ name: 'お嬢様',   color: '#d68a1c' },
-  red:     { name: '赤羽', color: '#c8362d', maid: true, from: 0 },
-  blue:    { name: '青島', color: '#2f6fd0', maid: true, from: 0 },   // 11月1日に来た新人
+  red:     { name: '赤メイド', real: '赤羽', color: '#c8362d', maid: true, from: 0 },
+  blue:    { name: '青メイド', real: '青島', color: '#2f6fd0', maid: true, from: 0 },   // 11月1日に来た新人
   black:   { name: '黒メイド', color: '#222222', maid: true, from: 2 },
-  white:   { name: '白井', color: '#9aa3ad', maid: true, from: 1 },
+  white:   { name: '白メイド', real: '白井', color: '#9aa3ad', maid: true, from: 1 },
   // 黒メイドの正体は主人公の妹。二人きりの場面だけ「雫」として話す（好感度は持たない）
   shizuku: { name: '雫',       color: '#222222' },
   guard:   { name: '巡回員',   color: '#41608f' },
@@ -138,7 +140,6 @@ export const CLUES = {
   n_red_night:  { ch: 0, text: '赤羽の話：夜中の1時ごろ、キッチン裏（裏階段の前）で翌日の仕込みをしている。' },
   r_past:       { ch: 0, text: '赤羽の過去：前のメイドが旦那様に濡れ衣を着せられて辞めさせられた。それ以来、赤羽は旦那様を信じていない。' },
   r_parcel:     { ch: 0, text: '赤羽の話：額縁の荷物が年に何度か夜中に届き、旦那様が自分で勝手口まで受け取りに出る。' },
-  back_gate:    { ch: 2, text: '裏庭の通用口：バラ園の奥の塀に、庭師の木戸がある。内側の閂だけで、鍵はない。決行の夜の逃げ道になる。' },
   d_cellar:     { ch: 0, text: 'お嬢様の思い出：子どもの頃の夜中、お父様がランプを持って、資料室の床の下へ降りていくのを見た。' },
   caterer_nov:  { ch: 0, text: '出入りの仕出し屋の青年：冬の食料を運んできた。愛想がよく、食料庫の場所も旦那様のワインの好みも知っている。' },
   caterer_friend:{ ch: 2, text: '【雫の情報】イブの舞踏会の料理は仕出し屋が入る。そこで雫の昔の知り合いが働いている。外から来て、外へ帰る車だ。' },

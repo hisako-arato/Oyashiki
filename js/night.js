@@ -1,7 +1,7 @@
 // 平日の夜（22時）：休む／仕事のあと共用室でメイドに声をかける（一杯飲みながら話す）／自室に雫を呼ぶ／お母様・お嬢様の部屋を訪ねる
 // 選べるようになるまでは、選択肢そのものを出さない（選べる相手がいない夜は、夜の画面を出さずに休む）
 // 表現は、性的な描写はせず、大人が読めば分かる程度にとどめる（暗転・翌朝の様子で示す）
-import { PEOPLE, CLUES } from './data.js';
+import { PEOPLE, CLUES, realName } from './data.js';
 import { activeMaids, fatherHome, rng, dayIndex, isAlly, WEEKS_PER_CHAPTER, applyFx, afterNight, dayOffset, EVE_OFFSET } from './state.js';
 import { joined, told, sulking, sis, afterSisterNight, afterMaidNight, afterRoomNight, tell } from './sister.js';
 import { whiteSaw } from './white.js';
@@ -124,7 +124,7 @@ export function nightScene(s, id) {
   // 来た日の呼び出しは避けられないので、噂や妬みの元にはしない
   // 白井がまだ報告役なら、新人を夜に呼んだことも報告の種になる（白井に打ち明けていれば数えない）
   if (id === K) return [{ place: '22:00　使用人棟　執事の部屋' }, ...sisterScene(s), ...(s.flags.shizuku_reunion ? [gossip(K), { call: s => { if (!told(s, W)) whiteSaw(s, 3); } }] : []), count(K)];
-  return [{ place: '22:00　使用人棟　共用室' }, [N, `夜10時。仕事を終えた使用人棟の共用室で、${PEOPLE[id].name}に「一杯どう？」と声をかけた。${DRINK[id]}`],
+  return [{ place: '22:00　使用人棟　共用室' }, [N, `夜10時。仕事を終えた使用人棟の共用室で、${realName(id)}に「一杯どう？」と声をかけた。${DRINK[id]}`],
     ...purpose(s, id), ...maidScene(s, id), ...fun(s, id), ...confess(s, id), gossip(id), count(id)];
 }
 
@@ -569,7 +569,7 @@ const CONFESS = {
 function confess(s, m) {
   if (!joined(s) || told(s, m) || !isAlly(s, m)) return [];
   return [
-    [B, `（${PEOPLE[m].name}なら、信じられる。……雫のことを、話すべきだろうか）`],
+    [B, `（${realName(m)}なら、信じられる。……雫のことを、話すべきだろうか）`],
     { choice: [
       { t: '黒メイドが妹の雫だと打ち明ける', then: [
         [B, '「実は……黒は、私の妹なんだ。名前は雫。ここへは、二人で母の絵を取り戻しに来た」'],
@@ -691,7 +691,7 @@ function shizukuChat(s) {
     [[S, '「ねえ、膝枕して。……昔、熱出したとき、お母さんがしてくれたみたいに」'],
       [N, '雫は返事も待たずに、執事の膝に頭をのせて目を閉じた。'],
       [S, '「……この屋敷に来て、初めてちゃんと眠れそう」', 'relaxed']],
-    ...(rival ? [[[S, `「……${PEOPLE[rival].name}と、仲いいよね」`],
+    ...(rival ? [[[S, `「……${realName(rival)}さんと、仲いいよね」`],
       [B, '「作戦のうちだ」'],
       [S, '「ふうん。……お兄ちゃん、笑ってたよ。作戦の顔じゃなかった」', 'sad'],
       { choice: [
