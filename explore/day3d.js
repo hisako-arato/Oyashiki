@@ -1363,6 +1363,7 @@ function tick(now) {
   else {
     if (carried.crate) carried.crate.visible = st.dayCarry === 'crate';
     if (van && !st.night) van.visible = delivering();
+    if (st.dayCarry === 'forgery' && cur.id === 'f2' && player.x > 40 && !s.flags.forgery_stashed && !st.busy) stashForgery();
     if ((st.dayCarry === 'painting' || st.dayCarry === 'forgery') && !st.busy) {
       carried.painting && (carried.painting.visible = true);
       for (const id of watchers()) if (!st.carrySeen[id]) { st.carrySeen[id] = true; s.susp = clamp(s.susp + 20); hooks.toast(`${people[id].name}に、布で包んだ大きな荷物を見られた（疑惑 +20）`); }
@@ -1590,13 +1591,6 @@ function eveThings() {
       st.dayCarry = 'forgery';
       say('青島の部屋の壁に、布に包んだ板が立て掛けてあった。……青島の模写だ。', '勝手口から屋敷に入り、裏階段で2階の納戸へ運ぼう。人に見られないように。');
     } });
-    if (cur.id === 'f2' && st.dayCarry === 'forgery') list.push({ name: '納戸の奥', at: () => STORE_AT, label: '模写を隠す', night: () => {
-      st.dayCarry = null;
-      setFlag(s, 'forgery_stashed');
-      ms.done = true;
-      refreshMarkers();
-      say('納戸の奥、古い屏風の裏に模写を立て掛けた。', ...EVE_MOTHER);
-    } });
   }
   // 舞踏会の準備を済ませ、旦那様が絵を掛けたら、納戸から模写を取り出して大広間ですり替える
   const prepped = !!(s.today.chores.find(c => c.id === 'evePrep') || {}).done;
@@ -1644,7 +1638,17 @@ function syncForgery() {
   if (forgeryProp.parent !== areas[a].group) areas[a].group.add(forgeryProp);
   forgeryProp.position.set(x, 0, z); forgeryProp.rotation.y = yaw; forgeryProp.visible = true;
 }
-// 模写を納戸に隠した直後：お母様に声をかけられる（気づかれない）
+// 模写を抱えて2階の東の端（裏階段の上）まで来ると、廊下の奥に人影が見え、目の前の納戸へ急いで隠す。その直後、お母様に声をかけられる（気づかれない）
+function stashForgery() {
+  const ms = mission();
+  st.dayCarry = null;
+  setFlag(s, 'forgery_stashed');
+  if (ms) ms.done = true;
+  refreshMarkers();
+  say('2階に上がったところで、廊下の奥に人影が見えた。', ['執事', '（まずい……！）'],
+    '執事は目の前の納戸へ飛び込み、古い屏風の裏に模写を押し込んだ。……足音は、こちらへは来なかった。', ...EVE_MOTHER);
+  afterMsg = () => { player.x = 45.2; player.z = 12.2; };
+}
 const EVE_MOTHER = [
   '（納戸を出たところで、背後から声をかけられた）',
   ['お母様', '「あら、執事さん。そんな所で何をしているの？」'],
@@ -1655,7 +1659,7 @@ const EVE_MOTHER = [
 ];
 const missionGoal = () => {
   const f = s.flags;
-  if (!f.forgery_stashed) return st.dayCarry === 'forgery' ? '模写を、勝手口から裏階段で2階の納戸へ（人に見られないように）' : '使用人棟の青島の部屋から、模写を持ち出す';
+  if (!f.forgery_stashed) return st.dayCarry === 'forgery' ? '模写を、勝手口から裏階段で2階へ（人に見られないように）' : '使用人棟の青島の部屋から、模写を持ち出す';
   const prep = s.today.chores.find(c => c.id === 'evePrep');
   if (prep && !prep.done) return '大広間で、舞踏会の準備をする';
   if (f.swapped) return f.swap_hidden ? '' : '本物を、お嬢様の部屋のクローゼットへ';
