@@ -28,6 +28,9 @@ export function useSlot(n) { slot = n; testing = false; }
 // テストプレイ（タイトルの隠し入口から）：どの枠にも保存しない
 let testing = false;
 export const isTesting = () => testing;
+// テストプレイ中、画面上の「テストプレイ」を長押ししている間は、ゲーム内の時計を10倍で進める（人物の動きはそのまま）
+export const clockBoost = { on: false };
+export const clockRate = () => testing && clockBoost.on ? 10 : 1;
 export function setTesting(on) { testing = on; }
 // 以前の1つだけのセーブは、枠1に移す
 function migrate() {

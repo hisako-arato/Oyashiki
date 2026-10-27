@@ -1,6 +1,6 @@
 // ゲーム進行と画面描画
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY, BASEMENT_HINTS } from './data.js';
-import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdown, newState, save, load, clearSave, listSlots, copySlot, markCleared, isTesting, setTesting, saveEve, loadEve, seenEndings, markSeenEnding, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
+import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdown, newState, save, load, clearSave, listSlots, copySlot, markCleared, isTesting, setTesting, clockBoost, saveEve, loadEve, seenEndings, markSeenEnding, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
@@ -177,7 +177,14 @@ function startTest(preset, when, rel) {
 // テストプレイの間は、画面の上に「テストプレイ」と出す（3Dの屋敷の上にも）
 function testBadge() {
   document.querySelector('.testbadge')?.remove();
-  if (isTesting()) document.body.append(el('div', { class: 'testbadge' }, 'テストプレイ'));
+  if (!isTesting()) return;
+  const b = el('div', { class: 'testbadge' }, 'テストプレイ');
+  // 3Dの屋敷の「なぞって歩く」操作に伝えない。指が少しずれても続くよう、指を捕まえておく
+  const on = v => e => { e.preventDefault(); e.stopPropagation(); clockBoost.on = v; b.classList.toggle('fast', v); b.textContent = v ? 'テストプレイ ▶▶ 10倍速' : 'テストプレイ'; };
+  b.addEventListener('pointerdown', e => { on(true)(e); try { b.setPointerCapture(e.pointerId); } catch (_) { /* noop */ } });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, on(false));
+  b.addEventListener('contextmenu', e => e.preventDefault());
+  document.body.append(b);
 }
 
 // ---- バージョンと更新 ----

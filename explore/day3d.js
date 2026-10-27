@@ -6,7 +6,7 @@ import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, ROOMS, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
 import { richNodes } from '../js/richtext.js';
-import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded, isEve, applyFx, fxNote } from '../js/state.js';
+import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded, isEve, applyFx, fxNote, clockRate } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
@@ -1025,7 +1025,7 @@ let seenTime = 0;
 function nightTick(dt) {
   const N = st.night;
   if (!st.busy) {
-    N.min += dt * 60 / NIGHT_SEC_PER_HOUR;
+    N.min += dt * clockRate() * 60 / NIGHT_SEC_PER_HOUR;
     if (N.morning && N.min >= 180 && !N.dawn) {
       N.dawn = true;
       afterMsg = () => endNight('caught25');
@@ -1290,8 +1290,8 @@ function tick(now) {
 
   // 時間が進む（メッセージや操作待ちの間は止まる）
   if (st.mode === 'day' && !st.busy && !document.querySelector('.modal-back')) {
-    s.today.min = (s.today.min || 0) + dt * 60 / SEC_PER_HOUR;
-    if (s.today.min >= 60) { s.today.min -= 60; s.today.hour++; }
+    s.today.min = (s.today.min || 0) + dt * clockRate() * 60 / SEC_PER_HOUR;
+    while (s.today.min >= 60) { s.today.min -= 60; s.today.hour++; }
   }
   if (st.mode === 'day' && DL.wineDue(s) && !st.wine) {
     if (cur.id === 'basement') { st.wine = { left: 8 }; hooks.toast('石段の上で、床の扉が開く音……旦那様だ！ 奥に隠れろ！'); }
@@ -1864,7 +1864,7 @@ const ballMin = () => st.ball.min;
 // 時刻ごとの出来事（会話の間は時間が止まる）
 function ballTick(dt) {
   const B = st.ball;
-  if (!st.busy && !B.search && !document.querySelector('.modal-back')) B.min += dt * 60 / BALL_SEC_PER_HOUR;
+  if (!st.busy && !B.search && !document.querySelector('.modal-back')) B.min += dt * clockRate() * 60 / BALL_SEC_PER_HOUR;
   // 客の顔を動かす（画面に入っている客だけ、2フレームに1回）
   // 近い客は2フレームに1回、遠い客（12m 以上）は4フレームに1回
   if (cur.id === 'f1') for (const gu of ballGuests) {
