@@ -94,6 +94,12 @@ Object.assign(CHORES, {
   xmasLights:  { name: '前庭のイルミネーション',   type: 'art', hours: 3, room: 'garden', xmas: true },
   xmasTouch:   { name: 'クリスマス飾りの手直し',   type: 'art', hours: 1, room: 'great' },
 });
+// イブの朝（ルート2）：青島の部屋の模写を、2階の納戸へ運んでおく（mission：決まった印の場所で働く仕事ではない）
+// 運び終えたら舞踏会の準備をし、そのあと大広間で本物とすり替える（needs：先に済ませておくこと）
+Object.assign(CHORES, {
+  eveForgery: { name: '青島の部屋から模写を運ぶ', type: 'escort', hours: 0, room: 'servants', place: '青島の部屋 → 2階の納戸', butlerOnly: true, optional: true, mission: true },
+  evePrep:    { name: '舞踏会の準備', type: 'misc', hours: 2, room: 'great', butlerOnly: true, optional: true, needs: 'forgery_stashed', needsWhy: '先に模写を納戸へ' },
+});
 export const XMAS = ['xmasTree', 'xmasWreath', 'xmasGarland', 'xmasLights', 'xmasStair', 'xmasDoor'];
 // 12月だけ、ふだんの仕事に加わる支度
 export const XMAS_POOL = ['xmasCards', 'xmasSweets', 'guestPrep'];

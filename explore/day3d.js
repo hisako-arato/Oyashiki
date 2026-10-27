@@ -423,6 +423,7 @@ function refreshMarkers() {
       people[who].g.add(gem); personGems.push(gem);
       return;
     }
+    if (!WORK[c.id]) return;
     const [area, x, z] = WORK[c.id];
     const a = areas[area], m = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.6, 20), workMat);
     m.rotation.x = -Math.PI / 2; m.position.set(x, 0.03, z);
@@ -451,7 +452,7 @@ function choreThings() {
   const list = [];
   if (st.mode !== 'day') return list;
   s.today.chores.forEach((c, i) => {
-    if (c.assignee !== 'butler' || c.done || withPerson(c.id)) return;
+    if (c.assignee !== 'butler' || c.done || withPerson(c.id) || !WORK[c.id]) return;
     const [area, x, z] = WORK[c.id];
     if (area === cur.id) list.push({ name: CHORES[c.id].name, at: () => [x, z], label: '仕事', chore: i });
   });
@@ -1123,7 +1124,7 @@ view.addEventListener('lostpointercapture', endStick);
 $('nb3d').addEventListener('click', () => { if (!st.busy) hooks.notebook(); });
 $('end3d').addEventListener('click', () => { if (!st.busy && st.mode === 'day' && confirm(endAsk('今日の業務を終えますか？'))) finish(); });
 // 業務を終えるときに痕跡が残っていれば、一度引き留める
-const endAsk = q => { if (st.dayCarry === 'crate') return `木箱を抱えたままです。食料庫に置いてから終えましょう。\n${q}`; if (st.dayCarry) return `本物の絵を抱えたままです。お嬢様の部屋のクローゼットに隠してから終えましょう。\n${q}`; const tr = DL.traces(s); return tr.length ? `まだ元に戻していない物があります（${tr.map(x => DL.TRACE_NAME[x]).join('、')}）。\nこのままだと、気づかれて疑われるかもしれません。\n${q}` : q; };
+const endAsk = q => { if (st.dayCarry === 'crate') return `木箱を抱えたままです。食料庫に置いてから終えましょう。\n${q}`; if (st.dayCarry === 'forgery') return `青島の模写を抱えたままです。このまま終えると、すり替えはできません。\n${q}`; if (st.dayCarry) return `本物の絵を抱えたままです。お嬢様の部屋のクローゼットに隠してから終えましょう。\n${q}`; const tr = DL.traces(s); return tr.length ? `まだ元に戻していない物があります（${tr.map(x => DL.TRACE_NAME[x]).join('、')}）。\nこのままだと、気づかれて疑われるかもしれません。\n${q}` : q; };
 
 // ---- 手前の壁・建物を低くする ----
 const tmpV = new THREE.Vector3();
@@ -1227,7 +1228,9 @@ function drawHud(room) {
     clock = `${dateLabel(s)}　${st.mode === 'morning' ? '7:30' : `${t.hour}:${String(Math.floor(t.min || 0)).padStart(2, '0')}`}${eveCountdown(s) ? `　${eveCountdown(s)}` : ''}`;
     if (st.wine) clock += `　旦那様が降りてくる！ あと${Math.ceil(st.wine.left)}秒`;
     else if (cur.id === 'basement' && fatherHome(s) && t.hour === DL.WINE_HOUR - 1 && !t.wineDone) clock += '　（17時ごろ旦那様が降りてくる）';
-    const todo = t.chores.filter(c => c.assignee === 'butler').map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${withPerson(c.id) && !c.done ? `（任意・${PEOPLE[withPerson(c.id)].name}に話しかける）` : CHORES[c.id].after && !c.done && t.hour < CHORES[c.id].after ? `（任意・${CHORES[c.id].after}時から）` : CHORES[c.id].optional ? '（任意）' : ''}`);
+    const todo = t.chores.filter(c => c.assignee === 'butler' && !CHORES[c.id].mission).map(c => `${c.done ? '✓' : '・'}${CHORES[c.id].name}${withPerson(c.id) && !c.done ? `（任意・${PEOPLE[withPerson(c.id)].name}に話しかける）` : CHORES[c.id].after && !c.done && t.hour < CHORES[c.id].after ? `（任意・${CHORES[c.id].after}時から）` : CHORES[c.id].optional ? '（任意）' : ''}`);
+    const mg = mission() && missionGoal();
+    if (mg) todo.unshift(`【模写】${mg}`);
     if (delivering()) todo.push(`・${st.dayCarry === 'crate' ? '木箱をキッチンの食料庫へ' : '勝手口の外のバンから木箱を運ぶ'}（任意・${t.crates || 0}/${EV.CRATES}）`);
     text = st.mode === 'morning' ? '共用室の席に着いて、朝礼を始めよう'
       : st.tut && TUT[st.tut.step] ? `【青島に教える ${st.tut.step + 1}/3】${typeof TUT[st.tut.step].goal === 'function' ? TUT[st.tut.step].goal() : TUT[st.tut.step].goal}`
@@ -1251,6 +1254,7 @@ function finish() {
   s.today.traceNotes = DL.settleTraces(s);
   // 本物を抱えたまま18時になったら、慌ててクローゼットへ押し込む（見られていたかもしれない）
   if (st.dayCarry === 'crate') st.dayCarry = null;
+  if (st.dayCarry === 'forgery') { st.dayCarry = null; s.today.traceNotes.push('模写を抱えたまま18時の鐘が鳴った。……慌てて元の場所に戻した。すり替えは、もうできない'); }
   if (st.dayCarry) { st.dayCarry = null; setFlag(s, 'swap_hidden'); s.susp = clamp(s.susp + 15); s.today.traceNotes.push('18時の鐘に追われ、本物をクローゼットへ押し込んだ。……誰かに見られていなければいいが（疑惑+15）'); }
   running = false;
   root.classList.add('hidden');
@@ -1359,7 +1363,7 @@ function tick(now) {
   else {
     if (carried.crate) carried.crate.visible = st.dayCarry === 'crate';
     if (van && !st.night) van.visible = delivering();
-    if (st.dayCarry === 'painting' && !st.busy) {
+    if ((st.dayCarry === 'painting' || st.dayCarry === 'forgery') && !st.busy) {
       carried.painting && (carried.painting.visible = true);
       for (const id of watchers()) if (!st.carrySeen[id]) { st.carrySeen[id] = true; s.susp = clamp(s.susp + 20); hooks.toast(`${people[id].name}に、布で包んだ大きな荷物を見られた（疑惑 +20）`); }
     } else if (carried.painting && st.mode === 'day') carried.painting.visible = false;
@@ -1572,23 +1576,51 @@ function syncHallArt() {
   }
   hallArt.visible = st.mode === 'ball' || (st.mode === 'day' && isEve(s) && s.today.hour >= EVE_HANG);
   if (shards) shards.visible = st.mode === 'ball';
+  syncForgery();
 }
 const EVE_HANG = 13;   // イブの昼、旦那様が自ら絵を大広間に掛ける時刻
 // ルート2（すり替え）：イブの昼、大広間に飾られた絵を青島の模写とすり替え、本物をお嬢様のクローゼットへ
 // 見張りの目（協力者は数えない）があるとすり替えられない。本物を抱えて運ぶ間に見られると、疑われる
 function eveThings() {
-  if (st.mode !== 'day' || !isEve(s) || s.today.hour < EVE_HANG) return [];
-  const list = [];
-  if (cur.id === 'f1' && !s.flags.swapped) list.push({ name: '月下の庭', at: () => [28, 1.0], label: s.flags.forgery_ready && s.flags.hide_ok ? 'すり替える' : '絵を見る', night: () => {
+  if (st.mode !== 'day' || !isEve(s)) return [];
+  const list = [], f = s.flags, ms = mission();
+  // ルート2の朝の仕事：青島の部屋の模写を、勝手口から屋敷に入れ、裏階段で2階の納戸へ運んで隠す
+  if (ms && !f.forgery_stashed) {
+    if (cur.id === 'cottage' && !st.dayCarry) list.push({ name: '布に包んだ模写', at: () => BLUE_FORGERY, label: '模写を持つ', night: () => {
+      st.dayCarry = 'forgery';
+      say('青島の部屋の壁に、布に包んだ板が立て掛けてあった。……青島の模写だ。', '勝手口から屋敷に入り、裏階段で2階の納戸へ運ぼう。人に見られないように。');
+    } });
+    if (cur.id === 'f2' && st.dayCarry === 'forgery') list.push({ name: '納戸の奥', at: () => STORE_AT, label: '模写を隠す', night: () => {
+      st.dayCarry = null;
+      setFlag(s, 'forgery_stashed');
+      ms.done = true;
+      refreshMarkers();
+      say('納戸の奥、古い屏風の裏に模写を立て掛けた。', ...EVE_MOTHER);
+    } });
+  }
+  // 舞踏会の準備を済ませ、旦那様が絵を掛けたら、納戸から模写を取り出して大広間ですり替える
+  const prepped = !!(s.today.chores.find(c => c.id === 'evePrep') || {}).done;
+  if (f.forgery_stashed && !f.swapped && cur.id === 'f2' && !st.dayCarry && s.today.hour >= EVE_HANG && prepped)
+    list.push({ name: '納戸の奥', at: () => STORE_AT, label: '模写を取り出す', night: () => {
+      st.dayCarry = 'forgery';
+      say('屏風の裏から、模写を取り出した。', '大広間の「月下の庭」と、すり替えよう。');
+    } });
+  if (s.today.hour >= EVE_HANG && cur.id === 'f1' && !f.swapped) list.push({ name: '月下の庭', at: () => [28, 1.0], label: st.dayCarry === 'forgery' ? 'すり替える' : '絵を見る', night: () => {
     recall(s, 'oil');
-    if (!s.flags.forgery_ready || !s.flags.hide_ok) return say('大広間の壁に、「月下の庭」が掛けられていた。旦那様が自ら掛けたらしい。', '（今夜、客の前に出す絵だ。……青島の模写と、隠し場所があれば）');
+    if (st.dayCarry !== 'forgery') {
+      const why = !f.forgery_ready || !f.hide_ok ? '（今夜、客の前に出す絵だ。……青島の模写と、隠し場所があれば）'
+        : !f.forgery_stashed ? '（青島の模写は、使用人棟の青島の部屋にある。……今朝のうちに運んでおくべきだった）'
+        : !prepped ? '（まずは舞踏会の準備を済ませよう。すり替えは、その後だ）'
+        : '（模写は2階の納戸の奥だ。取ってこよう）';
+      return say('大広間の壁に、「月下の庭」が掛けられていた。旦那様が自ら掛けたらしい。', ['執事', why]);
+    }
     if (watchers().length) return say('人の目がある。……今は手を出せない。');
     if (!confirm('青島の模写とすり替えますか？（本物は、お嬢様の部屋のクローゼットへ運ぶ）')) return;
     setFlag(s, 'swapped');
     st.dayCarry = 'painting';
     recall(s, 'stamp');
     say('青島の模写を額に収め、本物をテーブルクロスで包む。壁の絵は、何ひとつ変わらないように見えた。',
-      s.flags.shizuku ? ['執事', '（雫が、旦那様を書斎に引き止めてくれている。……今のうちだ）'] : null,
+      f.shizuku ? ['執事', '（雫が、旦那様を書斎に引き止めてくれている。……今のうちだ）'] : null,
       '本物を、2階のお嬢様の部屋のクローゼットへ運ぼう。人に見られないように。');
   } });
   if (cur.id === 'f2' && st.dayCarry === 'painting') list.push({ name: 'クローゼット', at: () => [41.3, 14], label: '本物を隠す', night: () => {
@@ -1598,6 +1630,38 @@ function eveThings() {
   } });
   return list;
 }
+// 朝礼で「模写を運ぶ」を引き受けた日の、その仕事
+const mission = () => s.today && s.today.chores.find(c => c.id === 'eveForgery' && c.assignee === 'butler');
+const BLUE_FORGERY = [14.6, 3.6], STORE_AT = [46.6, 16.8];
+// 布に包んだ模写（青島の部屋の壁際・納戸の奥に立て掛けてある間だけ見せる）
+let forgeryProp = null;
+function syncForgery() {
+  const f = s.flags, ms = st.mode === 'day' && isEve(s) && mission();
+  const where = !ms || st.dayCarry === 'forgery' || f.swapped ? null : !f.forgery_stashed ? ['cottage', BLUE_FORGERY, -Math.PI / 2] : ['f2', STORE_AT, Math.PI];
+  if (!where) { if (forgeryProp) forgeryProp.visible = false; return; }
+  if (!forgeryProp) { forgeryProp = new THREE.Group(); box(forgeryProp, 1.0, 0.8, 0.06, mat('#d8cfc0'), 0, 0.05, 0); forgeryProp.children[0].rotation.x = -0.12; }
+  const [a, [x, z], yaw] = where;
+  if (forgeryProp.parent !== areas[a].group) areas[a].group.add(forgeryProp);
+  forgeryProp.position.set(x, 0, z); forgeryProp.rotation.y = yaw; forgeryProp.visible = true;
+}
+// 模写を納戸に隠した直後：お母様に声をかけられる（気づかれない）
+const EVE_MOTHER = [
+  '（納戸を出たところで、背後から声をかけられた）',
+  ['お母様', '「あら、執事さん。そんな所で何をしているの？」'],
+  ['執事', '「今夜のお客様用の膝掛けを、探しておりました」'],
+  ['お母様', '「ふふ、働き者ね。……今夜は私のドレスも、ちゃんと見てちょうだいね」'],
+  'お母様は上機嫌で、廊下の向こうへ歩いていった。',
+  ['執事', '（……気づかれていない。あとは舞踏会の準備を済ませてから、大広間で）'],
+];
+const missionGoal = () => {
+  const f = s.flags;
+  if (!f.forgery_stashed) return st.dayCarry === 'forgery' ? '模写を、勝手口から裏階段で2階の納戸へ（人に見られないように）' : '使用人棟の青島の部屋から、模写を持ち出す';
+  const prep = s.today.chores.find(c => c.id === 'evePrep');
+  if (prep && !prep.done) return '大広間で、舞踏会の準備をする';
+  if (f.swapped) return f.swap_hidden ? '' : '本物を、お嬢様の部屋のクローゼットへ';
+  if (s.today.hour < EVE_HANG) return `${EVE_HANG}時に旦那様が絵を掛けたら、すり替える`;
+  return st.dayCarry === 'forgery' ? '大広間の「月下の庭」と、すり替える' : '2階の納戸から模写を取り出し、大広間ですり替える';
+};
 
 // 11月5日：仕出し屋の搬入。白いバンの荷台から、木箱を3つ、キッチンの食料庫まで運ぶ（運ぶ間は誰に見られても構わない）
 const delivering = () => st.mode === 'day' && EV.deliveryDay(s);

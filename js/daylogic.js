@@ -25,12 +25,14 @@ export function choreAvailability(s, c) {
   const partner = def.with && whereIs(s, def.with, hour);
   if (def.with && (partner === 'out' || (def.room !== 'out' && partner !== def.room))) return { ok: false, why: `${PEOPLE[def.with].name}が不在` };
   if (def.after && hour < def.after) return { ok: false, why: `${def.after}時以降` };
+  if (def.needs && !s.flags[def.needs]) return { ok: false, why: def.needsWhy };
   return { ok: true, why: '' };
 }
 
 // 今はできない仕事が、今日のうちに何時からできるか（相手が来る・時刻になる）。できなければ null
 export function waitTarget(s, c) {
   const def = CHORES[c.id], now = s.today.hour;
+  if (def.needs && !s.flags[def.needs]) return null;
   for (let h = now + 1; h < END_HOUR - 1; h++) {
     if (def.after && h < def.after) continue;
     const partner = def.with && whereIs(s, def.with, h);

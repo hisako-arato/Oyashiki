@@ -630,10 +630,14 @@ function renderMeeting(done = meetingDone) {
     const opts = def.butlerOnly
       ? [['butler', '執事が引き受ける'], [null, '今日は断る']]
       : [[null, '― 未割当 ―'], ['butler', `執事（${def.hours}h）`], ...maids.map(m => [m, `${PEOPLE[m].name}（${maidHours(m, c)}h）`])];
-    const sel = el('select', { disabled: !!c.forced, onchange: e => { c.assignee = e.target.value || null; renderMeeting(); } },
+    const sel = el('select', { disabled: !!c.forced || c.id === 'evePrep', onchange: e => {
+      c.assignee = e.target.value || null;
+      if (c.id === 'eveForgery') for (const p of t.chores) if (p.id === 'evePrep') p.assignee = c.assignee;
+      renderMeeting();
+    } },
       opts.map(([v, label]) => el('option', { value: v || '', selected: c.assignee === v }, label)));
     return el('tr', {}, el('td', {}, def.name, def.optional ? el('small', {}, '（任意）') : null),
-      el('td', {}, ROOMS[def.room] ? ROOMS[def.room].name : def.with ? `${PEOPLE[def.with].name}に声をかける` : '外出'), el('td', {}, sel));
+      el('td', {}, def.place || (ROOMS[def.room] ? ROOMS[def.room].name : def.with ? `${PEOPLE[def.with].name}に声をかける` : '外出')), el('td', {}, sel));
   });
   const loads = maids.map(m => {
     const l = maidLoad(s, m);
@@ -729,7 +733,7 @@ function renderDay(msg) {
   // 自分の担当の仕事
   t.chores.forEach((c, i) => {
     const def = CHORES[c.id];
-    if (c.assignee !== 'butler' || c.done) return;
+    if (c.assignee !== 'butler' || c.done || def.mission) return;
     const at = def.room === 'out' ? 'hall' : def.room;
     if (at !== room) return;
     const { ok, why } = DL.choreAvailability(s, c);
@@ -879,7 +883,7 @@ function endDay() {
   const maidFx = {};
   for (const c of t.chores) {
     const def = CHORES[c.id];
-    if (c.assignee === 'butler' && c.progress >= def.hours) c.done = true;
+    if (c.assignee === 'butler' && c.progress >= def.hours && !def.mission) c.done = true;
     if (c.done && !c.failed) { trust += 1; s.weekStats.done++; lines.push(`○ ${def.name}`); if (def.xmas) setFlag(s, `deco_${c.id}`); }
     else if (c.failed) { trust -= 2; s.weekStats.done++; lines.push(`△ ${def.name}（青島が失敗）`); }
     else if (!def.optional) { trust -= c.id === 'cook' ? 10 : 5; s.weekStats.missed++; lines.push(`× ${def.name}${c.overload ? '（時間内に終わらず）' : ''}`); }
