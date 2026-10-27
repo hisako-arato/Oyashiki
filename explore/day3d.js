@@ -1571,6 +1571,7 @@ function syncHallArt() {
     hallArt.traverse(o => { if (o.isMesh) o.castShadow = false; });
   }
   hallArt.visible = st.mode === 'ball' || (st.mode === 'day' && isEve(s) && s.today.hour >= EVE_HANG);
+  if (shards) shards.visible = st.mode === 'ball';
 }
 const EVE_HANG = 13;   // イブの昼、旦那様が自ら絵を大広間に掛ける時刻
 // ルート2（すり替え）：イブの昼、大広間に飾られた絵を青島の模写とすり替え、本物をお嬢様のクローゼットへ
@@ -1625,6 +1626,23 @@ function deliveryThings() {
   return list;
 }
 
+// 舞踏会の夜、キッチンの床に散らばった割れたお皿（青島が片付けている）
+const BLUE_AT = [38.6, 5.9];
+// 黒（雫）の配膳の道順：キッチンの戸口から大広間を回る
+const BLACK_SERVE = [[33, 9.2, 1.5], [29, 9], [27.6, 8.6, 2], [24, 6, 1.5], [20.5, 8, 2], [24, 11.4, 1.5], [29, 10]];
+let shards = null;
+function showShards() {
+  if (!shards) {
+    shards = new THREE.Group(); areas.f1.group.add(shards);
+    const m = mat('#f4f1ea');
+    for (const [dx, dz, r, a] of [[0.55, 0.05, 0.09, 0.3], [0.75, -0.22, 0.06, 1.2], [0.62, 0.3, 0.07, 2.1], [0.9, 0.1, 0.05, 0.7], [0.45, -0.3, 0.05, 2.6]]) {
+      const c = new THREE.Mesh(new THREE.CircleGeometry(r, 5, a, Math.PI * 1.2), m);
+      c.rotation.x = -Math.PI / 2; c.position.set(BLUE_AT[0] + dx, 0.02, BLUE_AT[1] + dz); shards.add(c);
+    }
+  }
+  shards.visible = true;
+}
+
 // 舞踏会の人の立ち位置（nightPerson で動かす：path は巡回、yaw はその場で辺りを見る）
 function placeBallCast() {
   const at = (id, x, z, role) => Object.assign(people[id], { area: 'f1', x, z, wait: 0, look: Math.random() * 3, nightRole: { i: 0, ...role } });
@@ -1633,11 +1651,13 @@ function placeBallCast() {
   at('mother', 22.4, 9.7, { yaw: 0.5 });
   at('daughter', 25.4, 9.3, { yaw: -0.3 });
   at('caterer', 38.6, 2.0, { yaw: 0 });
+  // 赤羽はキッチンで料理を作り、青島はキッチンで割れたお皿を片付けている（二人とも動かない）。配膳で動くのは白井と黒
   at('red', 34.2, 1.7, { yaw: 0 });
+  at('blue', ...BLUE_AT, { yaw: Math.PI / 2 });
+  showShards();
   at('guard', 24, 16.9, { yaw: Math.PI });
   if (s.flags.white_arrived) at('white', 35, 9, { path: [[35, 9], [31, 10], [27, 10.5, 2], [21.5, 10.5, 2], [27, 10.5], [31, 10]] });
-  at('blue', 35, 5.5, { path: [[35, 5.5], [35, 9], [31, 10], [28, 10, 2], [24, 11.5, 2], [28, 10], [31, 10], [35, 9]] });
-  if (s.flags.shizuku) at('black', 20.5, 8, { path: [[20.5, 8, 2], [24, 6, 1.5], [27.6, 8.6, 2], [24, 11.4, 1.5]] });
+  if (s.flags.shizuku) at('black', BLACK_SERVE[0][0], BLACK_SERVE[0][1], { path: BLACK_SERVE });
   // 麗子は 21時に玄関から入ってくる
   Object.assign(people.reiko, { area: null, nightRole: null });
 }
@@ -1856,8 +1876,8 @@ function endDance() {
   const ratio = D.pts / (MEASURES * 2), tier = ratio >= 0.7 ? 'great' : ratio >= 0.4 ? 'ok' : 'poor';
   s.flags.dance_score = Math.round(ratio * 100);
   Object.assign(D.p, D.back, { dancing: false });
-  // 雫は踊り終えたら、大広間の見回りに戻る
-  if (D.id === 'shizuku') Object.assign(D.p, { area: 'f1', x: 20.5, z: 8, wait: 0, nightRole: { i: 0, path: [[20.5, 8, 2], [24, 6, 1.5], [27.6, 8.6, 2], [24, 11.4, 1.5]] } });
+  // 雫は踊り終えたら、大広間の配膳に戻る
+  if (D.id === 'shizuku') Object.assign(D.p, { area: 'f1', x: 20.5, z: 8, wait: 0, nightRole: { i: 4, path: BLACK_SERVE } });
   afterMsg = () => {
     if (D.id === 'shizuku') { music.play('ball'); travel({ area: 'f1', x: 24, z: 13.6 }); }
     // お嬢様と踊ったら、このあと部屋に来てと誘われる（行く：決行はお嬢様の部屋から／行かない：バルコニーの鍵を開けておいてくれる）
