@@ -136,6 +136,7 @@ function enter(id, x, z) {
   camera.zoom = zoomBase;
   camera.updateProjectionMatrix();
   st.lastKey = undefined;
+  if (ball && st.ball && st.ball.op && st.ball.op.dark) darkLights(true);
   if (areas.basement && areas.f1) syncUnder();
 }
 function setLights(night) {
@@ -2393,12 +2394,16 @@ function opGoal() {
   return t + (g || '');
 }
 let darkProps = null;
-function setDark(on) {
+// 停電の明るさ（エリアを移るたびに enter が明るさを戻すので、作戦中はもう一度かける）
+function darkLights(on) {
   for (const l of LIGHTS) l.o.intensity = on ? 0 : l.base;
   if (hallArt) hallArt.children[2].intensity = on ? 0 : 14;
   hemi.intensity = on ? 0.07 : 0.95; sun.intensity = on ? 0.03 : 0.7;
   lantern.intensity = on ? 1.6 : 0;
   scene.background = on ? new THREE.Color('#020204') : NIGHT_SKY;
+}
+function setDark(on) {
+  darkLights(on);
   if (!darkProps) {
     darkProps = new THREE.Group(); ballGroup.add(darkProps);
     // 客のスマートフォンの灯り（光源は増やさず、光る点だけ）
