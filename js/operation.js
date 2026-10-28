@@ -14,6 +14,7 @@ export const ROLE = {
   black: { name: '雫', face: 'black2', role: '絵の回収', line: '「お兄ちゃん、見ててね」' },
   blue: { name: '青メイド', face: 'blue', role: '配膳車', line: '「堂々としてれば、誰も疑いません！」' },
   butler: { name: '執事', face: 'butler', role: '指揮', line: '「今宵の月を、いただきに」' },
+  caterer: { name: '仕出し屋', face: 'caterer', role: 'もう一人の執事', line: '「白は冷やしすぎない、ですよね」' },
 };
 const NAMES = { tsukishita: '月下作戦', kamen: '仮面舞踏会作戦', waltz: 'ワルツ作戦' };
 export const opName = s => NAMES[s.flags.op_name] || NAMES.tsukishita;
@@ -96,6 +97,10 @@ export const opMeet3 = s => [
   [N, '青い光の仮面が、暗がりにぼうっと浮かんだ。'],
   [R, '「……配膳車、二重底。キャンバスは、ちょうど入る」'],
   [W, s.flags.pipe_done ? '「配電盤の老朽化は、嵐の夜にも一度起きています。水道管だって破裂した屋敷です。旦那様も信じます」' : '「配電盤の老朽化は、嵐の夜に一度起きています。旦那様も信じます」'],
+  [W, '「それから、庭の古井戸の鉄格子。……ボルトは、さっき外しておきました。理由は聞かないでくださいね」'],
+  { call: s => { s.flags.b_grate = true; } },
+  [BL, '「あと、頼まれてた仮面、もう一枚できました！ 執事さんのと、そっくり同じのです！」'],
+  [B, '「ありがとう。……仕出し屋の彼に、渡しておいてくれ」'],
   [S, '「……お兄ちゃん。私たち、きっとうまくいくよ」'],
   [B, '「明日の夜。……母さんの絵を、迎えに行こう」'],
   { call: s => { s.flags.op_meet3 = true; } }, { cast: null },
@@ -148,8 +153,10 @@ export function highlights(s, done) {
     red: r.drop ? '光る仮面が、客の視線をさらった' : '仮面は少し早く、少し遅く――それでも宙を舞った',
     black: r.take ? '暗闇の中、懐中電灯をすり抜けた' : '光をかすめながらも、キャンバスを丸めきった',
     blue: r.cart ? '空の額縁の目の前に、ケーキの配膳車を' : 'ひやりとしながら、配膳車を大広間へ',
+    caterer: '同じ仮面と執事服で、旦那様の隣に立ち続けた',
+    butler: '古井戸から地下へ。保管庫の十数枚を、一枚残らず運び出した',
   };
-  for (const id of ['white', 'red', 'black', 'blue']) { const c = card(id); c.append(h('em', null, note[id])); row.append(c); }
+  for (const id of ['white', 'red', 'black', 'blue', 'caterer', 'butler']) { const c = card(id); c.append(h('em', null, note[id])); row.append(c); }
   L.append(row);
   const b = h('button', 'primary', '次へ');
   b.addEventListener('click', () => { L.remove(); done(); });

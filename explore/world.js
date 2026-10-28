@@ -1018,7 +1018,8 @@ AREAS.basement = {
     F.table(5, 3.6, 1.6, 0.8);
     const bulb = new THREE.PointLight('#ffd9a0', 2.5, 7, 1.6); bulb.position.set(5, 2.6, 3.5); A.group.add(bulb);
     // 保管庫：布を掛けた額縁、机、手紙の棚、発送待ちの木箱
-    for (const [x, z, r] of [[11.4, 6.65, 2], [13, 6.65, 2], [14.6, 6.65, 2], [15.65, 5.2, 3], [15.65, 1.6, 3]]) F.covered(x, z, r);
+    // 布を掛けた盗品の額縁（ENDING 3 では、舞踏会の最中に運び出されて消える）
+    variant('vault_frames', s => !s.flags.vault_emptied, () => { for (const [x, z, r] of [[11.4, 6.65, 2], [13, 6.65, 2], [14.6, 6.65, 2], [15.65, 5.2, 3], [15.65, 1.6, 3]]) F.covered(x, z, r); });
     F.desk(12.8, 0.6, 0, 1.4); F.cabinet(10.5, 1.0, 1, 1.0, 1.2, '#4a3a2a');
     F.crate(14.2, 4.4, 0.7); F.crate(13.4, 5.5, 0.6);
     const lamp = new THREE.PointLight('#cfe0ff', 1.8, 6, 1.6); lamp.position.set(13, 2.6, 3.5); A.group.add(lamp);

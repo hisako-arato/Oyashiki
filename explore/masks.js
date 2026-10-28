@@ -12,6 +12,11 @@ export const MASK_STYLE = {
   reiko: { base: 0xa01a2a, trim: 0x1b1b1b, deco: 'lace' },
   dealer: { base: 0x34343c, trim: 0xb8b8c2, deco: null },
   black: { base: 0x1c1c26, trim: 0x9aa3b5, deco: 'lace' },
+  // 舞踏会では使用人も仮面を付ける。仕出し屋は、執事と同じ仮面（ENDING 3 の入れ替わり）
+  red: { base: 0x8a1c22, trim: 0xd8b25a, deco: null },
+  blue: { base: 0x1e3f8a, trim: 0xe8e0c8, deco: 'gem' },
+  white: { base: 0xe8eaee, trim: 0x9aa3b5, deco: null },
+  caterer: { base: 0x15151c, trim: 0xc9a45c, deco: null },
   guest: [
     { base: 0x1f4a6b, trim: 0xd8b25a, deco: 'feather', plume: 0x3d7fb0 },
     { base: 0x2f5a2a, trim: 0xd8b25a, deco: 'gem' },

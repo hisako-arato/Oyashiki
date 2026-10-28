@@ -1804,7 +1804,7 @@ function placeBallCast() {
   // 麗子は 21時に玄関から入ってくる
   Object.assign(people.reiko, { area: null, nightRole: null });
 }
-// 舞踏会の衣装：お嬢様はドレス（daughter3）。家族と客は仮面を付ける（使用人は付けない）
+// 舞踏会の衣装：お嬢様はドレス（daughter3）。家族と客、執事と4人のメイド、仕出し屋も仮面を付ける
 async function dressBall() {
   if (TEST) return;
   if (castLoading) await castLoading;
@@ -1815,6 +1815,9 @@ async function dressBall() {
     V.attachVRM(d, await V.loadVRM('daughter3'));
   }
   for (const id of ['father', 'mother', 'daughter', 'reiko', 'dealer']) if (people[id].vrm) maskVRM(people[id].vrm, styleOf(id));
+  // 執事と4人のメイド、仕出し屋も仮面を付ける（仕出し屋は執事と同じ仮面）
+  if (player.vrm) maskVRM(player.vrm, styleOf('butler'));
+  for (const id of ['red', 'blue', 'white', 'black', 'caterer']) if (people[id].vrm) maskVRM(people[id].vrm, styleOf(id));
   crowdLook(V, true);
   // 一般客：4体の型を複製して並べる
   const G = await import('./guests.js');
@@ -2290,12 +2293,55 @@ function opOut() {
   Object.assign(people.guard, { x: 24, z: 16.9, nightRole: { i: 0, yaw: Math.PI } });
   say('メイドたちが旦那様の前に集まり、口々に何かを訴えている。旦那様の目は、メイドたちに釘付けだ。', ['執事', '（今だ。……資料室の棚から、キャンバスを）']);
 }
+// ⑩ 雫：旦那様と巡回員が地下へ向かう。後をついて行くと、保管庫はもぬけの殻
+function opChase() {
+  const O = st.ball.op;
+  O.step = 'chase'; O.carry = null;
+  O.via = cur.id === 'basement' ? 'door' : 'back';
+  setFlag(s, 'b_vault');   // 旦那様が、ワイン棚の隠し扉を開け放って奥へ駆け込む（雫も後を追える）
+  afterMsg = () => opCard('black', '――同じ頃、大広間', () => {
+    possess('black', 'f1', 25.2, 5.6, -Math.PI / 2);
+    people.black.area = null;   // この間、大広間に執事の姿は無い
+    afterMsg = () => {
+      Object.assign(people.father, { area: 'basement', x: 13.2, z: 3.4, wait: 0, nightRole: { i: 0, yaw: 0 } });
+      Object.assign(people.guard, { area: 'basement', x: 12, z: 4.8, wait: 0, nightRole: { i: 0, yaw: Math.PI / 2 } });
+    };
+    say(['巡回員', '「旦那様！ 地下の方で、物音が」'], ['旦那様', '「……地下だと？ まさか、あの扉か！」'], '旦那様と巡回員たちが、資料室へ駆けていく。', ['雫', '（……ついて行こう）']);
+  });
+  say('錆びた閂に、手を掛けた――');
+}
+function opEmpty() {
+  const O = st.ball.op;
+  O.emptied = true;
+  setFlag(s, 'vault_emptied'); syncDeco();
+  afterMsg = opBack;
+  say(['旦那様', '「……なんだ、これは！？」'], '保管庫の布を掛けた十数枚の額縁が、一枚残らず消えていた。', ['旦那様', '「下の絵まで……！ 誰が、いつの間に……！」'],
+    ['雫', '（……お兄ちゃん。やったんだね）'], ['旦那様', '「上だ！ 上に戻れ！」']);
+}
+// 大広間へ戻ると、メイドたちと執事が並んで立っている。そして、種明かし
+function opBack() {
+  st.busy = true;
+  fade('旦那様の後を追って、大広間へ駆け戻った……', () => {
+    unpossess(['f1', 28.4, 4.4, -Math.PI / 2]);
+    Object.assign(people.father, { area: 'f1', x: 27.2, z: 2.3, nightRole: { i: 0, yaw: Math.PI / 2 } });
+    Object.assign(people.guard, { area: 'f1', x: 24, z: 16.9, nightRole: { i: 0, yaw: Math.PI } });
+    for (const [id, x, z] of [['red', 28.6, 5.2], ['white', 29.0, 3.4], ['blue', 28.2, 6.0]]) Object.assign(people[id], { area: 'f1', x, z, nightRole: { i: 0, yaw: -Math.PI / 2 } });
+    afterMsg = opReveal;
+    say('大広間には、メイドたちと執事が、何事もなかったように並んで立っていた。', ['執事', '「旦那様、どうかなさいましたか」'], ['旦那様', '「……執事。お前、ずっとここにいたのか」'], ['執事', '「はい。お客様のお帰りの支度を」']);
+  }, 900);
+}
+function opReveal() {
+  recall(s, 'disguise');
+  afterMsg = opFinish;
+  say('――0時。明かりが消えた、あの瞬間。', '執事は、同じ仮面と同じ執事服の仕出し屋と、入れ替わっていた。', '旦那様の隣でグラスを持ち、取り調べに答えていたのは、仕出し屋だった。',
+    '本物の執事は古井戸から地下へ降り、保管庫の十数枚を、搬入路から外のトラックへ運び出していた。運び終えると、また古井戸から地上へ戻った。',
+    `最後に「月下の庭」を抱えて${st.ball.op.via === 'door' ? '鉄の扉' : '勝手口'}を抜けたのは、執事の顔をした仕出し屋だった。`, ['執事', '（……今宵の月は、確かにいただいた）']);
+}
 function opFinish() {
   const O = st.ball.op;
   O.step = 'end';
   opSave();
-  afterMsg = endBall;
-  say('執事は何食わぬ顔で、大広間の旦那様の隣に戻った。', ['旦那様', '「……執事。どこに行っていた」'], ['執事', '「お客様のお帰りの支度を。……旦那様、グラスが空いております」']);
+  endBall();
 }
 // 客と家族を、大広間の中央（光る仮面が落ちた所の東）へ集め、仮面の方を向かせる
 const CROWD = [22.8, 6.8];
@@ -2349,7 +2395,8 @@ function opTick(dt) {
     addDoubt(O.dark ? 2 : 1, `${people[id].name}に見られた`);
   }
   if (O.step === 'cart' && O.carry === 'cart' && cur.id === 'f1' && Math.hypot(player.x - OP.cartTarget[0], player.z - OP.cartTarget[1]) < 1.2) return cartArrive();
-  if (O.step === 'out' && O.handed && cur.id === 'f1' && roomAt(player.x, player.z) && roomAt(player.x, player.z).key === 'great') return opFinish();
+  // ⑩ 雫が保管庫に入ると、もぬけの殻
+  if (O.step === 'chase' && cur.id === 'basement' && player.x > 10.3 && !O.emptied) return opEmpty();
 }
 // 配膳車を押しているところを、旦那様か巡回員に見とがめられた
 function cartAsk(id) {
@@ -2408,14 +2455,11 @@ function opThings() {
       say('棚の奥から、丸めたキャンバスを取り出した。', under ? '（資料室の床の扉から地下へ。搬入路の鉄の扉の外に、仕出し屋が待っている）' : '（キッチンの仕出し屋の料理箱へ）');
     } });
     if (under && cur.id === 'f1' && O.carry === 'canvas') list.push({ name: '床の扉', at: () => OP.hatch, label: '地下へ降りる', night: () => travel({ area: 'basement', x: OP.under[0], z: OP.under[1] }) });
-    const give = (name, at) => list.push({ name, at: () => at, label: 'キャンバスを渡す', night: () => {
-      O.carry = null; O.handed = true;
-      say(['仕出し屋', '「……雫ちゃんのお兄さん。確かに」'], ['執事', '「頼む」'], under ? '鉄の扉の向こうで、白いバンのエンジンが、静かにかかった。' : '料理箱の一番下に、キャンバスが収まった。', '（大広間へ戻ろう。何事もなかった顔で）');
-    } });
-    if (under && cur.id === 'basement' && O.carry === 'canvas') give('鉄の扉の外の仕出し屋', OP.ironDoor);
-    if (!under && cur.id === 'f1' && O.carry === 'canvas') give('仕出し屋', OP.caterer);
-    if (under && cur.id === 'basement' && O.handed) list.push({ name: '石段', at: () => OP.under, label: '資料室へ戻る', night: () => travel({ area: 'f1', x: OP.hatch[0], z: OP.hatch[1] + 0.5 }) });
+    // 鉄の扉の閂に手を掛けたところで、雫に切り替わる（地下を知らなければ、勝手口から外へ）
+    if (under && cur.id === 'basement' && O.carry === 'canvas') list.push({ name: '搬入路の鉄の扉', at: () => OP.ironDoor, label: '閂を外す', night: opChase });
+    if (!under && cur.id === 'f1' && O.carry === 'canvas') list.push({ name: '勝手口', at: () => [45, 0.9], label: '外へ出る', night: opChase });
   }
+  if (O.step === 'chase' && cur.id === 'f1') list.push({ name: '床の扉', at: () => OP.hatch, label: '地下へ降りる', night: () => travel({ area: 'basement', x: OP.under[0], z: OP.under[1] }) });
   return list;
 }
 function opGoal() {
@@ -2427,7 +2471,8 @@ function opGoal() {
     hide: O.carry === 'canvas' ? '【白メイド】キッチンの配膳車の二重底に隠す' : '【白メイド】キッチン裏の配電盤で、電気を戻す',
     cart: O.carry ? '【青メイド】大広間の空の額縁の目の前へ' : '【青メイド】キッチンの配膳車を押す',
     move: O.carry ? '【雫】資料室の古い図面棚へ' : '【雫】大広間の端の配膳車から、キャンバスを抜き取る',
-    out: O.handed ? '大広間へ戻る' : O.carry ? (s.flags.b_key && s.flags.b_vault && s.flags.b_exit ? '資料室の床の扉から地下へ。ワイン棚の隠し扉を抜け、搬入路の鉄の扉の外の仕出し屋へ' : 'キッチンの仕出し屋へ') : '資料室の古い図面棚から、キャンバスを取り出す',
+    out: O.carry ? (s.flags.b_key && s.flags.b_vault && s.flags.b_exit ? '資料室の床の扉から地下へ。ワイン棚の隠し扉を抜け、搬入路の鉄の扉へ' : 'キッチン裏の勝手口から外へ') : '資料室の古い図面棚から、キャンバスを取り出す',
+    chase: cur.id === 'basement' ? '【雫】旦那様の後を追って、奥の保管庫へ' : '【雫】旦那様の後を追って、資料室の床の扉から地下へ',
     end: '',
   }[O.step];
   return t + (g || '');
@@ -2505,7 +2550,7 @@ function ballAct(t) {
     return say(...BALL.ballTalk(s, id, ballMin()));
   }
   if (t.exit) {
-    const out = st.ball.op && st.ball.op.step === 'out';
+    const out = st.ball.op && ['out', 'chase'].includes(st.ball.op.step);
     if (out && t.exit.area === 'grounds') return say('古井戸の縄梯子では、キャンバスが擦れる。……鉄の扉へ行こう。');
     if (!['f1', 'f2'].includes(t.exit.area) && !(out && t.exit.area === 'basement')) return say('今は舞踏会の最中だ。屋敷を離れるわけにはいかない。');
     return travel(t.exit);
@@ -2539,7 +2584,8 @@ async function endBall() {
   running = false;
   root.classList.add('hidden');
   const B = st.ball;
-  for (const id of ['father', 'mother', 'daughter', 'reiko', 'dealer']) if (people[id].vrm) unmaskVRM(people[id].vrm);
+  for (const id of ['father', 'mother', 'daughter', 'reiko', 'dealer', 'red', 'blue', 'white', 'black', 'caterer']) if (people[id].vrm) unmaskVRM(people[id].vrm);
+  if (player.vrm) unmaskVRM(player.vrm);
   for (const g of ballGuests) g.dispose();
   ballGuests = [];
   if (ballGroup) ballGroup.visible = false;

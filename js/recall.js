@@ -14,6 +14,7 @@ export const FORESHADOW = [
   { key: 'young', clue: ['m_secret'], title: 'お母様の贈り物', pay: '麗子が連れてきた若い男は、お母様が時計を贈っていた相手だった。' },
   { key: 'company', clue: ['w_past'], title: '会社の裏金', pay: '招待客の中に、白井の会社の役員たちがいた。保管庫の工事費の行き先は、この夜の主だった。' },
   { key: 'delivery', clue: ['caterer_nov'], title: '11月の搬入の青年', pay: 'あの愛想のいい仕出し屋は、雫の昔の知り合いだった。……ずっと前から、屋敷に出入りしていた。' },
+  { key: 'disguise', clue: ['caterer_nov'], title: '白ワインの温度', pay: '「白は冷やしすぎない」と言った執事は、執事と同じ仮面を付けた仕出し屋だった。' },
   { key: 'hollow', clue: ['b_hollow'], title: '床下の空洞', pay: '修繕業者が首をかしげた床下の空洞は、旦那様の地下のワイン貯蔵庫だった。' },
   { key: 'caterer', clue: ['caterer_friend'], title: '仕出し屋の知り合い', pay: '雫の知人の仕出し屋は、外から来て外へ帰る車で、絵の受け手になった。' },
   { key: 'storm', date: 27, title: '嵐の夜の停電', pay: 'あの嵐の夜、屋敷じゅうが一瞬で闇に沈んだ。……0時の仮面外しの瞬間に、もう一度。' },
