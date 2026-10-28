@@ -14,7 +14,7 @@ import * as BALL from '../js/ball.js';
 import * as music from '../js/music.js';
 import { recall } from '../js/recall.js';
 import * as EV from '../js/events.js';
-import { maskVRM, unmaskVRM, liftMask, updateMasks, styleOf, maskFragment } from './masks.js';
+import { maskVRM, unmaskVRM, liftMask, updateMasks, styleOf } from './masks.js';
 
 const SEC_PER_HOUR = 45;     // ゲーム内の1時間が現実の何秒か（昼）
 const NIGHT_SEC_PER_HOUR = 75; // 決行の夜
@@ -56,7 +56,7 @@ function speakerOf(l) {
 }
 function setFace(id, face) {
   if (faced && faced.vrm) faced.vrm.motion.face = Object.fromEntries(Object.keys(faced.vrm.motion.face).map(k => [k, 0]));
-  faced = id ? (id === 'butler' ? player : people[id]) : null;
+  faced = id ? (st.mode === 'ball' ? holderOf(id) : id === 'butler' ? player : people[id]) : null;
   if (faced && faced.vrm && face !== 'neutral') faced.vrm.motion.face = { [face]: 1 };
 }
 function nextMsg() {
@@ -408,7 +408,8 @@ function updatePerson(p, dt) {
   p.g.position.set(p.x, 0, p.z);
   driveSeen(p, moving && !st.busy, dt);
   // 舞踏会では、誰に見られても怪しまれない（視線の扇は出さない）
-  if (st.mode === 'ball' && !(st.ball.dark && p.id === 'guard')) { p.cone.visible = false; p.seeing = false; return; }
+  const opWatch = st.mode === 'ball' && st.ball.op && st.ball.op.carry && !MAIDS.includes(p.id) && p.id !== 'caterer' && (!st.ball.op.dark || p.id === 'guard');
+  if (st.mode === 'ball' && !opWatch) { p.cone.visible = false; p.seeing = false; return; }
   sight(p);
 }
 // 今こちらを見ている人（協力者は数えない）
@@ -1874,6 +1875,7 @@ function ballTick(dt) {
     if (gu.g) gu.g.visible = seen;
     if (seen) gu.update(dt * every);
   }
+  if (B.op) return opTick(dt);   // 月下作戦の最中は、時刻の出来事を止める
   if (st.busy) return;
   const at = t => B.min >= t, once = k => !B.done[k] && (B.done[k] = true);
   const serving = (at(BALL.AT.serve) && !at(BALL.AT.dance)) || (at(BALL.AT.serve2) && !at(BALL.AT.lastCall));
@@ -1939,10 +1941,9 @@ function ballTick(dt) {
       say(BALL.shizukuStayed);
     });
   }
-  if (B.dark) return darkTick(dt);
   if (at(BALL.AT.unmask) && once('unmask')) {
     B.reqs = []; B.glasses = 0;
-    if (s.flags.plan_blackout) return startBlackout();
+    if (s.flags.plan_blackout) return startOp();
     if (cur.id !== 'f1') travel({ area: 'f1', x: 24, z: 13.6 });
     // 鐘に合わせて、仮面を右手へ下ろす（少しずつずらす）
     music.sfx('bell');
@@ -2035,34 +2036,363 @@ function endDance() {
   say(`（ワルツの出来：${Math.round(ratio * 100)}点）`, ...BALL.danceResult(s, D.id, tier));
 }
 
-// ---- ENDING 3 の停電劇：0時の仮面外しの瞬間、白井が屋敷の電気を落とす。暗闇は90秒 ----
-// 壁の絵からキャンバスを外し、昇降機・配膳車・ピアノのどれかに隠して、明かりが戻る前に大広間の元の場所（真ん中）へ戻る
-// 停電の間だけ、増やされた巡回員が懐中電灯で大広間を回る。絵を抱えているところを照らされたら失敗
-const DARK_SEC = 90, HOME = [24, 8];
-const HIDE = {
-  dumbwaiter: { name: '料理の昇降機', at: [30.6, 3.2], label: '昇降機に隠す', line: 'キッチンの壁の昇降機に、キャンバスを丸めずに滑り込ませた。扉を閉める。' },
-  cart: { name: '仕出し屋の配膳車', at: [36, 5.9], label: '配膳車に隠す', line: '配膳車の空の料理箱に、キャンバスを寝かせた。上に、汚れたテーブルクロスをかぶせる。' },
-  piano: { name: '応接室のピアノ', at: [14.6, 10.0], label: 'ピアノの中に隠す', line: '応接室のピアノの蓋を開け、弦の上にキャンバスをそっと寝かせた。' },
+// ---- ENDING 3「月下作戦」：執事は指揮役、4人のメイドが主役 ----
+// 0時の鐘で白メイドが照明を落とし、赤メイドが2階の吹き抜けから光る仮面を落とす。その隙に雫がキャンバスを外して白メイドへ
+// 白メイドは配膳車の二重底に隠して電気を戻し、青メイドが配膳車を大広間の空の額縁の前へ。取り調べのあと、雫が資料室の棚へ移し
+// 最後に執事が資料室から地下へ降り、搬入路の鉄の扉の外で待つ仕出し屋へ渡す
+// メイドを操作する区切りでは、執事とメイドの体（VRM）を入れ替える（執事の体は、旦那様の隣に立たせておく）
+// 区切りごとの失敗は、その場では終わらず「疑い」が上がるだけ。最後に、疑い4以上なら見破られる（story.js の opVerdict）
+const DARK_SEC = 90;
+const STAND = [26.2, 3.0], STAND_YAW = Math.PI / 2 + 0.3;   // 執事の立ち位置（旦那様の隣）
+const OP = {
+  breaker: [43.2, 0.9], whiteAt: [43.2, 1.9],          // キッチン裏の配電盤
+  redAt: [28, 9.6], rail: [20.6, 8.5],                  // 2階の廊下と、吹き抜けの手すり
+  maskFall: [20.6, 6.0],                                // 光る仮面が落ちる所（大広間）
+  takeAt: [20.6, 8.6], art: [28, 1.0],                  // 雫の出発点と、壁の額縁
+  handoff: [30.0, 10.0], whiteWait: [31.4, 10.2],       // 食堂の戸口で白メイドが待つ
+  cart: [33.2, 6.4], cartTarget: [27.6, 3.6], corner: [19.4, 5.9],   // 配膳車（キッチン→空の額縁の前→大広間の端）
+  blueAt: [33.2, 7.4], shelf: [12, 1.1], hatch: [8.5, 6.2], ironDoor: [22, 2.6], under: [1.0, 4.0], caterer: [38.6, 2.0],
 };
-let darkProps = null;
-function startBlackout() {
-  const B = st.ball;
-  if (cur.id !== 'f1') enter('f1', 24, 13.6);
-  music.sfx('bell');
-  setTimeout(() => { music.sfx('blackout'); music.stop(); }, 2600);
-  afterMsg = () => {
-    recall(s, 'storm');
-    B.dark = { left: DARK_SEC, stage: 'take', spot: null, back: false, frag: null };
-    setDark(true);
-    hooks.toast('【暗闇】残り90秒。絵を外して隠し、大広間の真ん中へ戻れ');
-  };
-  say('深夜0時。大時計の鐘が鳴り始めた。',
-    ['お父様', '「皆さん、時間だ。……仮面を――」'],
-    '――その瞬間、屋敷じゅうの明かりが消えた。',
-    '悲鳴と、グラスの割れる音。暗闇の中で、客たちのスマートフォンの灯りが、小さな影のように揺れる。',
-    ['執事', '（白井が、約束どおり電源を落とした。……明かりが戻るまで、90秒）'],
-    BALL.firstTime('dark') && '【暗闇】壁の「月下の庭」からキャンバスを外し、昇降機・配膳車・ピアノのどれかに隠して、明かりが戻る前に大広間の真ん中へ戻ろう。巡回員の懐中電灯に気をつけて。');
+let opProps = null;
+const holderOf = id => { const c = st.ball && st.ball.op && st.ball.op.ctl; return c && id === c.id ? player : c && id === 'butler' ? people[c.id] : id === 'butler' ? player : people[id]; };
+function opPropsInit() {
+  if (opProps) return opProps;
+  opProps = new THREE.Group(); ballGroup.add(opProps);
+  // 予告状のカード（空の額縁の中に残す）
+  const cardM = box(opProps, 0.22, 0.14, 0.01, mat('#ffffff'), OP.art[0], 1.3, 0.17); opProps.userData.card = cardM;
+  // 配膳車：上段に赤メイドのケーキ、下段は二重底
+  const cart = new THREE.Group();
+  box(cart, 0.9, 0.06, 0.6, M.metal, 0, 0.82, 0); box(cart, 0.9, 0.06, 0.6, M.metal, 0, 0.35, 0);
+  for (const [dx, dz] of [[-0.42, -0.27], [0.42, -0.27], [-0.42, 0.27], [0.42, 0.27]]) box(cart, 0.04, 0.85, 0.04, M.metal, dx, 0, dz);
+  opMesh(new THREE.CylinderGeometry(0.22, 0.22, 0.2, 18), mat('#fbf4ea'), 0, 0.98, 0, cart);
+  opMesh(new THREE.CylinderGeometry(0.15, 0.15, 0.14, 18), mat('#fbf4ea'), 0, 1.15, 0, cart);
+  opBall(cart, 0.04, mat('#d03040'), 0, 1.26, 0);
+  opProps.add(cart); opProps.userData.cart = cart;
+  // 光る仮面とマント（青メイドの光る塗料）
+  const ghost = new THREE.Group();
+  const glow = new THREE.MeshBasicMaterial({ color: '#bfefff' });
+  opMesh(new THREE.CircleGeometry(0.18, 16), glow, 0, 0, 0, ghost);
+  const cape = new THREE.Mesh(new THREE.ConeGeometry(0.45, 1.1, 10, 1, true), new THREE.MeshBasicMaterial({ color: '#1a2a40', side: THREE.DoubleSide }));
+  cape.position.y = -0.62; ghost.add(cape);
+  ghost.visible = false; opProps.add(ghost); opProps.userData.ghost = ghost;
+  opProps.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  // 押している間の配膳車（執事の前）
+  carried.cart = cart.clone(); carried.cart.position.set(0, 0, 0.75); player.g.add(carried.cart); carried.cart.visible = false;
+  return opProps;
 }
+function opMesh(geo, material, x, y, z, parent) { const m = new THREE.Mesh(geo, material); m.position.set(x, y, z); parent.add(m); return m; }
+function opBall(parent, r, material, x, y, z) { return opMesh(new THREE.SphereGeometry(r, 10, 8), material, x, y, z, parent); }
+function placeCart(at) { const c = opProps.userData.cart; c.visible = !!at; if (at) c.position.set(at[0], 0, at[1]); }
+
+function opSave() { const O = st.ball.op; s.op = { doubt: O.doubt, res: O.res, left: Math.max(0, Math.round(O.left)), seen: O.seen }; }
+function addDoubt(n, why) {
+  const O = st.ball.op;
+  if (O.after) s.counters.doubt = (s.counters.doubt || 0) + n; else O.doubt += n;
+  O.seen++;
+  opSave();
+  if (why) hooks.toast(`${why}（疑い +${n}）`);
+}
+// メイドを操作する：執事の体と入れ替え、執事の体は旦那様の隣に立たせる
+function possess(id, area, x, z, yaw = 0) {
+  const O = st.ball.op;
+  if (O.ctl) unpossess();
+  const p = people[id];
+  O.ctl = { id, name: p.name };
+  if (VM) { const a = player.vrm, b = p.vrm; if (a && b) { VM.attachVRM(player, b); VM.attachVRM(p, a); } }
+  Object.assign(p, { area: 'f1', x: STAND[0], z: STAND[1], wait: 0, look: 0, route: null, nightRole: { i: 0, yaw: STAND_YAW }, name: '執事' });
+  enter(area, x, z); player.g.rotation.y = yaw;
+}
+// 執事に戻す。rest：メイドがその場に残る位置（[area, x, z, yaw]）
+function unpossess(rest) {
+  const O = st.ball.op, c = O.ctl;
+  if (!c) return;
+  const p = people[c.id];
+  const [area, x, z, yaw] = rest || [cur.id, player.x, player.z, player.g.rotation.y];
+  if (VM) { const a = player.vrm, b = p.vrm; if (a && b) { VM.attachVRM(player, b); VM.attachVRM(p, a); } }
+  Object.assign(p, { area, x, z, wait: 0, look: 0, route: null, nightRole: { i: 0, yaw }, name: c.name });
+  O.ctl = null;
+  enter('f1', STAND[0], STAND[1]); player.g.rotation.y = STAND_YAW;
+}
+const opCard = (id, place, then) => { st.busy = true; ROLECARD(id, place, () => { st.busy = false; then(); }); };
+let ROLECARD = (id, place, then) => then(), BREAKER = (o, done) => done(true), DROP = done => done(true);
+
+// 0時の鐘の前：作戦の始まり
+async function startOp() {
+  const B = st.ball;
+  B.op = { step: 'talk', doubt: 0, seen: 0, res: {}, left: DARK_SEC, dark: false, carry: null, seenBy: {}, ctl: null, after: false };
+  st.busy = true;
+  if (!TEST) VM = VM || await import('./vrm.js');
+  const M3 = await import('../js/operation.js');
+  ROLECARD = M3.flashCard; BREAKER = M3.breakerGame; DROP = M3.dropGame;
+  st.busy = false;
+  opPropsInit(); placeCart(OP.cart); opProps.visible = true; opProps.userData.card.visible = false;
+  if (cur.id !== 'f1') enter('f1', STAND[0], STAND[1]);
+  player.x = STAND[0]; player.z = STAND[1]; player.g.rotation.y = STAND_YAW;
+  for (const id of ['red', 'blue', 'white', 'black']) Object.assign(people[id], { nightRole: { i: 0, yaw: 0 } });
+  opSave();
+  say(['旦那様', '「……執事、グラスを」'], ['執事', '「旦那様、今夜は最高の夜ですね。……グラスが空いております」'], `（――${M3.opName(s)}、開始）`);
+  afterMsg = () => hooks.askChoice('旦那様の目を、大広間の中央へ向けておく。', [
+    { t: '「麗子様が、旦那様のお話を聞きたいと」', id: 'ok', run: () => '' },
+    { t: '「あちらの絵、本当に見事でございます」', id: 'ng', run: () => '' },
+    { t: '「次のワルツは、旦那様の番でございます」', id: 'ok', run: () => '' },
+  ], (msg, o) => {
+    B.op.res.talk = o.id === 'ok';
+    if (o.id === 'ng') { people.father.nightRole = { i: 0, yaw: Math.PI }; addDoubt(1, '旦那様が、壁の絵の方を向いてしまった'); }
+    else people.father.nightRole = { i: 0, yaw: -Math.PI / 2 };
+    afterMsg = opBreaker;
+    say(o.id === 'ng' ? '旦那様は満足げに、壁の「月下の庭」を振り返った。' : '旦那様は上機嫌で、大広間の真ん中へ目を向けた。', ['司会', '「皆さま、0時の鐘とともに、仮面をお外しください！」']);
+  });
+}
+// ① 白メイド：12回目の鐘で照明の主幹を落とす
+function opBreaker() {
+  const O = st.ball.op;
+  O.step = 'breaker';
+  opCard('white', '――同じ頃、キッチン裏', () => {
+    possess('white', 'f1', OP.whiteAt[0], OP.whiteAt[1], Math.PI);
+    music.stop();
+    st.busy = true;
+    BREAKER({}, ok => {
+      st.busy = false;
+      O.res.breaker = ok;
+      if (!ok) addDoubt(1, '一拍遅れて、明かりが落ちた');
+      setDark(true); O.dark = true;
+      afterMsg = opDrop;
+      say('――屋敷じゅうの明かりが、一瞬で落ちた。', '悲鳴と、グラスの割れる音。', ['白メイド', '「……落ちました。復旧まで、90秒」']);
+    });
+  });
+}
+// ② 赤メイド：2階の吹き抜けから、光る仮面を落とす
+function opDrop() {
+  const O = st.ball.op;
+  O.step = 'drop';
+  unpossess(['f1', OP.whiteWait[0], OP.whiteWait[1], -Math.PI / 2]);   // 白メイドは、暗闇の中を食堂の戸口へ
+  opCard('red', '――2階、吹き抜けの廊下', () => {
+    possess('red', 'f2', OP.redAt[0], OP.redAt[1], -Math.PI / 2);
+    if (s.flags.op_drop_blue) say(['赤メイド', '「……結局、わたしが上がることになった。青さんは配膳車で手が離せない」']);
+  });
+}
+function dropNow() {
+  const O = st.ball.op;
+  st.busy = true;
+  DROP(ok => {
+    st.busy = false;
+    O.res.drop = ok;
+    if (!ok) addDoubt(1, '客の目が、十分に集まらなかった');
+    const g = opProps.userData.ghost; g.visible = true; g.position.set(OP.maskFall[0], 5.6, OP.maskFall[1]); O.fall = 0;
+    recall(s, 'masks');
+    afterMsg = opTake;
+    say('暗闇の中、白く光る仮面とマントが、ひらりと宙を舞った。', ['客', '「か、怪盗だ！ あそこに！」'], ['旦那様', '「なんだ、あれは……！」']);
+  });
+}
+// ③ 雫：額縁からキャンバスを外し、食堂の戸口の白メイドへ
+function opTake() {
+  const O = st.ball.op;
+  O.step = 'take';
+  unpossess(['f2', OP.rail[0], OP.rail[1] + 0.4, Math.PI]);
+  opCard('black', '――大広間、北の壁', () => {
+    possess('black', 'f1', OP.takeAt[0], OP.takeAt[1], Math.PI / 2);
+    recall(s, 'storm');
+    say(['雫', '「……今だ」'], BALL.firstTime('op_take') ? '【雫】巡回員の懐中電灯を避けて、壁の額縁へ。キャンバスを外したら、食堂の戸口で待つ白メイドへ渡そう。' : null);
+  });
+}
+// ④ 白メイド：配膳車の二重底に隠し、配電盤で電気を戻す
+function opHide() {
+  const O = st.ball.op;
+  O.step = 'hide';
+  unpossess(['f1', OP.handoff[0] - 0.8, OP.handoff[1], -Math.PI / 2]);
+  opCard('white', '――食堂の戸口', () => {
+    possess('white', 'f1', OP.whiteWait[0], OP.whiteWait[1], Math.PI);
+    O.carry = 'canvas';
+    if (s.flags.op_piano) say(['白メイド', '「……ピアノは、明日の調律で開けられる。やっぱり配膳車に」']);
+  });
+}
+// 明かりが戻る（⑤）
+function opLightsBack() {
+  const O = st.ball.op;
+  O.dark = false; O.carry = null;
+  setDark(false);
+  music.play('ball');
+  unpossess(['f1', OP.whiteAt[0], OP.whiteAt[1], Math.PI]);
+  opProps.userData.card.visible = true;
+  setFlag(s, 'blackout_done');
+  recall(s, 'stamp');
+  Object.assign(people.guard, { area: 'f1', x: 24, z: 12, range: 6, wait: 0, look: 0, nightRole: { i: 0, path: [[22, 10.5, 1], [26, 10.5, 1], [26.6, 5.6, 1.5], [21.4, 5.6, 1.5]] } });
+  afterMsg = opCart;
+  say('パッ、と明かりが戻った。',
+    ['旦那様', '「……え、絵が……ない！？」'],
+    '壁には、空の額縁と、白いカードが一枚だけ。『仮面が外れる時刻に、月をいただく』',
+    ['旦那様', '「巡回員！ 玄関も勝手口も閉めろ！ 誰も外へ出すな！」'],
+    ['旦那様', '「白！ なぜ電気が落ちた！」'],
+    ['白メイド', s.flags.pipe_done ? '「配電盤の老朽化です。嵐の夜にも一度落ちています。……水道管も破裂した屋敷ですから。今、直りました」' : '「配電盤の老朽化です。嵐の夜にも一度落ちています。……今、直りました」'],
+    ['旦那様', '「……くそっ。屋敷じゅうを探せ！」']);
+}
+// ⑥ 青メイド：料理を載せた配膳車を、空の額縁の目の前へ
+function opCart() {
+  const O = st.ball.op;
+  O.step = 'cart';
+  opCard('blue', '――キッチン', () => {
+    possess('blue', 'f1', OP.blueAt[0], OP.blueAt[1], Math.PI);
+    say(['青メイド', '「……よし。堂々と、堂々と」'], BALL.firstTime('op_cart') ? '【青メイド】配膳車を押して、大広間の空の額縁の目の前へ。旦那様や巡回員に見とがめられたら、うまく答えよう。' : null);
+  });
+}
+function cartArrive() {
+  const O = st.ball.op;
+  O.carry = null; O.res.cart = !O.cartSlip;
+  placeCart(OP.cartTarget);
+  afterMsg = opInterrogate;
+  say(['青メイド', '「皆さま、少し落ち着いて、甘い物をどうぞ！ 赤羽さん特製のケーキです！」'], ['旦那様', '「……今はそれどころでは……」'], ['麗子', '「あら、いただくわ」'],
+    '客たちが、空の額縁の目の前の配膳車に群がった。');
+}
+// ⑦ 取り調べ（会話の画面）。終わったら屋敷へ戻って、⑧へ
+function opInterrogate() {
+  const O = st.ball.op;
+  unpossess(['f1', OP.cartTarget[0] + 0.9, OP.cartTarget[1] + 0.4, Math.PI]);
+  opSave();
+  running = false; root.classList.add('hidden');
+  hooks.interrogate(() => {
+    O.after = true;
+    root.classList.remove('hidden'); run();
+    opMove();
+  });
+}
+// ⑧ 雫：配膳車からキャンバスを抜き取り、探されたばかりの資料室の棚へ
+function opMove() {
+  const O = st.ball.op;
+  O.step = 'move';
+  placeCart(OP.corner);
+  people.father.nightRole = { i: 0, yaw: Math.PI / 2 };
+  opCard('black', '――0時20分、大広間の端', () => {
+    possess('black', 'f1', OP.corner[0] + 1.0, OP.corner[1] + 0.4, -Math.PI / 2);
+    say('青メイドが配膳車を大広間の端へ寄せ、片付けるふりをしている。', ['雫', '（……一度探した場所は、二度は探さない）'],
+      s.flags.op_cottage ? ['雫', '（使用人棟は、真っ先に探される。……やっぱり資料室にしよう）'] : null);
+  });
+}
+// ⑨ 執事：資料室から地下へ降り、搬入路の鉄の扉の外の仕出し屋へ（地下を知らなければ、キッチンの仕出し屋の料理箱へ）
+function opOut() {
+  const O = st.ball.op;
+  O.step = 'out';
+  unpossess(['f1', 22.6, 6.4, Math.PI / 2]);
+  for (const [id, x, z] of [['red', 28.6, 4.6], ['white', 28.8, 3.6], ['blue', 27.0, 4.8]]) Object.assign(people[id], { area: 'f1', x, z, nightRole: { i: 0, yaw: -Math.PI / 2 } });
+  people.father.nightRole = { i: 0, yaw: Math.PI / 2 };
+  Object.assign(people.guard, { x: 24, z: 16.9, nightRole: { i: 0, yaw: Math.PI } });
+  say('メイドたちが旦那様の前に集まり、口々に何かを訴えている。旦那様の目は、メイドたちに釘付けだ。', ['執事', '（今だ。……資料室の棚から、キャンバスを）']);
+}
+function opFinish() {
+  const O = st.ball.op;
+  O.step = 'end';
+  opSave();
+  afterMsg = endBall;
+  say('執事は何食わぬ顔で、大広間の旦那様の隣に戻った。', ['旦那様', '「……執事。どこに行っていた」'], ['執事', '「お客様のお帰りの支度を。……旦那様、グラスが空いております」']);
+}
+function opTick(dt) {
+  const O = st.ball.op;
+  const g = opProps && opProps.userData.ghost;
+  if (g && g.visible && O.fall != null && O.fall < 1) { O.fall = Math.min(1, O.fall + dt * 0.8); g.position.y = 5.6 - O.fall * 4.9; g.rotation.y += dt * 3; }
+  carried.painting.visible = O.carry === 'canvas';
+  if (carried.cart) carried.cart.visible = O.carry === 'cart';
+  if (st.busy || document.querySelector('.modal-back, .op-layer')) return;
+  // 暗闇の残り時間（③④）
+  if (O.dark) {
+    O.left -= dt;
+    for (const b of darkProps.children) if (b.userData.bob != null) { b.userData.bob += dt * 2; b.position.y = 1.2 + Math.sin(b.userData.bob) * 0.08; }
+    if (O.left <= 0) {
+      addDoubt(1, '明かりが戻るのが遅れた');
+      if (O.step === 'take') { hallArt.children[1].visible = false; O.carry = null; return opHide(); }
+      if (O.step === 'hide') { O.res.hide = false; return opLightsBack(); }
+    }
+  }
+  // 運んでいるところを見られた（協力者は数えない）
+  if (O.carry) for (const id of watchers()) {
+    if (O.seenBy[id]) continue;
+    O.seenBy[id] = true;
+    if (O.step === 'cart') { cartAsk(id); return; }
+    addDoubt(O.dark ? 2 : 1, `${people[id].name}に見られた`);
+  }
+  if (O.step === 'cart' && O.carry === 'cart' && cur.id === 'f1' && Math.hypot(player.x - OP.cartTarget[0], player.z - OP.cartTarget[1]) < 1.2) return cartArrive();
+  if (O.step === 'out' && O.handed && cur.id === 'f1' && roomAt(player.x, player.z) && roomAt(player.x, player.z).key === 'great') return opFinish();
+}
+// 配膳車を押しているところを、旦那様か巡回員に見とがめられた
+function cartAsk(id) {
+  const O = st.ball.op, who = people[id].name;
+  st.busy = true;
+  hooks.askChoice(`${who}「おい、それは何だ」`, [
+    { t: '「皆さまに、甘い物をお持ちしました！」', id: 'ok', run: () => '' },
+    { t: '「ち、ちょっと通りますね……！」', id: 'ng', run: () => '' },
+  ], (msg, o) => {
+    st.busy = false;
+    if (o.id === 'ng') { O.cartSlip = true; addDoubt(1, `${who}の目が細くなった`); return; }
+    say([who, id === 'father' ? '「……ふん。こんなときに」' : '「……ああ、料理か」'], `${who}は、配膳車から目をそらした。`);
+  });
+}
+function opThings() {
+  const O = st.ball.op, list = [];
+  if (!O || st.busy) return list;
+  if (O.step === 'drop' && cur.id === 'f2') list.push({ name: '吹き抜けの手すり', at: () => OP.rail, label: '光る仮面を落とす', night: dropNow });
+  if (O.step === 'take' && cur.id === 'f1') {
+    if (!O.carry) list.push({ name: '月下の庭', at: () => OP.art, label: 'キャンバスを外す', night: () => {
+      O.carry = 'canvas'; O.res.take = true;
+      hallArt.children[1].visible = false;
+      say(s.flags.op_frame ? ['雫', '（額縁ごとは、やっぱり無理。……キャンバスだけにする）'] : null, '雫は額縁の裏の留め具を外し、キャンバスだけを、音もなく丸めた。', '空の額縁の中に、白いカードを一枚。');
+      if (s.flags.op_frame) addDoubt(1, null);
+    } });
+    else list.push({ name: '白メイド', at: () => OP.handoff, label: '白メイドに渡す', night: () => {
+      O.carry = null;
+      if (O.seenBy.guard) O.res.take = false;
+      afterMsg = opHide;
+      say(['雫', '「……はい、白さん」'], ['白メイド', '「受け取りました」']);
+    } });
+  }
+  if (O.step === 'hide' && cur.id === 'f1') {
+    if (O.carry === 'canvas') list.push({ name: '配膳車', at: () => OP.cart, label: '二重底に隠す', night: () => {
+      O.carry = 'hidden'; O.res.hide = true;
+      say('配膳車の上段には、赤メイドの大きなクリスマスケーキ。その下の板一枚に、母の絵が眠っている。', '（配電盤へ戻って、電気を戻そう）');
+    } });
+    if (O.carry === 'hidden') list.push({ name: '配電盤', at: () => OP.breaker, label: '電気を戻す', night: () => { say(['白メイド', '「……戻します」']); afterMsg = opLightsBack; } });
+  }
+  if (O.step === 'cart' && cur.id === 'f1' && !O.carry) list.push({ name: '配膳車', at: () => OP.cart, label: '配膳車を押す', night: () => {
+    O.carry = 'cart'; placeCart(null);
+    say('ケーキの載った配膳車を、ゆっくりと押し出した。', '（行き先は、大広間の空の額縁の目の前）');
+  } });
+  if (O.step === 'move' && cur.id === 'f1') {
+    if (!O.carry && !O.moved) list.push({ name: '配膳車', at: () => OP.corner, label: 'キャンバスを抜き取る', night: () => { O.carry = 'canvas'; say('二重底の板をずらし、丸めたキャンバスを抜き取った。'); } });
+    if (O.carry === 'canvas') list.push({ name: '古い図面棚', at: () => OP.shelf, label: '棚の奥に隠す', night: () => {
+      O.carry = null; O.moved = true;
+      afterMsg = opOut;
+      say('図面の束の奥に、キャンバスを差し込んだ。巡回員が、ついさっき「異状なし」と言って出ていった棚だ。', ['雫', '（……あとは、お兄ちゃん）']);
+    } });
+  }
+  if (O.step === 'out') {
+    const under = !!(s.flags.b_found && s.flags.b_key);
+    if (cur.id === 'f1' && !O.carry && !O.handed) list.push({ name: '古い図面棚', at: () => OP.shelf, label: 'キャンバスを取り出す', night: () => {
+      O.carry = 'canvas';
+      say('棚の奥から、丸めたキャンバスを取り出した。', under ? '（資料室の床の扉から地下へ。搬入路の鉄の扉の外に、仕出し屋が待っている）' : '（キッチンの仕出し屋の料理箱へ）');
+    } });
+    if (under && cur.id === 'f1' && O.carry === 'canvas') list.push({ name: '床の扉', at: () => OP.hatch, label: '地下へ降りる', night: () => travel({ area: 'basement', x: OP.under[0], z: OP.under[1] }) });
+    const give = (name, at) => list.push({ name, at: () => at, label: 'キャンバスを渡す', night: () => {
+      O.carry = null; O.handed = true;
+      say(['仕出し屋', '「……雫ちゃんのお兄さん。確かに」'], ['執事', '「頼む」'], under ? '鉄の扉の向こうで、白いバンのエンジンが、静かにかかった。' : '料理箱の一番下に、キャンバスが収まった。', '（大広間へ戻ろう。何事もなかった顔で）');
+    } });
+    if (under && cur.id === 'basement' && O.carry === 'canvas') give('鉄の扉の外の仕出し屋', OP.ironDoor);
+    if (!under && cur.id === 'f1' && O.carry === 'canvas') give('仕出し屋', OP.caterer);
+    if (under && cur.id === 'basement' && O.handed) list.push({ name: '石段', at: () => OP.under, label: '資料室へ戻る', night: () => travel({ area: 'f1', x: OP.hatch[0], z: OP.hatch[1] + 0.5 }) });
+  }
+  return list;
+}
+function opGoal() {
+  const O = st.ball.op, t = O.dark ? `【暗闇　残り${Math.max(0, Math.ceil(O.left))}秒】` : '';
+  const g = {
+    talk: '旦那様の目を、大広間の中央へ', breaker: '12回目の鐘で、照明の主幹を落とす',
+    drop: '【赤メイド】2階の廊下を、吹き抜けの手すりへ',
+    take: O.carry ? '【雫】食堂の戸口で待つ白メイドへ渡す（懐中電灯に気をつけて）' : '【雫】壁の額縁から、キャンバスを外す',
+    hide: O.carry === 'canvas' ? '【白メイド】キッチンの配膳車の二重底に隠す' : '【白メイド】キッチン裏の配電盤で、電気を戻す',
+    cart: O.carry ? '【青メイド】大広間の空の額縁の目の前へ' : '【青メイド】キッチンの配膳車を押す',
+    move: O.carry ? '【雫】資料室の古い図面棚へ' : '【雫】大広間の端の配膳車から、キャンバスを抜き取る',
+    out: O.handed ? '大広間へ戻る' : O.carry ? (s.flags.b_found && s.flags.b_key ? '資料室の床の扉から地下へ。搬入路の鉄の扉の外の仕出し屋へ' : 'キッチンの仕出し屋へ') : '資料室の古い図面棚から、キャンバスを取り出す',
+    end: '',
+  }[O.step];
+  return t + (g || '');
+}
+let darkProps = null;
 function setDark(on) {
   for (const l of LIGHTS) l.o.intensity = on ? 0 : l.base;
   if (hallArt) hallArt.children[2].intensity = on ? 0 : 14;
@@ -2074,8 +2404,6 @@ function setDark(on) {
     // 客のスマートフォンの灯り（光源は増やさず、光る点だけ）
     const glowMat = new THREE.MeshBasicMaterial({ color: '#cfe6ff' });
     for (const [x, z] of GUEST_SPOTS.slice(0, 8)) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), glowMat); b.position.set(x + 0.25, 1.25, z + 0.1); b.userData.bob = Math.random() * 6; darkProps.add(b); }
-    // 昇降機の扉（キッチンの西の壁）
-    box(darkProps, 0.08, 0.75, 0.75, M.darkWood, 30.08, 0.8, 3.2);
   }
   darkProps.visible = true;
   for (const b of darkProps.children) if (b.userData.bob != null) b.visible = on;
@@ -2084,74 +2412,12 @@ function setDark(on) {
   if (on) Object.assign(g, { area: 'f1', x: 24, z: 12, range: 6, wait: 0, look: 0, nightRole: { i: 0, path: [[22, 10.5, 1], [26, 10.5, 1], [26.6, 5.6, 1.5], [21.4, 5.6, 1.5]] } });
   else Object.assign(g, { x: 24, z: 16.9, nightRole: { i: 0, yaw: Math.PI } });
 }
-function darkTick(dt) {
-  const D = st.ball.dark;
-  if (D.over) return;
-  D.left -= dt;
-  carried.painting.visible = D.stage === 'carry';
-  for (const b of darkProps.children) if (b.userData.bob != null) { b.userData.bob += dt * 2; b.position.y = 1.2 + Math.sin(b.userData.bob) * 0.08; }
-  // 絵を抱えているところを、懐中電灯に照らされた
-  if (D.stage === 'carry' && people.guard.seeing && people.guard.area === cur.id) return darkEnd('caught');
-  // 隠し終えて、大広間の真ん中へ戻った
-  if (D.stage === 'hidden' && cur.id === 'f1' && Math.hypot(player.x - HOME[0], player.z - HOME[1]) < 1.6) { D.back = true; return darkEnd('done'); }
-  if (D.left <= 0) darkEnd(D.stage === 'carry' ? 'caught' : D.stage === 'take' ? 'missed' : 'done');
-}
-// 明かりが戻る
-function darkEnd(how) {
-  const D = st.ball.dark;
-  D.over = true;
-  carried.painting.visible = false;
-  setDark(false);
-  music.play('ball');
-  s.dark = { spot: D.spot, back: D.back, frag: D.frag, left: Math.max(0, Math.round(D.left)) };
-  if (how === 'caught') music.sfx('alarm');
-  if (how === 'caught') {
-    s.flags.dark_caught = true;
-    afterMsg = endBall;
-    return say('パッ、と明かりが戻った。', '大広間じゅうの目が、布を抱えた執事に集まった。旦那様の顔が、みるみる赤くなっていく。', ['お父様', '「……貴様か！」']);
-  }
-  if (how === 'missed') {
-    // 絵に手が届かなかった：停電は「ただの故障」で終わり、舞踏会はそのまま閉宴へ
-    s.flags.plan_blackout = false;
-    afterMsg = () => { st.ball.dark = null; st.ball.min = BALL.AT.close; };
-    return say('パッ、と明かりが戻った。壁の「月下の庭」は、元のまま掛かっている。', ['お父様', '「……ただの停電か。驚かせおって」'], ['執事', '（間に合わなかった。……今夜のうちに、別の手を考えるしかない）']);
-  }
-  s.flags.blackout_done = true;
-  afterMsg = endBall;
-  say('パッ、と明かりが戻った。', '壁の額縁は、空っぽだった。', ['お父様', '「……な、なんだと！ 絵が……『月下の庭』が！」'],
-    D.back ? ['執事', '（間に合った。……何も知らない顔で、ここに立っていればいい）'] : ['執事', '（まずい……元の場所に戻れなかった）']);
-}
-function darkThings() {
-  const D = st.ball.dark, list = [];
-  if (!D || D.over) return list;
-  if (cur.id === 'f1' && D.stage === 'take') list.push({ name: '月下の庭', at: () => [28, 1.0], label: 'キャンバスを外す', night: () => {
-    D.stage = 'carry';
-    hallArt.children[1].visible = false;
-    recall(s, 'stamp');
-    st.busy = true;
-    hooks.askChoice('額縁からキャンバスを外した。……青島が作った、仮面の切れ端を落としていくか？', [
-      { t: '麗子の深紅の仮面の切れ端を落とす', id: 'reiko', run: () => '' },
-      { t: '担当者の灰色の仮面の切れ端を落とす', id: 'dealer', run: () => '' },
-      { t: '何も落とさない', id: null, run: () => '' },
-    ], (msg, o) => {
-      st.busy = false;
-      D.frag = o.id;
-      if (o.id) recall(s, 'masks');
-      if (o.id) { const f = maskFragment(styleOf(o.id)); f.position.set(27.6, 0.02, 1.5); f.userData.frag = true; darkProps.add(f); }
-      say(o.id ? '額縁の下に、仮面の切れ端をそっと落とした。' : '何も残さず、額縁の前を離れた。', '（昇降機か、配膳車か、ピアノか。……急げ）');
-    });
-  } });
-  if (D.stage === 'carry') for (const [id, h] of Object.entries(HIDE)) if (cur.id === 'f1') list.push({ name: h.name, at: () => h.at, label: h.label, night: () => {
-    D.stage = 'hidden'; D.spot = id;
-    say(h.line, '（大広間の真ん中へ戻れ。明かりが戻る前に）');
-  } });
-  return list;
-}
 
 function ballThings() {
-  if (st.mode !== 'ball' || cur.id !== 'f1') return [];
+  if (st.mode !== 'ball') return [];
   const B = st.ball, list = [];
-  if (B.dark) return darkThings();
+  if (B.op) return opThings();
+  if (cur.id !== 'f1') return [];
   list.push({ name: 'シャンパンのワゴン', at: () => WAGON, label: B.glasses ? `グラス残り${B.glasses}本` : 'グラスを4本受け取る', night: () => {
     if (B.glasses) return say(`お盆には、まだシャンパンが${B.glasses}本残っている。「！」の客へ配ろう。`);
     B.glasses = 4;
@@ -2188,6 +2454,7 @@ function ballAct(t) {
     afterMsg = () => startDance('shizuku');
     return say(...BALL.shizukuScene(s));
   }
+  if (t.person && st.ball.op) return say('（今は作戦の最中だ）');
   if (t.person) {
     const id = t.person.id;
     afterMsg = () => { const k = { red: s.flags.dealer_seen && 'dealer', caterer: 'caterer', guard: 'guard', white: 'company' }[id]; if (k) recall(s, k); };
@@ -2202,11 +2469,10 @@ function ballAct(t) {
 }
 function ballLabels(labels) {
   if (cur.id !== 'f1') return;
-  const D = st.ball.dark;
-  if (D && !D.over) {
-    if (D.stage === 'take') labels.push({ x: 28, y: 1.6, z: 1.0, text: '絵', cls: 'work' });
-    if (D.stage === 'carry') for (const h of Object.values(HIDE)) labels.push({ x: h.at[0], y: 1.2, z: h.at[1], text: h.name, cls: 'work' });
-    if (D.stage === 'hidden') labels.push({ x: HOME[0], y: 0.6, z: HOME[1], text: '元の場所', cls: 'work' });
+  if (st.ball.op) {
+    // 作戦中は、次に向かう所に印を出す
+    for (const th of opThings()) { const [x, z] = th.at(); labels.push({ x, y: 1.4, z, text: th.name, cls: 'work' }); }
+    if (st.ball.op.step === 'cart' && st.ball.op.carry === 'cart') labels.push({ x: OP.cartTarget[0], y: 0.6, z: OP.cartTarget[1], text: '空の額縁の前', cls: 'work' });
     return;
   }
   for (const r of st.ball.reqs) labels.push({ x: r.g.x, y: 2.2, z: r.g.z, text: '！シャンパン', cls: 'alert' });
@@ -2214,7 +2480,7 @@ function ballLabels(labels) {
 }
 function ballGoal() {
   const B = st.ball, m = B.min, st2 = s.ballStats;
-  if (B.dark && !B.dark.over) return `【暗闇　残り${Math.max(0, Math.ceil(B.dark.left))}秒】${{ take: '壁の「月下の庭」からキャンバスを外す', carry: '昇降機・配膳車・ピアノのどれかに隠す（懐中電灯に照らされるな）', hidden: '大広間の真ん中へ戻る' }[B.dark.stage]}`;
+  if (B.op) return opGoal();
   const score = `（配ったシャンパン ${st2.served}杯${st2.missed ? `・待たせた客 ${st2.missed}人` : ''}）`;
   if (m < BALL.AT.serve) return '開宴。旦那様の乾杯を見届けよう';
   if (m >= BALL.AT.lastCall) return '0時の鐘を待つ';
@@ -2232,10 +2498,12 @@ async function endBall() {
   ballGuests = [];
   if (ballGroup) ballGroup.visible = false;
   if (carried.tray) carried.tray.visible = false;
-  // 停電劇の片付け：外したキャンバスを額に戻し（次に遊ぶとき用）、落とした切れ端を拾う
+  // 月下作戦の片付け：外したキャンバスを額に戻し（次に遊ぶとき用）、配膳車やカードをしまう
   if (hallArt) hallArt.children[1].visible = true;
-  if (darkProps) { darkProps.visible = false; for (const c of [...darkProps.children]) if (c.userData.frag) darkProps.remove(c); }
-  if (B.dark && !B.dark.over) setDark(false);
+  if (darkProps) darkProps.visible = false;
+  if (B.op) { if (B.op.ctl) unpossess(); if (B.op.dark) setDark(false); }
+  if (opProps) { opProps.visible = false; opProps.userData.ghost.visible = false; }
+  if (carried.cart) carried.cart.visible = false;
   if (!TEST) {
     const V = await import('./vrm.js');
     if (B.daughterBase) { unmaskVRM(people.daughter.vrm); V.attachVRM(people.daughter, B.daughterBase); }
@@ -2276,4 +2544,4 @@ export function suspend() { if (!running) return; running = false; suspended = t
 export function resume() { if (suspended) { suspended = false; run(); } }
 
 // テスト用
-window.__day3d = { get state() { return s; }, st, player, people, areas, enter, act, planRoute, ROOM_OF, GATE, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r), get target() { return target && target.name; } };
+window.__day3d = { get state() { return s; }, st, player, people, areas, enter, act, planRoute, ROOM_OF, GATE, get cur() { return cur; }, blocked: (x, z, r) => blockedIn(cur, x, z, r), get target() { return target && target.name; }, get things() { return st.mode === "ball" ? ballThings().map(t => [t.name, ...t.at()]) : null; } };

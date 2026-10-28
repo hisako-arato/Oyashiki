@@ -7,7 +7,7 @@ const VRM_CACHE = 'oyashiki-vrm-v2';
 const MUSIC_CACHE = 'oyashiki-music-v1';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/style.css', 'css/day3d.css',
-  'js/main.js', 'js/music.js', 'js/evetest.js', 'js/ball.js', 'js/recall.js', 'js/version.js', 'js/lockdown.js', 'js/game.js', 'js/daylogic.js', 'js/night.js', 'js/events.js', 'js/pipe.js', 'js/sister.js', 'js/profiles.js', 'js/faces.js', 'js/state.js', 'js/vrmstore.js', 'js/white.js', 'js/data.js', 'js/actions.js', 'js/story.js',
+  'js/main.js', 'js/music.js', 'js/evetest.js', 'js/ball.js', 'js/recall.js', 'js/version.js', 'js/lockdown.js', 'js/game.js', 'js/daylogic.js', 'js/night.js', 'js/events.js', 'js/pipe.js', 'js/operation.js', 'js/sister.js', 'js/profiles.js', 'js/faces.js', 'js/state.js', 'js/vrmstore.js', 'js/white.js', 'js/data.js', 'js/actions.js', 'js/story.js',
   'explore/day3d.js', 'explore/engine.js', 'explore/world.js', 'explore/nav.js', 'explore/vrm.js', 'explore/viewer.js', 'explore/portrait.js', 'explore/masks.js', 'explore/guests.js',
   'vendor/three.module.min.js', 'vendor/GLTFLoader.js', 'vendor/BufferGeometryUtils.js', 'vendor/three-vrm.module.min.js',
   ...['butler', 'butler2', 'father', 'mother', 'mother2', 'daughter', 'daughter2', 'red', 'blue', 'white', 'black', 'black2', 'black3', 'guard', 'daughter3', 'reiko', 'dealer', 'caterer'].map(id => `assets/faces/${id}.webp`),

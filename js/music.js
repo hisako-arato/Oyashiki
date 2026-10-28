@@ -81,10 +81,12 @@ function unlock() {
   unlocked = true;
   if (want) start(want);
 }
-document.addEventListener('pointerdown', unlock, { capture: true });
-document.addEventListener('keydown', unlock, { capture: true });
-// 別のアプリに切り替えたら止め、戻ったら続ける
-document.addEventListener('visibilitychange', () => { if (ctx) document.hidden ? ctx.suspend() : ctx.resume(); });
+if (typeof document !== 'undefined') {   // 画面の無い所（動作確認用の node）では何もしない
+  document.addEventListener('pointerdown', unlock, { capture: true });
+  document.addEventListener('keydown', unlock, { capture: true });
+  // 別のアプリに切り替えたら止め、戻ったら続ける
+  document.addEventListener('visibilitychange', () => { if (ctx) document.hidden ? ctx.suspend() : ctx.resume(); });
+}
 
 // ---- 効果音（録音ファイルを使わず、その場で合成する）：足音・扉・警報・停電・鐘・食器・タップ ----
 const SFX_KEY = 'oyashiki-sfx-vol';

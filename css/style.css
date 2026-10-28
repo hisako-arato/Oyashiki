@@ -344,3 +344,38 @@ button.on { background: var(--gold); color: var(--bg); border-color: var(--gold)
 .pipe-puddle { border-radius: 50%; background: radial-gradient(circle at 40% 35%, rgba(160,210,250,.85), rgba(70,130,200,.7)); pointer-events: none; }
 .pipe-puddle.soak { background: rgba(30, 10, 14, .7); transition: opacity .6s; opacity: 0; }
 .pipe-result { left: 50%; top: 50%; font-size: 1.4rem; color: var(--gold); font-weight: bold; white-space: nowrap; }
+/* ENDING 3「月下作戦」：役割カード・小さな遊び・ハイライト（js/operation.js） */
+.op-layer { position: fixed; inset: 0; z-index: 9200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: 16px; box-sizing: border-box; color: #f1e6d0; touch-action: none; user-select: none; -webkit-user-select: none; }
+.op-flash { background: rgba(6, 6, 12, .82); animation: opin .25s ease-out; }
+.op-flash.out { opacity: 0; transition: opacity .3s; }
+@keyframes opin { from { opacity: 0; transform: scale(1.04); } }
+.op-place { margin: 0; color: var(--gold); letter-spacing: .2em; font-size: .85rem; }
+.op-card { width: min(240px, 42vw); background: #16131e; border: 1px solid var(--gold); border-radius: 10px; padding: 12px; text-align: center;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .55); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.op-card img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold); background: #2a2232; }
+.op-card small { color: var(--gold); letter-spacing: .15em; font-size: .72rem; }
+.op-card b { font-size: 1.05rem; }
+.op-card p { margin: 0; font-size: .8rem; color: #cbbfa8; line-height: 1.5; }
+.op-card em { font-style: normal; font-size: .78rem; color: #e8d9b5; border-top: 1px solid #4a3a4e; padding-top: 6px; margin-top: 4px; }
+.op-cards { background: rgba(10, 8, 16, .96); overflow-y: auto; justify-content: flex-start; padding-top: 32px; }
+.op-cards h3 { color: var(--gold); letter-spacing: .2em; margin: 0; }
+.op-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.op-cards button { width: min(320px, 100%); }
+.op-game { background: rgba(6, 8, 14, .9); }
+.op-title { color: var(--gold); font-size: 1.05rem; text-align: center; }
+.op-tip { margin: 0; font-size: .82rem; color: #cbbfa8; text-align: center; max-width: 420px; }
+.op-bells { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.op-bells i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #8a7a5a; }
+.op-bells i.on { background: var(--gold); border-color: var(--gold); }
+.op-bells i:last-child { border-color: #d05a5a; }
+.op-switches { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 460px; }
+.op-switch { min-width: 76px; padding: 18px 8px; background: #2a2a34; color: #f1e6d0; border: 2px solid #6a6a7a; border-radius: 8px; font-size: .8rem; }
+.op-switch.down { background: #5a2a2a; border-color: #d05a5a; transform: translateY(2px); }
+.op-msg { min-height: 1.4em; margin: 0; font-weight: bold; }
+.op-msg.ok { color: #8ad0a0; }
+.op-msg.ng { color: #e08a7a; }
+.op-bar { position: relative; width: min(360px, 90%); height: 22px; border: 2px solid #8a7a5a; border-radius: 12px; overflow: hidden; background: #1a1620; }
+.op-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #6ac0e8; }
+.op-bar em { position: absolute; left: 75%; right: 0; top: 0; bottom: 0; background: rgba(227, 192, 111, .35); }
+.op-drop { padding: 16px 28px; background: var(--gold); color: var(--bg); font-weight: bold; border: 0; border-radius: 10px; font-size: 1rem; }

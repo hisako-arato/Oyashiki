@@ -5,7 +5,7 @@ import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdo
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
 import * as DL from './daylogic.js';
-import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ENDING_HINTS, ARRIVAL, interrogation } from './story.js';
+import { PROLOGUE, WEEKENDS, ROUTES, ENDINGS, ENDING_HINTS, ARRIVAL, interrogation, opVerdict } from './story.js';
 import { WHITE_ARRIVAL, whiteReport, strictDue, strictScene, whiteActive, whiteCovers } from './white.js';
 import { hasNight, nightOptions, nightScene, nightChoices, markNightSeen, REST, rallyDue, rallyScene } from './night.js';
 import { morningEvents, joined } from './sister.js';
@@ -460,6 +460,7 @@ function playScript(steps, done) {
     if (st.place !== undefined) { stagePlace = st.place; return next(); }
     if (st.cast !== undefined) { stageCast = st.cast; return next(); }
     if (st.dark) return blackout(next);
+    if (st.wait) return st.wait(s, next);   // 画面に重ねる部品（役割カード・小さな遊び）を出し、終わったら続ける
     if (st.if) { queue.unshift(...((st.if(s) ? st.then : st.else) || [])); return next(); }
     if (st.report) return showReport(next);
     if (st.choice) return showChoice(st.choice, c => {
@@ -925,22 +926,27 @@ function ball() {
   preloadCast(async () => {
     loadPortrait();
     app().replaceChildren();
-    if (await load3D()) return day3d.startBall(s, { done: afterBall, toast, askChoice, notebook: openNotebook });
+    if (await load3D()) return day3d.startBall(s, { done: afterBall, toast, askChoice, notebook: openNotebook, interrogate });
     playScript(ball2D(s), () => afterBall(settleBall(s)));
   });
 }
 function afterBall(d) {
   s.phase = 'day';
   if (d) toast(`舞踏会の給仕：旦那様の心象 ${d > 0 ? '+' : ''}${d}`);
-  // ENDING 3：停電劇。照らされたら失敗、隠しおおせたら取り調べ
-  if (s.flags.dark_caught) return ending('caught_dark');
+  // ENDING 3：月下作戦。絵を運び出したあとで、残った疑いを判定する
   if (s.flags.blackout_done) {
-    s.phase = 'execution';
-    const dk = s.dark || {};
-    s.heist = { route: 'blackout', left: dk.left || 0, near: 0, card: true };
-    return playScript(interrogation(s), () => { s.heist.doubt = s.counters.doubt || 0; ending(s.counters.doubt >= 4 ? 'seen_through' : 'blackout'); });
+    const op = s.op || {};
+    s.heist = { route: 'blackout', left: op.left || 0, near: op.seen || 0, card: true, doubt: s.counters.doubt || 0 };
+    stagePlace = stageCast = null;
+    return playScript(opVerdict(), () => ending((s.counters.doubt || 0) >= 4 ? 'seen_through' : 'blackout'));
   }
   nextDay();
+}
+// 月下作戦の途中（0時15分）の取り調べ。3Dの屋敷を止めて会話の画面で行い、終わったら屋敷へ戻る
+function interrogate(back) {
+  s.phase = 'ball';
+  stagePlace = '0:15　屋敷 1F　大広間'; stageCast = null;
+  playScript(interrogation(s), () => { stagePlace = stageCast = null; app().replaceChildren(); back(); });
 }
 
 // ---- 夜（22時）：休む／メイドに声をかける／部屋を訪ねる（選べることが無い夜は、画面を出さずに休む） ----

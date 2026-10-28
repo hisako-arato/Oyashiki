@@ -7,6 +7,7 @@ import { joined, told, sulking, sis, afterSisterNight, afterMaidNight, afterRoom
 import { whiteSaw } from './white.js';
 import { startForgery } from './daylogic.js';
 import { welcomeDue, WELCOME_LABEL, WELCOME_WHITE, WELCOME_BLACK } from './events.js';
+import { OP_MEET1, OP_MEET2, opMeet3, opName, catchUp } from './operation.js';
 
 const N = 'n', B = 'butler', M = 'mother', D = 'daughter';
 const R = 'red', BL = 'blue', K = 'black', W = 'white', S = 'shizuku';
@@ -26,11 +27,15 @@ export function nightOptions(s) {
   // 新しいメイドが来た夜（白井は来た日、雫は再会の翌日）は、共用室で歓迎会
   const w = welcomeDue(s);
   if (w) return [{ id: w, label: WELCOME_LABEL[w], ok: true }];
+  // ENDING 3 の作戦会議：12月22日の夜は、大広間でリハーサル（この夜は、ほかの過ごし方を選べない）
+  const op = opDue(s);
+  if (op === 'op3') return [{ id: 'op3', label: '夜の大広間で、作戦のリハーサル（作戦会議 3/3）', ok: true }];
   const opts = [{ id: 'rest', label: '休む', ok: true }];
   for (const m of activeMaids(s)) {
     if (m === K) opts.push({ id: m, label: '自室に雫（黒メイド）を呼ぶ', ok: true });
     else if (s.aff[m] >= NEED[m]) opts.push({ id: m, label: `共用室で${PEOPLE[m].name}に声をかける`, ok: true });
   }
+  if (op) opts.push({ id: op, label: `共用室で、作戦会議（${op === 'op1' ? 1 : 2}/3）`, ok: true });
   if (rally23(s)) opts.push({ id: 'rally', label: '共用室で、決起会を開く（イブの作戦を決める）', ok: true });
   else if (allTold(s)) opts.push({ id: 'all', label: '共用室で、みんなと集まる', ok: true });
   if (s.aff.mother >= NEED.mother && !fatherHome(s)) opts.push({ id: 'mother', label: 'お母様の部屋（主寝室）を訪ねる', ok: true });
@@ -116,6 +121,9 @@ const count = who => ({ call: s => {
 export function nightScene(s, id) {
   if (id === 'rest') return REST;
   if (id === 'rally') return rallyPlan(s);
+  if (id === 'op1') return [...OP_MEET1, { call: s => { s.counters.op1_day = dayIndex(s); } }];
+  if (id === 'op2') return OP_MEET2;
+  if (id === 'op3') return opMeet3(s);
   if (id === 'welcome_w') return WELCOME_WHITE;
   if (id === 'welcome_k') return WELCOME_BLACK;
   if (id === 'all') return [{ place: '22:00　使用人棟　共用室' }, { cast: ['red', 'blue', 'white', 'shizuku'] }, ...groupScene(s), gossip(K), count('all'), { cast: null }];
@@ -515,25 +523,44 @@ function chatterScene(s) {
   return CHATTER[(n - 1 + CHATTER.length) % CHATTER.length];
 }
 // 決起会：決行の夜の前、四人全員が協力者のときだけ。役割を確かめて、乾杯する（効果は無い）
-export const rallyDue = s => allTold(s) && ['red', 'blue', 'white'].every(m => isAlly(s, m)) && !s.flags.rally_done;
+export const rallyDue = s => opReady(s) && !s.flags.rally_done;
+// 作戦会議を開けるのは、3人に雫のことを打ち明けて、3人とも協力者になってから
+export const opReady = s => allTold(s) && ['red', 'blue', 'white'].every(m => isAlly(s, m));
+// 今夜開ける作戦会議：会議1・2は12月21日までの好きな夜（同じ夜に二つは開かない）、会議3（リハーサル）は12月22日の夜
+export function opDue(s) {
+  if (!opReady(s) || s.flags.rally_done) return null;
+  const off = dayOffset(s), f = s.flags;
+  if (off === EVE_OFFSET - 2) return f.op_meet3 ? null : 'op3';
+  if (off > EVE_OFFSET - 2) return null;
+  if (!f.op_meet1) return 'op1';
+  if (!f.op_meet2 && s.counters.op1_day !== dayIndex(s)) return 'op2';
+  return null;
+}
 // 12月23日の夜：四人全員が協力者なら、共用室で決起会を開き、イブの作戦を決める（予告状を出せば ENDING 3 の停電劇）
 export const rally23 = s => rallyDue(s) && dayOffset(s) === EVE_OFFSET - 1;
 export function rallyPlan(s) {
+  const planned = !!s.flags.op_meet3;
   return [{ place: '22:00　使用人棟　共用室' }, { cast: ['red', 'blue', 'white', 'shizuku'] },
     [N, '12月23日の夜。明かりを落とした共用室に、五人が集まった。'],
     [S, '「明日は、イブ。……旦那様は舞踏会で、あの絵を大広間に飾る。客にも、担当者にも見せびらかすために」'],
-    [W, '「0時の仮面外しの瞬間、屋敷じゅうの目が互いの顔に向きます。……その瞬間なら、私は屋敷の電気を全部落とせます」'],
-    [BL, '「暗くなったら、何も見えませんよね。……あ、わたし、仮面の絵付けの余りで、麗子さんと担当者さんの仮面の切れ端、作れます！」'],
-    [R, '「……停電でも、キッチンは分かる。昇降機も、配膳車も」'],
-    [B, '「赤羽さんは、無理しないで。……お腹の子に障る」'],
-    [R, '「……平気。座ってても、目と口は動く」'],
+    ...(planned ? [
+      [W, `「${opName(s)}の手はずは、昨夜のとおりです。0時、12回目の鐘で、照明の主幹を落とします」`],
+      [R, '「……影は、わたし。配膳車のケーキも、焼いておく」'],
+      [BL, '「光る仮面、ちゃんと乾きました！ 配膳車は、わたしが堂々と押していきます！」'],
+      [B, '「赤羽さんは、無理しないで。……お腹の子に障る」'],
+      [R, '「……平気。階段を上がって、落とすだけ」'],
+    ] : [
+      [W, '「0時の仮面外しの瞬間、屋敷じゅうの目が互いの顔に向きます。……その瞬間なら、私は屋敷の電気を全部落とせます」'],
+      [S, '「……リハーサルをする時間は、なかったね。手はずだけでも、今夜決めよう」'],
+      ...catchUp(s),
+    ]),
     [S, '「仕出し屋の彼も、手伝ってくれるって。……どうする、お兄ちゃん？」'],
     { choice: [
       { t: '予告状を出す――「仮面が外れる時刻に、月をいただく」', fx: { flag: 'plan_blackout' }, then: [
         [S, '「……分かった。予告状は、明日の朝いちばんに、私が書斎の机に置いておく。掃除の担当だもの」'],
         [W, '「旦那様は、意地になって絵を大広間に飾ったままにするはずです。……盗めるものなら盗んでみろ、って」'],
         [R, '「……みんなで、やる。前のメイドさんの分も」'],
-        [B, '「明かりが消えている間に、絵を隠す。明かりが戻ったら、何も知らない顔で立っている。……みんな、頼む」'],
+        [B, '「私は、旦那様の隣でグラスを持っている。……主役は、みんなだ。頼む」'],
       ] },
       { t: 'いつもの手はずで、静かにやる（決行は舞踏会の後）', then: [
         [S, '「……うん。お兄ちゃんがそう決めたなら」'],

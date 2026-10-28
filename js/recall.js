@@ -17,7 +17,7 @@ export const FORESHADOW = [
   { key: 'hollow', clue: ['b_hollow'], title: '床下の空洞', pay: '修繕業者が首をかしげた床下の空洞は、旦那様の地下のワイン貯蔵庫だった。' },
   { key: 'caterer', clue: ['caterer_friend'], title: '仕出し屋の知り合い', pay: '雫の知人の仕出し屋は、外から来て外へ帰る車で、絵の受け手になった。' },
   { key: 'storm', date: 27, title: '嵐の夜の停電', pay: 'あの嵐の夜、屋敷じゅうが一瞬で闇に沈んだ。……0時の仮面外しの瞬間に、もう一度。' },
-  { key: 'masks', clue: ['forgery_start'], title: '青島の筆', pay: '模写を描いた青島の筆は、客の仮面も、落とした切れ端も描いていた。' },
+  { key: 'masks', clue: ['forgery_start'], title: '青島の筆', pay: '青島の筆は、客の仮面も、暗闇に浮かぶ光る仮面も描いていた。' },
   { key: 'stamp', clue: ['shizuku_diary'], title: '母の日記の蔵印', pay: 'キャンバスの裏に、美術館の蔵印が残っていた。額縁ではなく、キャンバスこそが本物の証だった。' },
   { key: 'framed', clue: ['r_past'], title: '前のメイドの濡れ衣', pay: '旦那様がまた罪を着せようとしたとき、赤羽は初めて言い返した。' },
   { key: 'courier', clue: ['shizuku_courier', 'c_red'], title: '25日の朝の運び屋', pay: '12月25日の朝7時、正門にオークション会社のトラックが着いた。' },
