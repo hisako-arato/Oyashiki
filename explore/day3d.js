@@ -2044,12 +2044,12 @@ function endDance() {
 // メイドを操作する区切りでは、執事とメイドの体（VRM）を入れ替える（執事の体は、旦那様の隣に立たせておく）
 // 区切りごとの失敗は、その場では終わらず「疑い」が上がるだけ。最後に、疑い4以上なら見破られる（story.js の opVerdict）
 const DARK_SEC = 90;
-const STAND = [26.2, 3.0], STAND_YAW = Math.PI / 2 + 0.3;   // 執事の立ち位置（旦那様の隣）
+const STAND = [26.8, 3.3], STAND_YAW = Math.PI / 2 + 0.3;   // 執事の立ち位置（旦那様の隣。大階段の東）
 const OP = {
   breaker: [43.2, 0.9], whiteAt: [43.2, 1.9],          // キッチン裏の配電盤
   redAt: [28, 9.6], rail: [20.6, 8.5],                  // 2階の廊下と、吹き抜けの手すり
   maskFall: [20.6, 6.0],                                // 光る仮面が落ちる所（大広間）
-  takeAt: [20.6, 8.6], art: [28, 1.0],                  // 雫の出発点と、壁の額縁
+  takeAt: [23.6, 9.8], art: [28, 1.0],                  // 雫の出発点（大広間の見回りの途中。ツリーの南東）と、壁の額縁
   handoff: [30.0, 10.0], whiteWait: [31.4, 10.2],       // 食堂の戸口で白メイドが待つ
   cart: [33.2, 6.4], cartTarget: [27.6, 3.6], corner: [19.4, 5.9],   // 配膳車（キッチン→空の額縁の前→大広間の端）
   blueAt: [33.2, 7.4], shelf: [12, 1.1], hatch: [8.5, 6.2], ironDoor: [22, 2.6], under: [1.0, 4.0], caterer: [38.6, 2.0],
@@ -2093,13 +2093,21 @@ function addDoubt(n, why) {
   opSave();
   if (why) hooks.toast(`${why}（疑い +${n}）`);
 }
+// 執事とメイドの体（VRM）を入れ替える。屋敷の人物は画面の外にいる間は描かない印（visible=false）が付くので、外しておく
+function swapBodies(p) {
+  if (!VM) return;
+  const a = player.vrm, b = p.vrm;
+  if (!a || !b) return;
+  VM.attachVRM(player, b); VM.attachVRM(p, a);
+  a.scene.visible = true; b.scene.visible = true;
+}
 // メイドを操作する：執事の体と入れ替え、執事の体は旦那様の隣に立たせる
 function possess(id, area, x, z, yaw = 0) {
   const O = st.ball.op;
   if (O.ctl) unpossess();
   const p = people[id];
   O.ctl = { id, name: p.name };
-  if (VM) { const a = player.vrm, b = p.vrm; if (a && b) { VM.attachVRM(player, b); VM.attachVRM(p, a); } }
+  swapBodies(p);
   Object.assign(p, { area: 'f1', x: STAND[0], z: STAND[1], wait: 0, look: 0, route: null, nightRole: { i: 0, yaw: STAND_YAW }, name: '執事' });
   enter(area, x, z); player.g.rotation.y = yaw;
 }
@@ -2109,7 +2117,7 @@ function unpossess(rest) {
   if (!c) return;
   const p = people[c.id];
   const [area, x, z, yaw] = rest || [cur.id, player.x, player.z, player.g.rotation.y];
-  if (VM) { const a = player.vrm, b = p.vrm; if (a && b) { VM.attachVRM(player, b); VM.attachVRM(p, a); } }
+  swapBodies(p);
   Object.assign(p, { area, x, z, wait: 0, look: 0, route: null, nightRole: { i: 0, yaw }, name: c.name });
   O.ctl = null;
   enter('f1', STAND[0], STAND[1]); player.g.rotation.y = STAND_YAW;
@@ -2129,7 +2137,10 @@ async function startOp() {
   opPropsInit(); placeCart(OP.cart); opProps.visible = true; opProps.userData.card.visible = false;
   if (cur.id !== 'f1') enter('f1', STAND[0], STAND[1]);
   player.x = STAND[0]; player.z = STAND[1]; player.g.rotation.y = STAND_YAW;
-  for (const id of ['red', 'blue', 'white', 'black']) Object.assign(people[id], { nightRole: { i: 0, yaw: 0 } });
+  // 4人を持ち場に立たせる（赤と青はキッチン、白は食堂の戸口、雫は大広間の見回り。ワルツで雫がバルコニーへ行っていても戻す）
+  B.search = false;
+  for (const [id, x, z, yaw] of [['red', 34.2, 1.7, 0], ['blue', ...BLUE_AT, Math.PI / 2], ['white', 31.4, 10.2, -Math.PI / 2], ['black', ...OP.takeAt, Math.PI]])
+    Object.assign(people[id], { area: 'f1', x, z, wait: 0, look: 0, route: null, dancing: false, nightRole: { i: 0, yaw } });
   opSave();
   say(['旦那様', '「……執事、グラスを」'], ['執事', '「旦那様、今夜は最高の夜ですね。……グラスが空いております」'], `（――${M3.opName(s)}、開始）`);
   afterMsg = () => hooks.askChoice('旦那様の目を、大広間の中央へ向けておく。', [
