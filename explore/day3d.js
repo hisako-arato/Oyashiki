@@ -529,7 +529,7 @@ function findTarget() {
   for (const t of eveThings()) consider(t, 0.8);
   for (const t of deliveryThings()) consider(t, 1.0);
   // 舞踏会で雫を探しているときは、見つけた雫に話しかけるのを優先する
-  if (st.mode !== 'night') for (const p of Object.values(people)) if (p.area === cur.id && !guiding(p)) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p }, st.mode === 'ball' && st.ball.search && p.id === 'black' ? 1.2 : 0);
+  if (st.mode !== 'night' && !(st.mode === 'ball' && st.ball.op)) for (const p of Object.values(people)) if (p.area === cur.id && !guiding(p)) consider({ name: p.name, at: () => [p.x, p.z], label: 'TALK', person: p }, st.mode === 'ball' && st.ball.search && p.id === 'black' ? 1.2 : 0);
   return best;
 }
 function act() {
@@ -2192,6 +2192,7 @@ function dropNow() {
     if (!ok) addDoubt(1, '客の目が、十分に集まらなかった');
     const g = opProps.userData.ghost; g.visible = true; g.position.set(OP.maskFall[0], 5.6, OP.maskFall[1]); O.fall = 0;
     recall(s, 'masks');
+    gatherCrowd();
     afterMsg = opTake;
     say('暗闇の中、白く光る仮面とマントが、ひらりと宙を舞った。', ['客', '「か、怪盗だ！ あそこに！」'], ['旦那様', '「なんだ、あれは……！」']);
   });
@@ -2296,8 +2297,35 @@ function opFinish() {
   afterMsg = endBall;
   say('執事は何食わぬ顔で、大広間の旦那様の隣に戻った。', ['旦那様', '「……執事。どこに行っていた」'], ['執事', '「お客様のお帰りの支度を。……旦那様、グラスが空いております」']);
 }
+// 客と家族を、大広間の中央（光る仮面が落ちた所の東）へ集め、仮面の方を向かせる
+const CROWD = [22.8, 6.8];
+function gatherCrowd() {
+  const O = st.ball.op, [cx, cz] = CROWD, look = (x, z) => Math.atan2(OP.maskFall[0] - x, OP.maskFall[1] - z);
+  O.crowd = ballGuests.map((gu, i) => {
+    const a = i * 2.39996, r = 0.7 + 0.55 * Math.sqrt(i);   // ひまわりの種の並び（重ならない）
+    const tx = cx + Math.cos(a) * r * 1.2, tz = cz + Math.sin(a) * r;
+    return { gu, tx, tz, yaw: look(tx, tz) };
+  });
+  ['mother', 'daughter', 'reiko', 'dealer'].forEach((id, i) => {
+    const p = people[id];
+    if (p.area !== 'f1') return;
+    const tx = cx + 1.6 + (i % 2) * 0.8, tz = cz - 1.0 + Math.floor(i / 2) * 1.6;
+    Object.assign(p, { wait: 0, nightRole: { i: 0, path: [[tx, tz, 99999]] } });
+  });
+  people.father.nightRole = { i: 0, yaw: look(people.father.x, people.father.z) };
+}
+function crowdTick(dt) {
+  const O = st.ball.op;
+  if (!O.crowd) return;
+  for (const c of O.crowd) {
+    const dx = c.tx - c.gu.x, dz = c.tz - c.gu.z, d = Math.hypot(dx, dz);
+    if (d > 0.01) { const k = Math.min(1, Math.max(dt * 2.5, dt * 3.2 / d)); c.gu.x += dx * k; c.gu.z += dz * k; }
+    if (c.gu.g) { c.gu.g.position.set(c.gu.x, 0, c.gu.z); c.gu.g.rotation.y = d > 0.2 ? Math.atan2(dx, dz) : c.yaw; }
+  }
+}
 function opTick(dt) {
   const O = st.ball.op;
+  crowdTick(dt);
   const g = opProps && opProps.userData.ghost;
   if (g && g.visible && O.fall != null && O.fall < 1) { O.fall = Math.min(1, O.fall + dt * 0.8); g.position.y = 5.6 - O.fall * 4.9; g.rotation.y += dt * 3; }
   carried.painting.visible = O.carry === 'canvas';
@@ -2374,7 +2402,7 @@ function opThings() {
     } });
   }
   if (O.step === 'out') {
-    const under = !!(s.flags.b_found && s.flags.b_key);
+    const under = !!(s.flags.b_key && s.flags.b_vault && s.flags.b_exit);   // 床の扉の鍵・隠し扉・鉄の扉を知っていれば、地下から
     if (cur.id === 'f1' && !O.carry && !O.handed) list.push({ name: '古い図面棚', at: () => OP.shelf, label: 'キャンバスを取り出す', night: () => {
       O.carry = 'canvas';
       say('棚の奥から、丸めたキャンバスを取り出した。', under ? '（資料室の床の扉から地下へ。搬入路の鉄の扉の外に、仕出し屋が待っている）' : '（キッチンの仕出し屋の料理箱へ）');
@@ -2399,7 +2427,7 @@ function opGoal() {
     hide: O.carry === 'canvas' ? '【白メイド】キッチンの配膳車の二重底に隠す' : '【白メイド】キッチン裏の配電盤で、電気を戻す',
     cart: O.carry ? '【青メイド】大広間の空の額縁の目の前へ' : '【青メイド】キッチンの配膳車を押す',
     move: O.carry ? '【雫】資料室の古い図面棚へ' : '【雫】大広間の端の配膳車から、キャンバスを抜き取る',
-    out: O.handed ? '大広間へ戻る' : O.carry ? (s.flags.b_found && s.flags.b_key ? '資料室の床の扉から地下へ。搬入路の鉄の扉の外の仕出し屋へ' : 'キッチンの仕出し屋へ') : '資料室の古い図面棚から、キャンバスを取り出す',
+    out: O.handed ? '大広間へ戻る' : O.carry ? (s.flags.b_key && s.flags.b_vault && s.flags.b_exit ? '資料室の床の扉から地下へ。ワイン棚の隠し扉を抜け、搬入路の鉄の扉の外の仕出し屋へ' : 'キッチンの仕出し屋へ') : '資料室の古い図面棚から、キャンバスを取り出す',
     end: '',
   }[O.step];
   return t + (g || '');
@@ -2477,7 +2505,9 @@ function ballAct(t) {
     return say(...BALL.ballTalk(s, id, ballMin()));
   }
   if (t.exit) {
-    if (!['f1', 'f2'].includes(t.exit.area)) return say('今は舞踏会の最中だ。屋敷を離れるわけにはいかない。');
+    const out = st.ball.op && st.ball.op.step === 'out';
+    if (out && t.exit.area === 'grounds') return say('古井戸の縄梯子では、キャンバスが擦れる。……鉄の扉へ行こう。');
+    if (!['f1', 'f2'].includes(t.exit.area) && !(out && t.exit.area === 'basement')) return say('今は舞踏会の最中だ。屋敷を離れるわけにはいかない。');
     return travel(t.exit);
   }
   if (t.say) return say(...t.say.map(l => typeof l === 'function' ? l(s) : l));
