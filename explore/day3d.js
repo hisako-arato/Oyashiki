@@ -2023,10 +2023,13 @@ function endDance() {
   const ratio = D.pts / (MEASURES * 2), tier = ratio >= 0.7 ? 'great' : ratio >= 0.4 ? 'ok' : 'poor';
   s.flags.dance_score = Math.round(ratio * 100);
   Object.assign(D.p, D.back, { dancing: false });
-  // 雫は踊り終えたら、大広間の配膳に戻る
-  if (D.id === 'shizuku') Object.assign(D.p, { area: 'f1', x: 20.5, z: 8, wait: 0, nightRole: { i: 4, path: BLACK_SERVE } });
+  // 雫は、会話が終わるまでバルコニーで執事の向かいに立っている。会話が終わったら、大広間の配膳に戻る
+  if (D.id === 'shizuku') Object.assign(D.p, { area: 'f2', x: D.p.x, z: D.p.z, wait: 0, look: 0, route: null, nightRole: { i: 0, yaw: Math.atan2(player.x - D.p.x, player.z - D.p.z) } });
   afterMsg = () => {
-    if (D.id === 'shizuku') { music.play('ball'); travel({ area: 'f1', x: 24, z: 13.6 }); }
+    if (D.id === 'shizuku') {
+      Object.assign(D.p, { area: 'f1', x: 20.5, z: 8, wait: 0, nightRole: { i: 4, path: BLACK_SERVE } });
+      music.play('ball'); travel({ area: 'f1', x: 24, z: 13.6 });
+    }
     // お嬢様と踊ったら、このあと部屋に来てと誘われる（行く：決行はお嬢様の部屋から／行かない：バルコニーの鍵を開けておいてくれる）
     if (D.id === 'daughter') {
       afterMsg = () => hooks.askChoice('お嬢様の部屋へ行く？', [{ t: '行く', id: 'go', run: () => '' }, { t: '行かない', id: 'no', run: () => '' }], (msg, o) => {
