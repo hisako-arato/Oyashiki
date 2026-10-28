@@ -1,9 +1,8 @@
 // 白井：お父様が自分の会社から連れてきた、予定外の新人。屋敷の様子を週末にお父様へ報告する（スパイ）
 //  ・白井に見られると「報告の種」がたまり、週末の報告で疑惑が上がる（白井の好感度が高いほど、伏せてくれる）
 //  ・会社で帳簿に載らない電気工事に気づいて屋敷へ飛ばされた過去を聞き、地下の保管庫の話をすると、寝返る
-//  ・寝返るか協力者（好感度70）になると、嘘の報告で執事をかばう
+//  ・寝返るか、雫のことを打ち明けて協力者になると、嘘の報告で執事をかばう
 //  ・味方にしないまま報告が積み重なると、最終章でお父様がイブの夜の巡回を厳しくする
-import { ALLY_AFF } from './data.js';
 import { maidAvailable, setFlag, dayIndex } from './state.js';
 
 const N = 'n', B = 'butler', F = 'father', W = 'white', R = 'red', BL = 'blue';
@@ -11,7 +10,7 @@ export const STRICT_AT = 20;   // 報告で上がった疑惑の合計がこれ�
 
 export const whiteActive = s => maidAvailable(s, W) && !!s.flags.white_spy;
 // 白井がかばってくれる（嘘の報告をする）か
-export const whiteCovers = s => !!s.flags.white_turned || s.aff.white >= ALLY_AFF;
+export const whiteCovers = s => !!s.flags.white_turned || !!s.flags.told_white;
 
 // 白井に見られた。pts：報告の種。画面に出す一言を返す
 export function whiteSaw(s, pts) {

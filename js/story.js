@@ -3,6 +3,7 @@
 // {choice:[{t, fx, then}]} 選択肢 / {if, then, else} 条件分岐 / {fx} 効果 / {report:true} 週の成果報告
 import { recall } from './recall.js';
 import { planDoubt, highlights } from './operation.js';
+import { isAlly } from './state.js';
 
 const N = 'n', B = 'butler', F = 'father', M = 'mother', D = 'daughter';
 const R = 'red', BL = 'blue', K = 'black', W = 'white', S = 'shizuku';
@@ -211,7 +212,7 @@ export const WEEKENDS = [
         [B, '（警報のブレーカー。白井なら見分けられるはずだ）'],
         { choice: [
           { t: '白井に協力を頼む', then: [
-            { if: s => s.aff.white >= 70 || s.flags.white_turned,
+            { if: s => isAlly(s, 'white'),
               then: [[W, '「イブの深夜1時、警報の系統だけ落とせばいいんですね。理由は聞きません」'], { fx: { flag: 'white_ally' } }],
               else: [[W, '「……え、それって何のためです？ ちょっと、引き受けられません」'], { fx: { susp: 15 } }] },
           ] },

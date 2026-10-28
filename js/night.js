@@ -2,7 +2,7 @@
 // 選べるようになるまでは、選択肢そのものを出さない（選べる相手がいない夜は、夜の画面を出さずに休む）
 // 表現は、性的な描写はせず、大人が読めば分かる程度にとどめる（暗転・翌朝の様子で示す）
 import { PEOPLE, CLUES, realName } from './data.js';
-import { activeMaids, fatherHome, rng, dayIndex, isAlly, WEEKS_PER_CHAPTER, applyFx, afterNight, dayOffset, EVE_OFFSET } from './state.js';
+import { activeMaids, fatherHome, rng, dayIndex, isAlly, canConfess, WEEKS_PER_CHAPTER, applyFx, afterNight, dayOffset, EVE_OFFSET } from './state.js';
 import { joined, told, sulking, sis, afterSisterNight, afterMaidNight, afterRoomNight, tell } from './sister.js';
 import { whiteSaw } from './white.js';
 import { startForgery } from './daylogic.js';
@@ -43,6 +43,7 @@ export function nightOptions(s) {
   for (const o of opts) {
     o.fresh = o.id !== 'rest' && !s.counters[`night_${o.id}`] && !s.counters[`nightseen_${o.id}`];
     o.info = o.id !== 'rest' && !(joined(s) && !s.flags.shizuku_reunion) && nightHasInfo(s, o.id);
+    o.confess = canConfess(s, o.id);
   }
   return opts;
 }
@@ -437,7 +438,7 @@ const TOPICS = {
       [W, '「執事さん。今週から、旦那様への報告は私が書きます。……嘘の報告を、合理的に」'],
       { fx: { flag: 'white_turned', aff: { white: 10 } } },
       [B, '（白井が、こちら側に付いた）']] },
-    { t: '「イブの夜、警報の系統を落としてもらえないか」', if: s => s.chapter === 3 && (s.aff.white >= 70 || s.flags.white_turned) && s.flags.white_elec, done: s => s.flags.white_ally, then: [
+    { t: '「イブの夜、警報の系統を落としてもらえないか」', if: s => s.chapter === 3 && isAlly(s, 'white') && s.flags.white_elec, done: s => s.flags.white_ally, then: [
       [W, '「……イブの深夜1時、警報の系統だけ落とせばいいんですね。理由は聞きません」'],
       [W, '「非合理なお願いですけど。……非合理なものほど、面白いので」'],
       { fx: { flag: 'white_ally' } }] },
@@ -575,7 +576,7 @@ export function rallyScene(s) {
   return [{ cast: ['red', 'blue', 'white', 'shizuku'] },
     [N, 'イブのパーティーが終わった夜。客が帰り、明かりの落ちた共用室に、五人が集まった。'],
     [W, '「最終確認です。……深夜1時、私が警報の系統を落とします」'],
-    [R, s.aff.red >= 70 ? '「……勝手口は、わたしの前。……執事さんが通るとき、わたしは鍋しか見てない」' : '「……わたしは、仕込み場にいる。……何も、見てない」'],
+    [R, isAlly(s, 'red') ? '「……勝手口は、わたしの前。……執事さんが通るとき、わたしは鍋しか見てない」' : '「……わたしは、仕込み場にいる。……何も、見てない」'],
     [BL, f.forgery_ready ? '「模写は、わたしの部屋の壁際に立て掛けてあります！ 本物と並べても、わたしにしか分からないはずです！」' : '「わたし、いちばんの役目は……みんなを笑わせることです！ ……緊張してますけど！」'],
     [S, '「大広間と玄関ホールは、私の見回り。……お兄ちゃんは、2階の巡回員に気をつけて」'],
     [B, '「……ありがとう。みんなのおかげで、ここまで来られた」'],
@@ -585,24 +586,38 @@ export function rallyScene(s) {
     { cast: null }];
 }
 
-// 協力者になったメイドには、雫とのことを打ち明けられる
+// 雫と再会したあと、好感度70以上のメイドには、主人公の目的と雫のことを一度に打ち明けられる。打ち明けると協力者になる
+// 他のメイドも打ち明けられる状態なら、その場で全員を呼んで、まとめて打ち明ける
 const CONFESS = {
-  red: [[R, '「……やっぱり。黒さんを見る執事さんの目、家族の目だった」'], [R, '「……大丈夫。わたし、お姉さんの代わりくらいはできる。二人とも、見守ってる」']],
-  blue: [[BL, '「妹さん……！ じゃあ、お母様と見た絵って、雫さんの思い出の絵でもあるんですね」'],
-    [BL, '「……ねえ執事さん、小さい頃の二人の話、もっと聞かせてください。いつか、三人の絵を描きたいな」']],
-  white: [[W, '「なるほど。それで二人とも、人前であんなにぎこちなかったんですね。合理的に納得しました」'],
-    [W, '「では、雫さんと会う夜は、私が口裏を合わせます。『執事さんは白井と配線の打ち合わせ』。……理由は聞きませんよ」']],
+  red: [[R, '「……やっぱり。黒さんを見る目、家族の目だった」'], [R, '「……いいよ。わたしは、見てないことにする。二人とも、見守ってる」']],
+  blue: [[BL, '「ど、泥棒……！？ ……でも、お母さんの絵なんですよね」'],
+    [BL, '「……わたし、絵を取り戻す話、嫌いじゃないです！ いつか、三人の絵を描きたいな」']],
+  white: [[W, '「……理由は聞かない主義でしたけど。聞いてしまいましたね」'],
+    [W, '「報告書には書きません。雫さんと会う夜は、口裏を合わせます」']],
 };
+const SECRET = [
+  [B, '「私がここへ来たのは、働くためじゃない。……旦那様が隠している絵を、取り戻すためだ」'],
+  [B, '「20年前、美術館から盗まれた『月下の庭』。母が最後に見たがった絵だ。……それと、黒は私の妹の雫だ」'],
+];
+const tellAll = ms => ms.flatMap(m => [...CONFESS[m], { call: s => tell(s, m) }, { fx: { aff: { [m]: 3 } } }]);
 function confess(s, m) {
-  if (!joined(s) || told(s, m) || !isAlly(s, m)) return [];
+  if (!canConfess(s, m)) return [];
+  const others = ['red', 'blue', 'white'].filter(x => x !== m && canConfess(s, x));
   return [
-    [B, `（${realName(m)}なら、信じられる。……雫のことを、話すべきだろうか）`],
+    [B, '（……この人には、本当のことを話したい。利用するんじゃなく、一緒にやってほしい）'],
     { choice: [
-      { t: '黒メイドが妹の雫だと打ち明ける', then: [
-        [B, '「実は……黒は、私の妹なんだ。名前は雫。ここへは、二人で母の絵を取り戻しに来た」'],
-        ...CONFESS[m], { call: s => tell(s, m) }, { fx: { aff: { [m]: 3 } } },
-        [B, '（これで、彼女が雫とのことを噂することはない。……ただ、雫が知ったら何と言うか）'],
-      ] },
+      { t: 'すべてを打ち明ける', then: others.length ? [
+        [N, '打ち明けようとしたところで、共用室の扉が開いた。'],
+        ...(others.includes('blue') && m !== 'blue' ? [[BL, '「あれ、二人で何の話ですか？」']] : []),
+        ...(others.includes('white') && m !== 'white' ? [[W, '「……私も、聞いていいですか」']] : []),
+        ...(others.includes('red') && m !== 'red' ? [[R, '「……わたしも、いていい？」']] : []),
+        [B, '（……この人たちになら、全部話せる）'],
+        [B, '「みんなに、聞いてほしいことがある」'],
+        ...SECRET, ...tellAll([m, ...others]),
+        [N, '執事は、廊下で待っていた雫を呼び入れた。'],
+        [S, '「……もう、隠さなくていいんだ」'],
+        [R, '「……乾杯、する？ お茶だけど」'],
+      ] : [...SECRET, ...tellAll([m]), [B, '（打ち明けた。……雫が知ったら、何と言うだろう）']] },
       { t: 'まだ黙っておく' },
     ] },
   ];
@@ -641,6 +656,8 @@ function sisterScene(s) {
     [S, '「その代わり……夜は、いつでも呼んでいいよ。私からは、いつだって来るから」'],
     [N, '雫は名残惜しそうに袖を離し、何事もなかったような顔で部屋を出ていった。'],
     [B, '（……他のメイドたちに怪しまれないよう、気をつけなければ。新人ばかり呼んでいれば、噂になる）'],
+    [B, '（……一人でやるつもりだった。お母様も、お嬢様も、絵に近づくための道具だと思っていた）'],
+    [B, '（なのに雫は、迷わず飛び込んできた。……私一人の話じゃ、なかったんだ）'],
   ];
   if (sulking(s)) return [...intro,
     [S, '「……」（ベッドの端に座ったまま、こちらを見ようとしない）'],

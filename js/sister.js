@@ -2,11 +2,12 @@
 // 新しいメーターは作らず、他のメイドの好感度と疑惑だけで「噂」と「嫉妬」を表す
 //  ・雫と夜に会うと、打ち明けていない他のメイドの好感度が下がる（新人ばかり贔屓している、という陰口）
 //  ・雫と会って間もないうちに、好感度30未満のメイドがいると、朝礼で噂になり疑惑が上がる
-//  ・協力者（好感度70）になったメイドには、共用室で飲む夜に雫とのことを打ち明けられる。打ち明けたメイドは噂も妬みもしない
-//  ・雫と会わずに他のメイドと2夜続けて会う／他のメイドが協力者になる／打ち明ける と、雫がすねる
+//  ・雫と再会したあと、好感度70以上のメイドには、共用室で飲む夜に、主人公の目的と雫のことを打ち明けられる
+//    打ち明けたメイドは協力者になり、噂も妬みもしない
+//  ・雫と会わずに他のメイドと2夜続けて会う／打ち明ける と、雫がすねる
 //    すねている間は、朝礼で重い仕事を押し付けられ、次に会った夜は情報をくれない（会えば機嫌が直る）
 import { PEOPLE, CHORES, SISTER, realName } from './data.js';
-import { activeMaids, applyFx, setFlag, dayIndex, isAlly } from './state.js';
+import { activeMaids, applyFx, setFlag, dayIndex } from './state.js';
 
 export const RUMOR_AFF = 30, RUMOR_SUSP = 5, RUMOR_DAYS = 2;
 
@@ -41,20 +42,12 @@ export function tell(s, m) {
   setFlag(s, `told_${m}`);
   sulk(s, 'told');
 }
-// 協力者が増えたら、雫は少し妬く（雫が来る前からの協力者は数えない）
-function checkNewAllies(s) {
-  for (const m of otherMaids(s)) if (isAlly(s, m) && !s.flags[`ally_seen_${m}`]) {
-    s.flags[`ally_seen_${m}`] = true;
-    sulk(s, 'ally');
-  }
-}
 
 // 朝礼の前に一度だけ呼ぶ。お知らせの文の一覧を返す
 export function morningEvents(s) {
   const t = s.today, notes = [];
   if (!joined(s)) return notes;
   s.aff[SISTER] = 100;   // 雫の好感度は 100 のまま
-  checkNewAllies(s);
   const st = sis(s);
   if (st.last != null && dayIndex(s) - st.last <= RUMOR_DAYS) {
     const who = otherMaids(s).filter(m => !told(s, m) && s.aff[m] < RUMOR_AFF);

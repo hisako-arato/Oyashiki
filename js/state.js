@@ -164,9 +164,11 @@ export const BALL_CAST = ['reiko', 'dealer', 'caterer', 'daughter3', 'guest_m1',
 export const CATERER_DAY = 4;
 export const castNeeded = s => ['butler', 'father', 'mother', 'daughter', ...activeMaids(s), ...(s.chapter >= 3 ? ['guard'] : []), ...(s.phase === 'execution' ? ['butler2'] : []), ...(s.phase === 'ball' ? BALL_CAST : []),
   ...(s.phase !== 'ball' && dayOffset(s) === CATERER_DAY && !s.flags.caterer_nov ? ['caterer'] : [])];
-// 好感度70以上のメイドは協力者。黒メイド（妹の雫）は、屋敷に来た日から味方
-// 白井は、寝返った後（white_turned）も味方
-export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.flags.shizuku : s.aff[who] >= ALLY_AFF || (who === 'white' && !!s.flags.white_turned));
+// 協力者：雫と再会したあと、好感度70以上のメイドに、主人公の目的と雫のことを打ち明けると協力者になる（told_*）
+// 黒メイド（妹の雫）は、屋敷に来た日から味方。白井の寝返り（white_turned）は報告を止めるだけで、協力者にはならない
+export const isAlly = (s, who) => MAIDS.includes(who) && (who === SISTER ? !!s.flags.shizuku : !!s.flags[`told_${who}`]);
+// 打ち明けられる相手（夜の選択肢に「◆ 打ち明けられそうだ」の印）
+export const canConfess = (s, who) => MAIDS.includes(who) && who !== SISTER && !!s.flags.shizuku_reunion && !s.flags[`told_${who}`] && s.aff[who] >= ALLY_AFF && maidAvailable(s, who);
 
 // ---- 1日の予定 ----
 

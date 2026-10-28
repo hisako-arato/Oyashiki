@@ -565,7 +565,7 @@ function affList() {
   const people = [...FAMILY, ...activeMaids(s)];
   return el('div', { class: 'affs' }, people.map(p => el('div', { class: 'aff' }, badge(p),
     el('div', { class: 'bar' }, el('i', { style: `width:${affOf(p)}%;background:${PEOPLE[p].color}` })),
-    el('b', {}, String(affOf(p))), isAlly(s, p) && !(p === 'black' && joined(s)) ? el('small', { class: 'ally' }, s.flags[`told_${p}`] ? '協力者・打ち明けた' : '協力者') : null)));
+    el('b', {}, String(affOf(p))), isAlly(s, p) && !(p === 'black' && joined(s)) ? el('small', { class: 'ally' }, '協力者') : null)));
 }
 
 // ---- 章の進行 ----
@@ -962,8 +962,9 @@ function night() {
     el('div', { class: 'nightopts' }, opts.map(o => el('button', {
       onclick: () => { s.phase = 'night'; stagePlace = stageCast = null; playScript(nightScene(s, o.id), () => { stagePlace = stageCast = null; checkFatal() || nextDay(); }); } },
       o.label, o.fresh ? el('small', { class: 'new' }, 'NEW') : null,
-      o.info ? el('small', { class: 'info' }, '◆ 聞ける話がありそうだ') : null))),
-    el('p', { class: 'hint' }, '◆ は、物語の手がかりを聞き出せそうな相手。印の無い相手とは、他愛もない夜になる。')));
+      o.info ? el('small', { class: 'info' }, '◆ 聞ける話がありそうだ') : null,
+      o.confess ? el('small', { class: 'info' }, '◆ 打ち明けられそうだ') : null))),
+    el('p', { class: 'hint' }, '◆ は、物語の手がかりを聞き出せそうな相手か、本当のことを打ち明けられそうな相手。印の無い相手とは、他愛もない夜になる。')));
 }
 
 // 暦の上の出来事の朝（麗子の誕生日、イブ）
@@ -1089,7 +1090,7 @@ async function runRoute(id) {
       ...(room ? [{ t: `${room}から、そっと書斎へ向かう`, go: () => playScript([['n', `寝息を確かめ、${room}を抜け出した。`]], corridor) }] : []),
       // 夜は倉庫から資料室への扉に鍵が掛かる。屋敷に入るには、勝手口（赤羽の前）か、地下の搬入路を通る
       { t: `${s.flags.b_grate && s.flags.b_found ? '古井戸から地下を抜けて屋敷に入り、' : '屋敷に入り、'}大広間の大階段を上る${s.flags.hall_patrol ? '（黒メイド――雫が見回っている）' : ''}`, go: () => {
-        const way = s.flags.b_grate && s.flags.b_found ? 'tunnel' : s.aff.red >= ALLY_AFF ? 'back' : null;
+        const way = s.flags.b_grate && s.flags.b_found ? 'tunnel' : isAlly(s, 'red') ? 'back' : null;
         if (!way) return fail('倉庫の奥の扉には、夜は鍵が掛かっていた。勝手口に回ると、キッチン裏の赤羽が振り返った。「……誰？」');
         const inside = way === 'tunnel'
           ? ['n', '古井戸の底の横穴から搬入路へ。保管庫を抜け、資料室の床の扉を下から押し上げた。誰にも見られていない。']
@@ -1097,7 +1098,7 @@ async function runRoute(id) {
         if (!isAlly(s, 'black')) return fail('大広間に足を踏み入れた瞬間、懐中電灯の光が執事を照らした。');
         playScript([inside, ['n', '大広間の懐中電灯の光は、執事の前でわざと逸らされた。すれ違いざま、雫が小さく頷いた。']], corridor);
       } },
-      { t: '裏階段を使う（キッチン裏の赤羽の前を通る）', go: () => s.aff.red >= ALLY_AFF
+      { t: '裏階段を使う（キッチン裏の赤羽の前を通る）', go: () => isAlly(s, 'red')
         ? playScript([['n', '仕込みをしていた赤羽と目が合った気がしたが、彼女は黙って鍋に向き直った。']], corridor)
         : fail('「……誰？」キッチン裏の赤羽が振り返った。足音を聞かれてしまった。') },
     ];
@@ -1179,7 +1180,7 @@ function noteTab() {
   const got = Object.entries(CLUES).filter(([k]) => s.flags[k]);
   // 目標：[文, 見せるか, 済んだか]。済んだ目標は ✓ を付けて下に並べる
   const f = s.flags, hints = BASEMENT_HINTS.filter(k => f[k]).length;
-  const way = f.eve_go_daughter || f.b_grate || s.aff.red >= ALLY_AFF || (f.ladder && f.balcony_open);
+  const way = f.eve_go_daughter || f.b_grate || isAlly(s, 'red') || (f.ladder && f.balcony_open);
   const goals = [
     ['屋敷の構造を調べ、絵の隠し場所を突き止める', true, f.hidden_room],
     ['書斎の本棚に隠し扉の仕掛けがあるはずだ', f.hidden_room, f.red_book],
