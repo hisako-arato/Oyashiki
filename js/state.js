@@ -128,11 +128,15 @@ export function rng(seed) {
   };
 }
 
+// 好感度の上がりやすさ（上がるときだけ掛ける。下がるときはそのまま）
+// お嬢様は上がりにくいが、仲良くなる利点が多い。赤羽・青島は少し上がりにくい
+export const AFF_RATE = { daughter: 0.65, mother: 1, red: 0.85, blue: 0.85, white: 1 };
 // 効果の適用。{aff:{mother:3}, trust, susp, flag:[...]}
 export function applyFx(s, fx) {
   if (!fx) return [];
   const notes = [];
-  if (fx.aff) for (const [k, v] of Object.entries(fx.aff)) {
+  if (fx.aff) for (const [k0, v0] of Object.entries(fx.aff)) {
+    const k = k0, v = v0 > 0 && AFF_RATE[k] ? Math.max(1, Math.round(v0 * AFF_RATE[k])) : v0;
     if (!v) continue;
     s.aff[k] = clamp(s.aff[k] + v);
     notes.push(`${PEOPLE[k].name}の好感度 ${v > 0 ? '+' : ''}${v}`);
@@ -155,6 +159,10 @@ export function setFlag(s, f, notes) {
 }
 
 export const maidAvailable = (s, m) => s.chapter >= PEOPLE[m].from;
+// ENDING 2：本物の隠し場所（お嬢様が預かってくれる／お嬢様の部屋の古い飾り棚を調べてある）
+export const canHide = s => !!(s.flags.hide_ok || s.flags.d_shelf);
+// お嬢様と親しければ（好感度60以上）、昼にお嬢様の部屋へ入っても怪しまれない
+export const droomOpen = s => s.aff.daughter >= 60;
 export const activeMaids = s => MAIDS.filter(m => maidAvailable(s, m));
 // 今の章で屋敷にいる人（VRM を読み込む人）。巡回員は最終章（イブの夜）だけ
 // 決行の夜は、執事が決行の服（butler2）に着替える
@@ -195,7 +203,7 @@ export function generateChores(s) {
   }
   if (!motherOutDay(s)) ids.push('escortM');
   // イブの朝、青島の模写が仕上がっていて本物の隠し場所もあれば、模写を運ぶ仕事を朝礼で選べる
-  if (isEve(s) && s.flags.forgery_ready && s.flags.hide_ok && !s.flags.swapped) ids.push('eveForgery', 'evePrep');
+  if (isEve(s) && s.flags.forgery_ready && canHide(s) && !s.flags.swapped) ids.push('eveForgery', 'evePrep');
   if (s.day % 2 === 1 || s.chapter >= 2) ids.push('tutorD');
   return ids.map(id => ({ id, assignee: id.startsWith('escort') || id === 'tutorD' || id === 'eveForgery' || id === 'evePrep' ? 'butler' : null, progress: 0, done: false, failed: false }));
 }

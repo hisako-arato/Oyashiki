@@ -1,6 +1,6 @@
 // ゲーム進行と画面描画
 import { PEOPLE, ROOMS, CHORES, CLUES, MAIDS, FAMILY, ALLY_AFF, PASSCODE, START_HOUR, END_HOUR, MAID_CAPACITY, BASEMENT_HINTS } from './data.js';
-import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdown, newState, save, load, clearSave, listSlots, copySlot, markCleared, isTesting, setTesting, clockBoost, saveEve, loadEve, seenEndings, markSeenEnding, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
+import { castNeeded, dayOffset, dateOf, EVE_OFFSET, isEve, daysToEve, eveCountdown, newState, save, load, clearSave, listSlots, copySlot, markCleared, isTesting, setTesting, clockBoost, canHide, saveEve, loadEve, seenEndings, markSeenEnding, exportSave, parseSave, importSave, useSlot, currentSlot, SLOTS, clamp, applyFx, fxNote, setFlag, dayIndex, activeMaids, isAlly,
   generateChores, buildPlan, maidLoad, maidHours, whereIs, peopleIn, hoursLeft, dateLabel,
   fatherHome, motherOutDay, rng, WEEKS_PER_CHAPTER } from './state.js';
 import { SPOTS } from './actions.js';
@@ -975,7 +975,7 @@ function morningCalendar(s) {
     : '（今日は11月3日。旦那様は朝から、花屋に電話をかけていた。……誰への花だろう）');
   if (isEve(s)) notes.push('今日は12月24日、クリスマス・イブ。夜は仮面舞踏会だ。屋敷じゅうが、朝から準備で慌ただしい。');
   // ルート2：青島の模写が仕上がっていれば、今日の昼のうちにすり替える
-  if (isEve(s) && s.flags.forgery_ready && s.flags.hide_ok && !s.flags.swapped)
+  if (isEve(s) && s.flags.forgery_ready && canHide(s) && !s.flags.swapped)
     notes.push('★ 青島の模写が完成したようだ。今日の日中に、本物とすり替えよう（下の「青島の部屋から模写を運ぶ」を、執事が引き受ける）。旦那様が絵を大広間へ運ぶ18時までが勝負だ。');
   // ENDING 3：雫が書斎の机に置いた予告状。旦那様は意地になり、絵を大広間に飾ったまま警備を増やす
   if (isEve(s) && s.flags.plan_blackout) notes.push('朝、書斎の机に一枚のカードが置かれていた。『仮面が外れる時刻に、月をいただく』――旦那様は顔を真っ赤にして、警備会社に電話をかけた。「巡回員を増やせ。絵は大広間に飾ったままにする。盗めるものなら、盗んでみろ」');
@@ -1192,7 +1192,7 @@ function noteTab() {
     // すり替え（ルート2）
     ['青島に、絵の模写を頼めるかもしれない（好感度60以上で、昼に話しかけるか、夜に共用室で）', f.found_painting, f.forgery_start],
     [forgeryGoal(), f.forgery_start, f.forgery_ready],
-    ['本物を隠しておける場所を探す（お嬢様……？）', f.forgery_start, f.hide_ok],
+    ['本物を隠しておける場所を探す（お嬢様……？）', f.forgery_start, canHide(s)],
     ['白井に見られたことは、週末に旦那様へ報告される（仲良くなれば、伏せてくれるかもしれない）', whiteActive(s), whiteCovers(s)],
     ['地下があるらしい。資料室の床を調べる', s.chapter >= 2 && hints >= 2, f.b_hatch],
     ['床の扉の鍵を手に入れる（旦那様が出かける日の、食料庫あたり？）', f.b_hatch && !f.b_key_lost, f.b_key],

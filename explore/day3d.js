@@ -6,7 +6,7 @@ import { buildNav, planRoute } from './nav.js';
 import { PEOPLE, CHORES, ROOMS, END_HOUR, MAIDS } from '../js/data.js';
 import { faceOf } from '../js/faces.js';
 import { richNodes } from '../js/richtext.js';
-import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded, isEve, applyFx, fxNote, clockRate } from '../js/state.js';
+import { whereIs, isAlly, fatherHome, dateLabel, eveCountdown, clamp, buildPlan, setFlag, maidAvailable, fillUnassigned, castNeeded, isEve, applyFx, fxNote, clockRate, droomOpen } from '../js/state.js';
 import { SPOTS } from '../js/actions.js';
 import * as DL from '../js/daylogic.js';
 import { whiteSaw } from '../js/white.js';
@@ -1358,7 +1358,7 @@ function tick(now) {
     s.today.loc = key || 'elsewhere';
     if (key !== st.lastKey) {
       const owner = OWNERS[key];
-      if (st.lastKey !== undefined && owner && whereIs(s, owner, s.today.hour) === key && !choreHere(key) && !st.busy && !st.tut) say(DL.intrude(s, owner));
+      if (st.lastKey !== undefined && owner && whereIs(s, owner, s.today.hour) === key && !choreHere(key) && !st.busy && !st.tut) say(owner === 'daughter' && droomOpen(s) ? ['お嬢様', '「……また来たの？ べつに、追い出さないけど」'] : DL.intrude(s, owner));
       st.lastKey = key;
     }
   }
@@ -1367,7 +1367,7 @@ function tick(now) {
   for (const p of Object.values(people)) updatePerson(p, dt);
   bobMarkers(dt);
   st.placeNow = false;
-  const inPrivate = !night && !ball && !!(room && room.private) && !choreHere(key);
+  const inPrivate = !night && !ball && !!(room && room.private) && !choreHere(key) && !(key === 'droom' && droomOpen(s));
   for (const p of Object.values(people)) p.coneMat.color.set(isAlly(s, p.id) ? '#8ad0a0' : (night || inPrivate) && p.seeing ? '#ff5a4a' : night ? '#fff2b0' : '#ffe08a');
   updateMasks(dt);
   syncHallArt();
@@ -1380,7 +1380,7 @@ function tick(now) {
     if ((st.dayCarry === 'painting' || st.dayCarry === 'forgery') && !st.busy) {
       carried.painting && (carried.painting.visible = true);
       // お嬢様は「贈り物の絵」を預かると約束してくれている。本物を抱えて近くを通れば、声をかけてくる（怪しまれない）
-      const dg = people.daughter, keeper = st.dayCarry === 'painting' && s.flags.hide_ok;
+      const dg = people.daughter, keeper = st.dayCarry === 'painting' && s.flags.hide_ok;   // 飾り棚だけ知っている場合は、お嬢様に見られれば怪しまれる
       if (keeper && !st.carrySeen.daughter && dg.area === cur.id && Math.hypot(dg.x - player.x, dg.z - player.z) < 4.5) {
         st.carrySeen.daughter = true;
         dg.g.rotation.y = Math.atan2(player.x - dg.x, player.z - dg.z); dg.wait = Math.max(dg.wait, 4);
@@ -1638,11 +1638,12 @@ function eveThings() {
   if (cur.id === 'f2' && st.dayCarry === 'painting') list.push({ name: 'クローゼット', at: () => CLOSET, label: '本物を隠す', night: () => {
     st.dayCarry = null;
     setFlag(s, 'swap_hidden');
-    const d = people.daughter, here = d.area === 'f2' && whereIs(s, 'daughter', s.today.hour) === 'droom';
+    // お嬢様が預かってくれるなら（hide_ok）お嬢様と一緒に。そうでなければ、クローゼットの奥の古い飾り棚に、気づかれないように
+    const d = people.daughter, here = s.flags.hide_ok && d.area === 'f2' && whereIs(s, 'daughter', s.today.hour) === 'droom';
     const first = here && !st.carrySeen.daughter;
     if (first) st.carrySeen.daughter = true;
     say(...(first ? DAUGHTER_SECRET : []),
-      here ? 'お嬢様がクローゼットの扉を開け、ドレスを脇へ寄せてくれた。その奥に、本物を寝かせる。' : 'クローゼットの奥、ドレスの陰に本物を寝かせた。',
+      here ? 'お嬢様がクローゼットの扉を開け、ドレスを脇へ寄せてくれた。その奥に、本物を寝かせる。' : s.flags.hide_ok ? 'クローゼットの奥、ドレスの陰に本物を寝かせた。' : 'クローゼットの奥の古い飾り棚に、本物を寝かせた。……お嬢様も、ここは開けない。',
       here ? ['お嬢様', '「……今夜、パパが自慢するのは偽物なのね。ふふ、楽しみ」'] : null,
       '（あとは今夜、旦那様が偽物を自慢するのを見届けて……25日の朝、運び出すだけだ）');
   } });

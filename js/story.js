@@ -3,7 +3,7 @@
 // {choice:[{t, fx, then}]} 選択肢 / {if, then, else} 条件分岐 / {fx} 効果 / {report:true} 週の成果報告
 import { recall } from './recall.js';
 import { planDoubt, highlights } from './operation.js';
-import { isAlly } from './state.js';
+import { isAlly, canHide } from './state.js';
 
 const N = 'n', B = 'butler', F = 'father', M = 'mother', D = 'daughter';
 const R = 'red', BL = 'blue', K = 'black', W = 'white', S = 'shizuku';
@@ -274,8 +274,8 @@ export const ROUTES = [
     ok: s => !!s.flags.swap_hidden,
     need: s => [!s.flags.found_painting && '絵の隠し場所を見つけていない',
       !s.flags.forgery_start && '青島に模写を頼んでいない', s.flags.forgery_start && !s.flags.forgery_ready && '青島の模写が完成していない',
-      !s.flags.hide_ok && '本物を隠しておける場所がない',
-      s.flags.forgery_ready && s.flags.hide_ok && !s.flags.swap_hidden && 'イブの昼（18時まで）、隠し部屋の絵をすり替えていない'] },
+      !canHide(s) && '本物を隠しておける場所がない',
+      s.flags.forgery_ready && canHide(s) && !s.flags.swap_hidden && 'イブの昼（18時まで）、隠し部屋の絵をすり替えていない'] },
 ];
 
 // 地下の仕入れ帳の写真を持っていれば、最後にその扱いを選ぶ（主人公と雫の目的は、あくまで「月下の庭」だけ）

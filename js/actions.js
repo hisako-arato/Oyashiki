@@ -182,6 +182,12 @@ export const SPOTS = {
       setFlag(s, 'd_secret');
       return { text: '教科書の間に「退学届（控）」——日付は半年前だ。お嬢様の秘密を知ってしまった。', clue: true };
     } },
+    { id: 'oldshelf', name: '古い飾り棚', run: s => {
+      if (s.flags.d_shelf) return { text: 'クローゼットの奥の古い飾り棚。……ここなら、誰も開けない。' };
+      if (ch(s) < 2) return { text: 'クローゼットの奥に、埃をかぶった古い飾り棚がある。お嬢様が子どもの頃の物入れらしい。' };
+      setFlag(s, 'd_shelf');
+      return { text: 'クローゼットの奥に、埃をかぶった古い飾り棚がある。お嬢様が子どもの頃の物入れらしい。……ここなら、誰も開けない。旦那様も、娘の部屋までは疑わない。', clue: true };
+    } },
   ],
 };
 
@@ -205,7 +211,8 @@ export const TALKS = {
     { if: s => afterNight(s, 'daughter') && s.flags.d_close, line: '「……おはよ」（目が合った瞬間、ぱっと逸らされた。耳まで赤い）「昨日のこと、誰にも言ってないからね」' },
     { if: s => s.aff.daughter >= 35 && ch(s) >= 1 && !s.flags.hint_redbook, flag: 'hint_redbook', ask: '「お嬢様は、旦那様の書斎に入られたことは？」',
       line: '「子どもの頃ね、パパの本棚の赤い本を触ったら、すごく怒られたの。なんでだろう？」' },
-    { if: s => s.aff.daughter >= 60, line: '「執事さんといると落ち着くな。……ずっとこの家にいてくれる？」' },
+    { if: s => s.aff.daughter >= 60, line: '「執事さんといると落ち着くな。……ずっとこの家にいてくれる？」（……執事なんか、好きになっちゃいけないのに）' },
+    { if: s => s.aff.daughter >= 40 && s.chapter >= 1, line: '「……さっき、青島さんと楽しそうだったね。べつに、いいけど」' },
     { line: '「執事さんって何でもできるよね。私、何にもできないや」' },
   ],
   red: [
